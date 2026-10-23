@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0e0f">
+  <meta name="description" content="МИФЫ: ПРОБУЖДЕНИЕ — кооперативные сражения с мифологическими боссами на Земле для 2–5 игроков.">
+  <title>МИФЫ: ПРОБУЖДЕНИЕ</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/3d.bundle.js?v=5" defer></script>
+  <script src="/game.js?v=6" defer></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="site-header" id="siteHeader">
+    <button class="brand" id="brandButton" aria-label="На главный экран">
+      <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+        <path d="M22 2 41 22 22 42 3 22Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <path d="m13 29 9-20 9 20M16 23h12M22 9v26" fill="none" stroke="currentColor" stroke-width="2"/>
+      </svg>
+      <span>МИФЫ <b>//</b> ПРОБУЖДЕНИЕ</span>
+    </button>
+    <div class="header-center">3D CO-OP BOSS RUSH <span>·</span> 2—5 ИГРОКОВ</div>
+    <div class="header-actions">
+      <div class="connection" id="connectionStatus"><i></i><span>ПОДКЛЮЧЕНИЕ</span></div>
+      <button class="icon-button" id="helpButton" aria-label="Управление и помощь">?</button>
+    </div>
+  </header>
+
+  <main class="screen main-screen" id="mainScreen">
+    <div class="main-art" aria-hidden="true"></div>
+    <div class="main-shade" aria-hidden="true"></div>
+    <div class="map-lines" aria-hidden="true"></div>
+
+    <section class="hero">
+      <div class="eyebrow"><span></span> ЗЕМЛЯ / ПРОТОКОЛ «АРГО»</div>
+      <h1><span class="title-main">МИФЫ</span><span class="title-sub">ПРОБУЖДЕНИЕ</span></h1>
+      <p class="hero-copy">Они вернулись не из легенд. Они пришли в наш мир.<br>Соберите отряд и верните Землю людям.</p>
+
+      <div class="muster-panel">
+        <label class="field-label" for="playerName">ВАШ ПОЗЫВНОЙ</label>
+        <input class="name-input" id="playerName" maxlength="16" autocomplete="nickname" placeholder="Введите имя" value="Странник">
+        <div class="main-actions">
+          <button class="button button-primary" id="createButton"><span>СОБРАТЬ ОТРЯД</span><b>→</b></button>
+          <button class="button button-ghost" id="quickStartButton">3D ТРЕНИРОВКА</button>
+        </div>
+        <div class="join-divider"><span>ИЛИ ПРИСОЕДИНИТЬСЯ ПО КОДУ</span></div>
+        <div class="join-row">
+          <input id="joinCode" class="code-input" maxlength="5" autocomplete="off" spellcheck="false" placeholder="КОД КОМНАТЫ" aria-label="Код комнаты">
+          <button class="button button-join" id="joinButton">ВОЙТИ <span>↗</span></button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="threat-card">
+      <div class="threat-top"><span>АКТИВНАЯ УГРОЗА</span><i></i></div>
+      <div class="threat-index">01 <span>/ 03</span></div>
+      <h2>МИНОТАВР</h2>
+      <p>Хозяин лабиринта</p>
+      <div class="threat-location">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.1 7-12A7 7 0 0 0 5 9c0 5.9 7 12 7 12Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="9" r="2.3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        <span>КРИТ, ГРЕЦИЯ<small>35.24° N · 25.13° E</small></span>
+      </div>
+      <div class="threat-footer"><span>КЛАСС УГРОЗЫ</span><b>III</b></div>
+    </aside>
+
+    <div class="feature-strip">
+      <div><b>2—5</b><span>ИГРОКОВ<br>В ОТРЯДЕ</span></div>
+      <div><b>03</b><span>БОЕВЫХ<br>КЛАССА</span></div>
+      <div><b>03</b><span>ДРЕВНИХ<br>УГРОЗЫ</span></div>
+    </div>
+    <div class="scroll-note">ЛКМ — АТАКА <span>·</span> WASD — ДВИЖЕНИЕ <span>·</span> Q — СПОСОБНОСТЬ</div>
+  </main>
+
+  <main class="screen lobby-screen" id="lobbyScreen" hidden>
+    <div class="lobby-backdrop" id="lobbyBackdrop" aria-hidden="true"></div>
+    <div class="lobby-shade" aria-hidden="true"></div>
+
+    <section class="lobby-heading">
+      <div>
+        <div class="eyebrow"><span></span> ШТАБ ОПЕРАЦИИ</div>
+        <h1>ПОДГОТОВКА ОТРЯДА</h1>
+      </div>
+      <div class="room-code-block">
+        <span>КОД ПРИГЛАШЕНИЯ</span>
+        <button id="copyCodeButton" title="Скопировать ссылку-приглашение"><b id="roomCode">—</b><i>⧉</i></button>
+        <small>Нажмите, чтобы скопировать ссылку</small>
+      </div>
+    </section>
+
+    <div class="lobby-grid">
+      <section class="mission-panel">
+        <div class="section-heading"><span>01</span><div>ВЫБЕРИТЕ УГРОЗУ<small>Реальные координаты. Сверхъестественный противник.</small></div></div>
+        <div class="boss-cards">
+          <button class="boss-card selected" data-boss="minotaur">
+            <img src="/assets/minotaur.jpg" alt="Минотавр">
+            <span class="boss-card-shade"></span>
+            <span class="boss-number">01</span>
+            <span class="boss-card-copy"><small>КРИТ, ГРЕЦИЯ</small><b>МИНОТАВР</b><em>УГРОЗА III</em></span>
+            <span class="selected-mark">ВЫБРАН</span>
+          </button>
+          <button class="boss-card" data-boss="anubis">
+            <img src="/assets/anubis.jpg" alt="Анубис">
+            <span class="boss-card-shade"></span>
+            <span class="boss-number">02</span>
+            <span class="boss-card-copy"><small>ГИЗА, ЕГИПЕТ</small><b>АНУБИС</b><em>УГРОЗА IV</em></span>
+            <span class="selected-mark">ВЫБРАН</span>
+          </button>
+          <button class="boss-card" data-boss="fenrir">
+            <img src="/assets/fenrir.jpg" alt="Фенрир">
+            <span class="boss-card-shade"></span>
+            <span class="boss-number">03</span>
+            <span class="boss-card-copy"><small>НОРВЕГИЯ</small><b>ФЕНРИР</b><em>УГРОЗА V</em></span>
+            <span class="selected-mark">ВЫБРАН</span>
+          </button>
+        </div>
+        <div class="mission-dossier">
+          <div class="dossier-top"><span id="dossierRegion">Эгейское море</span><b id="dossierThreat">III</b></div>
+          <h2 id="dossierName">МИНОТАВР</h2>
+          <p id="dossierLore">Лабиринт раскололся изнутри. Тот, кого считали мифом, вышел под открытое небо.</p>
+          <div class="dossier-tip"><span>СОВЕТ РАЗВЕДКИ</span><p id="dossierTip">Не стойте на линии рывка.</p></div>
+        </div>
+      </section>
+
+      <section class="squad-panel">
+        <div class="section-heading"><span>02</span><div>СОБЕРИТЕ ОТРЯД<small>До пяти бойцов. Одиночная тренировка доступна.</small></div></div>
+        <div class="squad-count"><span>БОЙЦЫ НА СВЯЗИ</span><b id="squadCount">1 / 5</b></div>
+        <div class="player-slots" id="playerSlots"></div>
+
+        <div class="class-heading"><span>03</span><div>ВЫБЕРИТЕ КЛАСС</div></div>
+        <div class="class-cards">
+          <button class="class-card" data-class="guardian">
+            <span class="class-icon guardian-icon">Λ</span>
+            <span><b>АРГОНАВТ</b><small>Защитник · Ближний бой</small></span>
+            <i></i>
+          </button>
+          <button class="class-card selected" data-class="ranger">
+            <span class="class-icon ranger-icon">➶</span>
+            <span><b>СЛЕДОПЫТ</b><small>Стрелок · Дальний бой</small></span>
+            <i></i>
+          </button>
+          <button class="class-card" data-class="oracle">
+            <span class="class-icon oracle-icon">✦</span>
+            <span><b>ОРАКУЛ</b><small>Целитель · Поддержка</small></span>
+            <i></i>
+          </button>
+        </div>
+        <div class="class-detail" id="classDetail">
+          <div><span>СПОСОБНОСТЬ · Q</span><b id="classAbilityName">СЕМЬ СТРЕЛ</b></div>
+          <p id="classAbilityDescription">Выпускает веер из семи пробивающих стрел.</p>
+          <div class="class-ultimate"><span>УЛЬТИМЕЙТ · R</span><b id="classUltimateName">ЛИВЕНЬ СТРЕЛ</b></div>
+          <div class="class-stats"><span>ЗДОРОВЬЕ <b id="classHp">125</b></span><span>СКОРОСТЬ <b id="classSpeed">290</b></span><span>УРОН <b id="classDamage">19</b></span></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="launch-bar">
+      <button class="button button-text" id="leaveLobbyButton">← ПОКИНУТЬ ОТРЯД</button>
+      <div class="launch-status"><i></i><span id="launchStatus">ВЫ ЛИДЕР ОТРЯДА</span><small id="launchHint">Можно начать тренировку или дождаться союзников</small></div>
+      <button class="button button-primary launch-button" id="startButton"><span>НАЧАТЬ ОХОТУ</span><b>→</b></button>
+    </div>
+  </main>
+
+  <main class="screen game-screen" id="gameScreen" hidden>
+    <canvas id="gameCanvas"></canvas>
+    <div class="renderer-status" id="rendererStatus" hidden>
+      <div class="renderer-status-card">
+        <div class="renderer-spinner" id="rendererSpinner"></div>
+        <div class="eyebrow"><span></span> 3D / WEBGL</div>
+        <h2 id="rendererStatusTitle">ЗАГРУЗКА 3D-МИРА</h2>
+        <p id="rendererStatusText">Подготавливаем модели, освещение и арену. Первый запуск может занять несколько секунд.</p>
+        <div class="renderer-status-actions" id="rendererStatusActions" hidden>
+          <button class="button button-primary" id="retryRendererButton">ПОВТОРИТЬ</button>
+          <button class="button button-ghost" id="lowQualityButton">ОБЛЕГЧЁННЫЙ 3D</button>
+          <button class="button button-text" id="rendererMainButton">НА ГЛАВНУЮ</button>
+        </div>
+      </div>
+    </div>
+    <div class="game-vignette" aria-hidden="true"></div>
+    <div class="damage-flash" id="damageFlash" aria-hidden="true"></div>
+
+    <div class="boss-hud hud-layer">
+      <div class="boss-hud-heading"><span id="gameBossLocation">КРИТ, ГРЕЦИЯ</span><b id="gameBossPhase">ФАЗА I</b></div>
+      <div class="boss-hud-name"><h2 id="gameBossName">МИНОТАВР</h2><span id="gameBossHpText">1850 / 1850</span></div>
+      <div class="boss-health-track"><div id="gameBossHealth"></div><i></i><i></i></div>
+      <div class="boss-stagger-row"><span>ОГЛУШЕНИЕ</span><div class="boss-stagger-track"><div id="gameBossStagger"></div></div><b id="gameBossStatus">ФОКУС УРОНА</b></div>
+    </div>
+
+    <div class="game-top-right hud-layer">
+      <div class="game-room">ОТРЯД <b id="gameRoomCode">—</b></div>
+      <div class="game-timer" id="gameTimer">00:00</div>
+      <button class="hud-button" id="soundButton" aria-label="Включить или выключить звук">ЗВУК: ВКЛ</button>
+    </div>
+
+    <div class="squad-hud hud-layer" id="squadHud"></div>
+
+    <div class="objective-hud hud-layer"><span>ЗАДАЧА</span><b>ПОБЕДИТЬ БОССА</b><small>Красные зоны — опасность</small></div>
+    <div class="player-vitals hud-layer"><div><span>ВЫНОСЛИВОСТЬ · SHIFT</span><b id="staminaText">100</b></div><div class="stamina-track"><i id="staminaFill"></i></div></div>
+    <div class="camera-hint hud-layer">ПКМ — КАМЕРА · КОЛЕСО — ЗУМ · TAB — ФИКСАЦИЯ <b id="cameraMode">[ВКЛ]</b></div>
+
+    <div class="ability-bar hud-layer">
+      <div class="ability-slot passive"><div class="ability-key">ЛКМ</div><div><b id="basicAttackName">ВЫСТРЕЛ</b><small>Базовая атака</small></div></div>
+      <div class="ability-slot" id="dashSlot"><div class="cooldown-sweep" id="dashCooldown"></div><div class="ability-key">SPACE</div><div><b>РЫВОК</b><small id="dashCooldownText">Готов</small></div></div>
+      <div class="ability-slot signature" id="abilitySlot"><div class="cooldown-sweep" id="abilityCooldown"></div><div class="ability-key">Q</div><div><b id="hudAbilityName">СЕМЬ СТРЕЛ</b><small id="abilityCooldownText">Готов</small></div></div>
+      <div class="ability-slot ultimate" id="ultimateSlot"><div class="cooldown-sweep" id="ultimateCharge"></div><div class="ability-key">R</div><div><b id="hudUltimateName">ЛИВЕНЬ СТРЕЛ</b><small id="ultimateChargeText">Заряд 0%</small></div></div>
+      <div class="ability-slot passive revive-slot"><div class="ability-key">E</div><div><b>ВОСКРЕШЕНИЕ</b><small>Удерживать рядом</small></div></div>
+    </div>
+
+    <div class="controls-hint hud-layer">WASD — ДВИЖЕНИЕ ОТНОСИТЕЛЬНО КАМЕРЫ <span>·</span> МЫШЬ — ПРИЦЕЛ <span>·</span> КАМЕРА — ОТ 3-ГО ЛИЦА</div>
+    <div class="interaction-hint hud-layer" id="interactionHint" hidden></div>
+    <div class="announcement hud-layer" id="announcement" hidden></div>
+    <div class="boss-intro hud-layer" id="bossIntro" hidden><span id="introLocation">КРИТ, ГРЕЦИЯ</span><h2 id="introName">МИНОТАВР</h2><p id="introEpithet">Хозяин лабиринта</p><i></i></div>
+
+    <div class="end-screen" id="endScreen" hidden>
+      <div class="end-card">
+        <div class="end-sigil" id="endSigil">Λ</div>
+        <div class="eyebrow"><span></span> ОПЕРАЦИЯ ЗАВЕРШЕНА</div>
+        <h2 id="endTitle">МИФ ОКОНЧЕН</h2>
+        <p id="endSubtitle">Земля запомнит вашу последнюю охоту.</p>
+        <div class="end-stats">
+          <div><span>ВРЕМЯ БОЯ</span><b id="endTime">00:00</b></div>
+          <div><span>ВАШ УРОН</span><b id="endDamage">0</b></div>
+          <div><span>ВОСКРЕШЕНИЯ</span><b id="endRevives">0</b></div>
+        </div>
+        <div class="end-actions">
+          <button class="button button-primary" id="restartButton">ВЕРНУТЬСЯ В ЛОББИ <b>→</b></button>
+          <button class="button button-ghost" id="leaveGameButton">ПОКИНУТЬ ОТРЯД</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal-backdrop" id="helpModal" hidden>
+    <section class="help-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <button class="modal-close" id="closeHelpButton" aria-label="Закрыть">×</button>
+      <div class="eyebrow"><span></span> ПОЛЕВОЕ РУКОВОДСТВО</div>
+      <h2 id="helpTitle">КАК СРАЖАТЬСЯ</h2>
+      <div class="help-grid">
+        <div><kbd>W A S D</kbd><span>Движение</span></div>
+        <div><kbd>ЛКМ</kbd><span>Базовая атака</span></div>
+        <div><kbd>SPACE</kbd><span>Рывок · неуязвимость</span></div>
+        <div><kbd>Q</kbd><span>Способность класса</span></div>
+        <div><kbd>E</kbd><span>Воскресить союзника</span></div>
+        <div><kbd>МЫШЬ</kbd><span>Прицеливание</span></div>
+        <div><kbd>SHIFT</kbd><span>Спринт · выносливость</span></div>
+        <div><kbd>R</kbd><span>Ультимейт при 100%</span></div>
+        <div><kbd>ПКМ</kbd><span>Вращение камеры</span></div>
+        <div><kbd>TAB</kbd><span>Фиксация на боссе</span></div>
+      </div>
+      <div class="help-rules">
+        <p><b>Камера от третьего лица.</b> Она следует за бойцом и помогает держать босса в кадре. WASD двигает персонажа относительно камеры.</p>
+        <p><b>Читайте атаки.</b> Красные круги, кольца и линии показывают зону удара до его нанесения.</p>
+        <p><b>Не оставляйте никого.</b> Павший союзник держится 20 секунд. Подойдите вплотную и удерживайте E.</p>
+        <p><b>Меняйте тактику.</b> На 66% и 32% здоровья босс переходит в новую фазу. Заполняйте шкалу оглушения, чтобы прервать атаку и получить окно +25% урона.</p>
+      </div>
+      <button class="button button-primary" id="understoodButton">ПОНЯТНО</button>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
