@@ -1,7 +1,13 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ARENA_CONFIG } from '../config/arenaConfig';
 import { KnightClassId } from '../config/classes';
-import { GameSettings } from '../config/settings';
+import { GameSettings, GraphicsQuality } from '../config/settings';
 import { CombatEvent } from '../core/CombatSystem';
 import { MatchManager } from '../core/MatchManager';
 import { ArenaBuilder } from './ArenaBuilder';
@@ -9,6 +15,7 @@ import { CameraRig } from './CameraRig';
 import { EffectsManager } from './EffectsManager';
 import { KnightVisualRig } from './KnightMesh';
 import { MaterialLibrary } from './PixelTextures';
+import { SkyAndAtmosphere } from './SkyAndAtmosphere';
 
 export interface ProjectedFighterLabel {
   id: string;
@@ -25,31 +32,69 @@ export interface ProjectedFighterLabel {
 
 const BOT_CLOTH_ACCENTS = [0xc93838, 0x2979c9, 0xd99b26, 0x2f8f4e, 0xa843c9];
 
+const CINEMATIC_GRADE_SHADER = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uVignette: { value: 0.24 },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform float uVignette;
+    varying vec2 vUv;
+    void main() {
+      vec4 texel = texture2D(tDiffuse, vUv);
+      vec3 col = texel.rgb;
+
+      // Gentle corner vignette & subtle golden-hour warmth in linear HDR space
+      col *= vec3(1.02, 1.0, 0.98);
+      vec2 centered = vUv - 0.5;
+      float distSq = dot(centered, centered);
+      col *= 1.0 - distSq * uVignette * 1.45;
+
+      gl_FragColor = vec4(col, texel.a);
+    }
+  `,
+};
+
 /**
- * Top-level 3D World Renderer for KNIGHTS: LAST STANDING.
- * Maintains consistent stylized lighting, shadows, arena geometry, character rigs,
- * 3D character selection showcase, and optional retro pixel scale.
+ * High-Fidelity Stylized 3D World Renderer for KNIGHTS: LAST STANDING.
+ * Combines GLSL Golden-Hour Sky, PMREM IBL Environment Reflections, Normal-Mapped Masonry & Steel,
+ * 2048px Soft Shadows, Rim Backlighting, 3D Weapon Ribbon Trails, and HDR Post-Processing.
  */
 export class WorldRenderer {
   public readonly renderer: THREE.WebGLRenderer;
   public readonly scene: THREE.Scene;
   public readonly cameraRig: CameraRig;
   public readonly materials: MaterialLibrary;
+  public readonly sky: SkyAndAtmosphere;
   public readonly arenaBuilder: ArenaBuilder;
   public readonly effects: EffectsManager;
 
+  private sunLight!: THREE.DirectionalLight;
+  private composer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+
   private readonly fightersGroup = new THREE.Group();
+  private readonly trailsGroup = new THREE.Group();
   private readonly rigs = new Map<string, KnightVisualRig>();
   private renderedGeneration = -1;
 
-  // Dedicated 3D Showcase Knight on a stone pedestal for Class Selection screen
+  // Dedicated 3D Showcase Knight on sunlit stone pedestal for Class Selection screen
   private readonly showcaseGroup = new THREE.Group();
   private showcaseRig: KnightVisualRig | null = null;
   private showcaseClassId: KnightClassId | null = null;
-  private readonly showcasePos = new THREE.Vector3(0, 0.2, 4.2);
+  private readonly showcasePos = new THREE.Vector3(0, 0.24, 4.2);
 
   private totalElapsed = 0;
-  private currentPixelScale = 1;
+  private currentPixelScale: 1 | 2 | 3 = 1;
+  private currentQuality: GraphicsQuality = 'ultra';
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -59,85 +104,208 @@ export class WorldRenderer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.toneMappingExposure = 1.05;
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x88a8c7);
-    this.scene.fog = new THREE.Fog(0x88a8c7, 26, 62);
+    this.scene.fog = new THREE.FogExp2(0xc49c74, 0.0085);
 
-    this.cameraRig = new THREE.PerspectiveCamera
-      ? new CameraRig(window.innerWidth / Math.max(1, window.innerHeight))
-      : new CameraRig(1.6);
+    this.cameraRig = new CameraRig(
+      window.innerWidth / Math.max(1, window.innerHeight)
+    );
 
-    this.setupLighting();
+    const sunPos = new THREE.Vector3(15, 21, 12);
+    this.setupLighting(sunPos);
+
+    this.sky = new SkyAndAtmosphere(sunPos);
+    this.scene.add(this.sky.group);
+
+    // Apply procedural IBL environment map for authentic metallic armor & weapon sheen
+    const envTex = this.sky.generateEnvironmentMap(this.renderer);
+    this.scene.environment = envTex;
+    this.scene.environmentIntensity = 0.85;
 
     this.materials = new MaterialLibrary();
     this.arenaBuilder = new ArenaBuilder(ARENA_CONFIG, this.materials);
     this.scene.add(this.arenaBuilder.group);
 
     this.scene.add(this.fightersGroup);
+    this.scene.add(this.trailsGroup);
 
-    this.effects = new EffectsManager();
+    this.effects = new EffectsManager(this.materials.crackDecalTex);
     this.scene.add(this.effects.group);
 
-    // Setup Selection Pedestal
-    this.showcaseGroup.position.copy(this.showcasePos);
-    const ped = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.05, 1.2, 0.24, 12),
-      this.materials.curbStoneMat
-    );
-    ped.position.y = -0.12;
-    ped.receiveShadow = true;
-    ped.castShadow = true;
-    this.showcaseGroup.add(ped);
-    this.showcaseGroup.visible = false;
-    this.scene.add(this.showcaseGroup);
-
-    this.handleResize(1);
+    this.buildShowcasePedestal();
+    this.rebuildPostProcessing(1, 'ultra');
   }
 
-  private setupLighting(): void {
-    // Crisp sky/ground hemisphere fill so dark armor silhouettes remain readable
-    const hemi = new THREE.HemisphereLight(0xd9ecff, 0x524c44, 1.05);
+  private setupLighting(sunPos: THREE.Vector3): void {
+    // Sky-to-stone hemisphere fill
+    const hemi = new THREE.HemisphereLight(0xcbe2ff, 0x615244, 0.85);
     this.scene.add(hemi);
 
-    // Main stylized sunlight casting expressive medieval courtyard shadows
-    const sun = new THREE.DirectionalLight(0xfff1d6, 2.05);
-    sun.position.set(13, 22, 11);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.near = 2;
-    sun.shadow.camera.far = 55;
-    const d = 17;
-    sun.shadow.camera.left = -d;
-    sun.shadow.camera.right = d;
-    sun.shadow.camera.top = d;
-    sun.shadow.camera.bottom = -d;
-    sun.shadow.bias = -0.0008;
-    this.scene.add(sun);
+    // Golden-hour main directional sun with crisp 2048px shadows
+    this.sunLight = new THREE.DirectionalLight(0xffe9c4, 2.35);
+    this.sunLight.position.copy(sunPos);
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.set(2048, 2048);
+    this.sunLight.shadow.camera.near = 2;
+    this.sunLight.shadow.camera.far = 58;
+    const d = 17.5;
+    this.sunLight.shadow.camera.left = -d;
+    this.sunLight.shadow.camera.right = d;
+    this.sunLight.shadow.camera.top = d;
+    this.sunLight.shadow.camera.bottom = -d;
+    this.sunLight.shadow.bias = -0.0005;
+    this.sunLight.shadow.normalBias = 0.02;
+    this.scene.add(this.sunLight);
+
+    // Cool azure rim backlight from opposite side so dark graphite armor silhouettes pop!
+    const rimLight = new THREE.DirectionalLight(0x7cb8ff, 0.85);
+    rimLight.position.set(-14, 11, -13);
+    this.scene.add(rimLight);
   }
 
-  public handleResize(pixelScale: 1 | 2 | 3): void {
+  private buildShowcasePedestal(): void {
+    this.showcaseGroup.position.copy(this.showcasePos);
+
+    const pedBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.18, 1.32, 0.2, 16),
+      this.materials.curbStoneMat
+    );
+    pedBase.position.y = -0.14;
+    pedBase.receiveShadow = true;
+    pedBase.castShadow = true;
+    this.showcaseGroup.add(pedBase);
+
+    const pedTop = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.02, 1.08, 0.08, 16),
+      this.materials.pillarMat
+    );
+    pedTop.position.y = -0.02;
+    pedTop.receiveShadow = true;
+    this.showcaseGroup.add(pedTop);
+
+    const goldRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.88, 0.96, 24),
+      this.materials.bronzeTrimMat
+    );
+    goldRing.rotateX(-Math.PI / 2);
+    goldRing.position.y = 0.024;
+    this.showcaseGroup.add(goldRing);
+
+    // Dedicated warm key spotlight on showcase knight
+    const keyLight = new THREE.PointLight(0xffe6ba, 6.0, 7.5, 1.4);
+    keyLight.position.set(-1.3, 2.6, 2.2);
+    this.showcaseGroup.add(keyLight);
+
+    this.showcaseGroup.visible = false;
+    this.scene.add(this.showcaseGroup);
+  }
+
+  public applyGraphicsConfig(
+    pixelScale: 1 | 2 | 3,
+    quality: GraphicsQuality
+  ): void {
     this.currentPixelScale = pixelScale;
+    this.currentQuality = quality;
+
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
     this.cameraRig.setAspect(w / h);
 
-    if (pixelScale === 1) {
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      this.renderer.setSize(w, h, true);
-      this.renderer.domElement.style.imageRendering = 'auto';
-    } else {
-      // Optional crisp integer downscale without anti-aliasing blur
-      this.renderer.setPixelRatio(1);
-      const rw = Math.max(320, Math.floor(w / pixelScale));
-      const rh = Math.max(200, Math.floor(h / pixelScale));
-      this.renderer.setSize(rw, rh, false);
-      this.renderer.domElement.style.width = `${w}px`;
-      this.renderer.domElement.style.height = `${h}px`;
-      this.renderer.domElement.style.imageRendering = 'pixelated';
+    this.sky.setMotesVisible(quality !== 'low');
+    this.sunLight.castShadow = quality !== 'low';
+
+    const maxDpr =
+      quality === 'ultra' ? 2 : quality === 'high' ? 1.5 : 1;
+    const dpr = pixelScale === 1 ? Math.min(window.devicePixelRatio || 1, maxDpr) : 1;
+
+    this.renderer.setPixelRatio(dpr);
+    this.renderer.setSize(w, h, true);
+    this.renderer.domElement.style.imageRendering =
+      pixelScale > 1 ? 'pixelated' : 'auto';
+
+    this.rebuildPostProcessing(pixelScale, quality);
+  }
+
+  public handleResize(
+    pixelScale: 1 | 2 | 3 = this.currentPixelScale,
+    quality: GraphicsQuality = this.currentQuality
+  ): void {
+    this.applyGraphicsConfig(pixelScale, quality);
+  }
+
+  private rebuildPostProcessing(
+    pixelScale: 1 | 2 | 3,
+    quality: GraphicsQuality
+  ): void {
+    if (this.composer) {
+      this.composer.dispose();
+      this.composer = null;
+      this.bloomPass = null;
     }
+
+    if (quality === 'low' && pixelScale === 1) {
+      // Direct single-pass WebGL render for maximum FPS on low-spec hardware
+      return;
+    }
+
+    const w = Math.max(1, window.innerWidth);
+    const h = Math.max(1, window.innerHeight);
+    const dpr = this.renderer.getPixelRatio();
+
+    const rt = new THREE.WebGLRenderTarget(
+      Math.floor(w * dpr),
+      Math.floor(h * dpr),
+      {
+        type: THREE.HalfFloatType,
+        samples:
+          this.renderer.capabilities.isWebGL2 &&
+          pixelScale === 1 &&
+          quality === 'ultra'
+            ? 4
+            : 0,
+      }
+    );
+
+    this.composer = new EffectComposer(this.renderer, rt);
+    this.composer.setPixelRatio(dpr);
+    this.composer.setSize(w, h);
+
+    if (pixelScale > 1) {
+      // Genuine depth/normal edge-aware 3D pixelation pass!
+      const pixPass = new RenderPixelatedPass(
+        pixelScale * 2,
+        this.scene,
+        this.cameraRig.camera,
+        {
+          normalEdgeStrength: 0.28,
+          depthEdgeStrength: 0.35,
+        }
+      );
+      this.composer.addPass(pixPass);
+    } else {
+      const renderPass = new RenderPass(this.scene, this.cameraRig.camera);
+      this.composer.addPass(renderPass);
+    }
+
+    if (quality === 'ultra' || quality === 'high') {
+      // Selective HDR Bloom: high threshold ensures zero screen haze — only flames & sparks glow!
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(w, h),
+        quality === 'ultra' ? 0.32 : 0.22,
+        0.42,
+        0.96
+      );
+      this.composer.addPass(this.bloomPass);
+    }
+
+    const gradePass = new ShaderPass(CINEMATIC_GRADE_SHADER);
+    this.composer.addPass(gradePass);
+
+    const outputPass = new OutputPass();
+    this.composer.addPass(outputPass);
   }
 
   public syncShowcaseClass(classId: KnightClassId): void {
@@ -160,7 +328,6 @@ export class WorldRenderer {
     for (const ev of events) {
       this.effects.spawnFromEvent(ev);
 
-      // Moderate camera shake when player deals or receives impactful strikes
       const involvesObserved =
         ev.attackerId === observedFighterId || ev.victimId === observedFighterId;
       if (involvesObserved) {
@@ -182,44 +349,50 @@ export class WorldRenderer {
     match: MatchManager,
     settings: GameSettings
   ): ProjectedFighterLabel[] {
-    if (settings.pixelScale !== this.currentPixelScale) {
-      this.handleResize(settings.pixelScale);
+    if (
+      settings.pixelScale !== this.currentPixelScale ||
+      settings.graphicsQuality !== this.currentQuality
+    ) {
+      this.applyGraphicsConfig(settings.pixelScale, settings.graphicsQuality);
     }
 
     this.totalElapsed += dt;
+    this.sky.update(dt, this.totalElapsed);
     this.arenaBuilder.update(this.totalElapsed, match.isFinalPhase);
 
     if (match.state === 'MainMenu') {
       this.showcaseGroup.visible = false;
       this.fightersGroup.visible = false;
+      this.trailsGroup.visible = false;
       this.effects.debugGroup.visible = false;
       this.cameraRig.updateMenuOrbit(this.totalElapsed);
-      this.renderer.render(this.scene, this.cameraRig.camera);
+      this.drawFinal();
       return [];
     }
 
     if (match.state === 'CharacterSelection') {
       this.fightersGroup.visible = false;
+      this.trailsGroup.visible = false;
       this.effects.debugGroup.visible = false;
       this.showcaseGroup.visible = true;
       this.syncShowcaseClass(match.selectedPlayerClass);
       if (this.showcaseRig) {
         this.showcaseRig.updatePreviewIdle(this.totalElapsed);
-        // Gentle turntable rotation so user sees cape, shield, helmet & weapon clearly!
         this.showcaseRig.root.rotation.y =
-          Math.sin(this.totalElapsed * 0.85) * 0.55 + 0.25;
+          Math.sin(this.totalElapsed * 0.85) * 0.62 + 0.25;
       }
       this.cameraRig.updateShowcaseCamera(
         this.showcasePos.x,
         this.showcasePos.z
       );
-      this.renderer.render(this.scene, this.cameraRig.camera);
+      this.drawFinal();
       return [];
     }
 
     // Active Match / Countdown / Spectator / Finished
     this.showcaseGroup.visible = false;
     this.fightersGroup.visible = true;
+    this.trailsGroup.visible = true;
 
     this.syncFighterMeshes(match);
 
@@ -239,8 +412,16 @@ export class WorldRenderer {
       settings.debugHitboxes && match.state !== 'MatchFinished'
     );
 
-    this.renderer.render(this.scene, this.cameraRig.camera);
+    this.drawFinal();
     return this.projectLabels(match, settings.debugHitboxes);
+  }
+
+  private drawFinal(): void {
+    if (this.composer) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.cameraRig.camera);
+    }
   }
 
   public resetCameraBehindPlayer(match: MatchManager): void {
@@ -252,9 +433,9 @@ export class WorldRenderer {
 
   private syncFighterMeshes(match: MatchManager): void {
     if (this.renderedGeneration !== match.matchGeneration) {
-      // Cleanly rebuild fighter meshes on new match start / restart
       for (const rig of this.rigs.values()) {
         this.fightersGroup.remove(rig.root);
+        this.trailsGroup.remove(rig.trail.mesh);
       }
       this.rigs.clear();
       this.effects.clearAll();
@@ -269,6 +450,7 @@ export class WorldRenderer {
           isHuman: f.isHuman,
         });
         this.fightersGroup.add(rig.root);
+        this.trailsGroup.add(rig.trail.mesh);
         this.rigs.set(f.id, rig);
       });
     }
@@ -292,7 +474,7 @@ export class WorldRenderer {
 
     for (const f of match.fighters) {
       if (!f.isAlive || f.isHuman) continue;
-      tempV.set(f.body.x, 2.38, f.body.z);
+      tempV.set(f.body.x, 2.42, f.body.z);
       tempV.project(this.cameraRig.camera);
 
       const inFront = tempV.z >= -1 && tempV.z <= 1;

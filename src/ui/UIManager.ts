@@ -3,7 +3,7 @@ import {
   KNIGHT_CLASSES,
   KnightClassId,
 } from '../config/classes';
-import { GameSettings } from '../config/settings';
+import { GameSettings, GraphicsQuality } from '../config/settings';
 import { FighterState } from '../core/Fighter';
 import { MatchManager, MatchMode, MatchState } from '../core/MatchManager';
 import { ProjectedFighterLabel } from '../render/WorldRenderer';
@@ -265,8 +265,20 @@ export class UIManager {
 
           <div class="setting-group">
             <div class="setting-label">
+              <span>Качество графики</span>
+              <span id="lbl-qual">Ультра (HDR + Тени 2K)</span>
+            </div>
+            <div class="mode-toggle-row" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 4px;">
+              <button id="qual-ultra" class="mode-btn active">Ультра</button>
+              <button id="qual-high" class="mode-btn">Высокое</button>
+              <button id="qual-low" class="mode-btn">Быстрое</button>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-label">
               <span>Стиль рендера</span>
-              <span id="lbl-pix">Чёткий Low-Poly (1x)</span>
+              <span id="lbl-pix">Чёткий HD 3D (1x)</span>
             </div>
             <input id="inp-pix" type="range" min="1" max="3" step="1" class="setting-slider" />
           </div>
@@ -452,7 +464,7 @@ export class UIManager {
     const pixInp = this.q('#inp-pix') as HTMLInputElement;
     const dbgInp = this.q('#inp-debug') as HTMLInputElement;
 
-    const pushSettings = () => {
+    const pushSettings = (overrideQual?: GraphicsQuality) => {
       const pVal = Number(pixInp.value);
       const pixelScale: 1 | 2 | 3 = pVal === 2 ? 2 : pVal === 3 ? 3 : 1;
       this.settings = {
@@ -460,15 +472,20 @@ export class UIManager {
         mouseSensitivity: Number(sensInp.value) / 100,
         pixelScale,
         debugHitboxes: dbgInp.checked,
+        graphicsQuality: overrideQual ?? this.settings.graphicsQuality,
       };
       this.syncSettingsControls();
       this.callbacks.onSettingsChanged(this.settings);
     };
 
-    volInp.addEventListener('input', pushSettings);
-    sensInp.addEventListener('input', pushSettings);
-    pixInp.addEventListener('input', pushSettings);
-    dbgInp.addEventListener('change', pushSettings);
+    volInp.addEventListener('input', () => pushSettings());
+    sensInp.addEventListener('input', () => pushSettings());
+    pixInp.addEventListener('input', () => pushSettings());
+    dbgInp.addEventListener('change', () => pushSettings());
+
+    this.q('#qual-ultra').addEventListener('click', () => pushSettings('ultra'));
+    this.q('#qual-high').addEventListener('click', () => pushSettings('high'));
+    this.q('#qual-low').addEventListener('click', () => pushSettings('low'));
 
     this.q('#btn-settings-close').addEventListener('click', () => {
       this.settingsModalEl.classList.add('hidden');
@@ -574,10 +591,21 @@ export class UIManager {
     );
     this.q('#lbl-pix').textContent =
       this.settings.pixelScale === 1
-        ? 'Чёткий Low-Poly (1x)'
+        ? 'Чёткий HD 3D (1x)'
         : this.settings.pixelScale === 2
-        ? 'Ретро 3D (2x)'
-        : 'Пиксель-ретро (3x)';
+        ? 'Ретро 3D с контуром (2x)'
+        : 'Пиксель-арт 3D (3x)';
+
+    const q = this.settings.graphicsQuality;
+    this.q('#qual-ultra').classList.toggle('active', q === 'ultra');
+    this.q('#qual-high').classList.toggle('active', q === 'high');
+    this.q('#qual-low').classList.toggle('active', q === 'low');
+    this.q('#lbl-qual').textContent =
+      q === 'ultra'
+        ? 'Ультра (HDR Bloom + Тени 2K)'
+        : q === 'high'
+        ? 'Высокое (HDR + Тени)'
+        : 'Производительность';
 
     (this.q('#inp-debug') as HTMLInputElement).checked =
       this.settings.debugHitboxes;

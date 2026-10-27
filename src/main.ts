@@ -26,6 +26,7 @@ class KnightsGameApp {
 
   private lastFrameTime = performance.now();
   private lastCountdownWhole = -1;
+  private hitStopTimer = 0;
 
   constructor() {
     const canvasRoot = document.getElementById('game-canvas-root')!;
@@ -33,7 +34,10 @@ class KnightsGameApp {
 
     this.sound.setVolume(this.settings.masterVolume);
     this.world = new WorldRenderer(canvasRoot);
-    this.world.handleResize(this.settings.pixelScale);
+    this.world.applyGraphicsConfig(
+      this.settings.pixelScale,
+      this.settings.graphicsQuality
+    );
 
     this.ui = new UIManager(uiRoot, this.settings, {
       onOpenSelection: () => {
@@ -71,7 +75,10 @@ class KnightsGameApp {
         this.settings = { ...next };
         saveSettings(this.settings);
         this.sound.setVolume(this.settings.masterVolume);
-        this.world.handleResize(this.settings.pixelScale);
+        this.world.applyGraphicsConfig(
+          this.settings.pixelScale,
+          this.settings.graphicsQuality
+        );
       },
       onSelectPreviewClass: (classId) => {
         this.match.selectedPlayerClass = classId;
@@ -156,7 +163,10 @@ class KnightsGameApp {
     const canvas = this.world.renderer.domElement;
 
     window.addEventListener('resize', () => {
-      this.world.handleResize(this.settings.pixelScale);
+      this.world.applyGraphicsConfig(
+        this.settings.pixelScale,
+        this.settings.graphicsQuality
+      );
     });
 
     window.addEventListener('contextmenu', (e) => {
@@ -329,6 +339,18 @@ class KnightsGameApp {
     this.lastFrameTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
 
+    if (this.hitStopTimer > 0) {
+      this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
+      const projected = this.world.renderFrame(
+        dt * 0.15,
+        this.match,
+        this.settings
+      );
+      this.ui.update(this.match, projected, this.pointerLocked);
+      requestAnimationFrame(this.loop);
+      return;
+    }
+
     const humanIntent = this.buildHumanIntent();
     const stepOut = this.match.update(dt, humanIntent);
 
@@ -360,7 +382,21 @@ class KnightsGameApp {
     if (stepOut.events.length > 0) {
       this.sound.handleCombatEvents(stepOut.events);
       const obs = this.match.getObservedFighter();
-      this.world.processCombatEvents(stepOut.events, obs ? obs.id : null);
+      const obsId = obs ? obs.id : null;
+      this.world.processCombatEvents(stepOut.events, obsId);
+
+      // Brief, tactile 32ms hit-stop when observed knight lands/receives a heavy strike or parry
+      for (const ev of stepOut.events) {
+        if (
+          (ev.attackerId === obsId || ev.victimId === obsId) &&
+          (ev.type === 'heavy_hit' ||
+            ev.type === 'parried' ||
+            ev.type === 'guard_broken')
+        ) {
+          this.hitStopTimer = 0.032;
+          break;
+        }
+      }
     }
 
     const projectedLabels = this.world.renderFrame(
