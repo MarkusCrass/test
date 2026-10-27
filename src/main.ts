@@ -260,13 +260,7 @@ class KnightsGameApp {
     this.setupGlobalInputListeners();
     this.ui.update(this.match, [], false);
 
-    // Dismiss boot splash immediately now that Royal Citadel Main Menu is rendered!
-    const splash = document.getElementById('boot-splash');
-    if (splash) {
-      splash.classList.add('fade-out');
-      window.setTimeout(() => splash.remove(), 220);
-    }
-
+    (window as unknown as { __knightsBooted?: boolean }).__knightsBooted = true;
     fetch('/api/client-ready', { method: 'POST' }).catch(() => {});
 
     // Asynchronously load & initialize 3D WorldRenderer behind the already-interactive UI

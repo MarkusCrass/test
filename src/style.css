@@ -2349,3 +2349,8 @@ body {
   }
 }
 
+/* Ensure game canvas sits directly beneath UI layer */
+#game-canvas-root canvas {
+  display: block;
+}
+

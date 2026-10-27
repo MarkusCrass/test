@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import zlib from 'node:zlib';
 import { attachMultiplayerHub } from './wsHub';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -36,43 +35,6 @@ const MIME_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
-const COMPRESSIBLE_EXTS = new Set([
-  '.html',
-  '.js',
-  '.css',
-  '.json',
-  '.svg',
-  '.glb',
-  '.txt',
-]);
-
-interface CachedAsset {
-  mtimeMs: number;
-  raw: Buffer;
-  gzipped: Buffer | null;
-}
-
-const assetCache = new Map<string, CachedAsset>();
-
-function getAssetBuffers(filePath: string, ext: string): CachedAsset {
-  const stat = fs.statSync(filePath);
-  const existing = assetCache.get(filePath);
-  if (existing && existing.mtimeMs === stat.mtimeMs) {
-    return existing;
-  }
-
-  const raw = fs.readFileSync(filePath);
-  const gzipped = COMPRESSIBLE_EXTS.has(ext)
-    ? zlib.gzipSync(raw, { level: 6 })
-    : null;
-  const entry: CachedAsset = { mtimeMs: stat.mtimeMs, raw, gzipped };
-  // Cache text/JS/CSS/SVG/GLB up to 64 MB total
-  if (assetCache.size < 180) {
-    assetCache.set(filePath, entry);
-  }
-  return entry;
-}
-
 const port = Number(process.env.PORT ?? 5173);
 const host = process.env.HOST ?? '0.0.0.0';
 
@@ -92,7 +54,7 @@ const server = http.createServer((req, res) => {
   const pathname = (req.url ?? '/').split('?')[0];
 
   if (req.method === 'POST' && pathname === '/api/client-ready') {
-    console.log('[Browser Client Ready] UI mounted successfully.');
+    console.log('[Browser Client Ready] Main Menu mounted.');
     res.statusCode = 204;
     res.end();
     return;
@@ -143,6 +105,7 @@ const server = http.createServer((req, res) => {
     if (!path.extname(safeRel)) {
       filePath = path.join(DIST_DIR, 'index.html');
     } else {
+      console.warn(`[HTTP 404] ${req.method} ${rawPath}`);
       res.statusCode = 404;
       res.end('Not Found');
       return;
@@ -156,33 +119,23 @@ const server = http.createServer((req, res) => {
 
   const ext = path.extname(filePath).toLowerCase();
   const mime = MIME_TYPES[ext] ?? 'application/octet-stream';
-  const entry = getAssetBuffers(filePath, ext);
+  const stat = fs.statSync(filePath);
 
+  if (ext === '.html' || ext === '.js' || ext === '.css') {
+    console.log(`[HTTP 200] ${req.method} ${rawPath} (${stat.size}B)`);
+  }
+
+  res.statusCode = 200;
   res.setHeader('Content-Type', mime);
-  if (ext === '.html') {
-    res.setHeader('Cache-Control', 'no-cache');
-  } else if (rawPath.startsWith('/assets/') || rawPath.startsWith('/models/')) {
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-  }
-
-  const acceptEncoding = String(req.headers['accept-encoding'] ?? '');
-  const useGzip = Boolean(entry.gzipped && acceptEncoding.includes('gzip'));
-  const payload = useGzip ? entry.gzipped! : entry.raw;
-
-  if (useGzip) {
-    res.setHeader('Content-Encoding', 'gzip');
-    res.setHeader('Vary', 'Accept-Encoding');
-  }
-  res.setHeader('Content-Length', payload.byteLength);
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Content-Length', stat.size);
 
   if (req.method === 'HEAD') {
-    res.statusCode = 200;
     res.end();
     return;
   }
 
-  res.statusCode = 200;
-  res.end(payload);
+  fs.createReadStream(filePath).pipe(res);
 });
 
 hubRef = attachMultiplayerHub(server);

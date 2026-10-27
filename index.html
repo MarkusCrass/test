@@ -4,38 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KNIGHTS: LAST STANDING — Medieval 3D Arena Fighter</title>
-    <script>
-      window.__reportBootIssue = function (msg) {
-        var el = document.getElementById('boot-status');
-        if (el) {
-          el.style.color = '#fca5a5';
-          el.textContent = 'Ошибка загрузки: ' + msg;
-        }
-        try {
-          fetch('/api/client-error', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: String(msg), href: location.href })
-          }).catch(function () {});
-        } catch (_) {}
-      };
-      window.addEventListener('error', function (e) {
-        if (!document.getElementById('boot-splash')) return;
-        var t = e.target;
-        if (t && t !== window && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
-          window.__reportBootIssue('Не удалось загрузить ресурс ' + (t.src || t.href || t.tagName));
-          return;
-        }
-        if (e.message) {
-          window.__reportBootIssue(e.message);
-        }
-      }, true);
-      window.addEventListener('unhandledrejection', function (e) {
-        if (!document.getElementById('boot-splash')) return;
-        var reason = e.reason && (e.reason.message || String(e.reason));
-        window.__reportBootIssue(reason || 'Unhandled rejection');
-      });
-    </script>
     <style>
       html, body {
         margin: 0;
@@ -50,7 +18,7 @@
       #boot-splash {
         position: fixed;
         inset: 0;
-        z-index: 9999;
+        z-index: 50;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -58,11 +26,6 @@
         background: radial-gradient(circle at 50% 42%, #1b2030 0%, #0b0d14 72%);
         text-align: center;
         padding: 24px;
-        transition: opacity 0.22s ease;
-      }
-      #boot-splash.fade-out {
-        opacity: 0;
-        pointer-events: none;
       }
       .boot-badge {
         color: #f0c362;
@@ -98,7 +61,8 @@
         margin-top: 12px;
         font-size: 13px;
         color: #b7c2d8;
-        max-width: 520px;
+        max-width: 560px;
+        line-height: 1.45;
       }
       @keyframes bootPulse {
         from { transform: translateX(-25%); width: 45%; }
@@ -107,14 +71,66 @@
     </style>
   </head>
   <body>
-    <div id="boot-splash">
-      <div class="boot-badge">⚔ Цитадель арены ⚔</div>
-      <h1 class="boot-title">KNIGHTS: LAST STANDING</h1>
-      <div class="boot-bar"><div class="boot-bar-fill"></div></div>
-      <div id="boot-status" class="boot-status">Открытие врат арены...</div>
-    </div>
     <div id="game-canvas-root"></div>
-    <div id="ui-root"></div>
+    <div id="ui-root">
+      <div id="boot-splash">
+        <div class="boot-badge">⚔ Цитадель арены ⚔</div>
+        <h1 class="boot-title">KNIGHTS: LAST STANDING</h1>
+        <div class="boot-bar"><div class="boot-bar-fill"></div></div>
+        <div id="boot-status" class="boot-status">Загрузка зала цитадели...</div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        window.__knightsBooted = false;
+        window.__reportBootIssue = function (msg) {
+          var el = document.getElementById('boot-status');
+          if (el) {
+            el.style.color = '#fca5a5';
+            el.textContent = 'Ошибка запуска: ' + msg;
+          }
+          try {
+            fetch('/api/client-error', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: String(msg), href: location.href })
+            }).catch(function () {});
+          } catch (_) {}
+        };
+
+        window.addEventListener('error', function (e) {
+          if (window.__knightsBooted) return;
+          var t = e.target;
+          if (t && t !== window && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+            window.__reportBootIssue('Не загрузился ' + (t.src || t.href || t.tagName));
+            return;
+          }
+          if (e.message) {
+            window.__reportBootIssue(e.message);
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function (e) {
+          if (window.__knightsBooted) return;
+          var reason = e.reason && (e.reason.message || String(e.reason));
+          window.__reportBootIssue(reason || 'Unhandled rejection');
+        });
+
+        setTimeout(function () {
+          if (!window.__knightsBooted) {
+            var el = document.getElementById('boot-status');
+            if (el && el.textContent.indexOf('Ошибка') === -1) {
+              if (location.protocol === 'about:' || location.protocol === 'blob:' || location.protocol === 'file:') {
+                el.style.color = '#fde68a';
+                el.textContent = 'Открыт статический предпросмотр файла. Переключитесь на вкладку превью сервера «Website» (порт 5173).';
+              } else {
+                el.textContent = 'Загрузка модулей игры (' + location.host + ')...';
+              }
+            }
+          }
+        }, 2500);
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
