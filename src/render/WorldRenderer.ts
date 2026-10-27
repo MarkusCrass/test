@@ -13,6 +13,7 @@ import { MatchManager } from '../core/MatchManager';
 import { ArenaBuilder } from './ArenaBuilder';
 import { CameraRig } from './CameraRig';
 import { EffectsManager } from './EffectsManager';
+import { kayKitAssets } from './KayKitAssetCache';
 import { KnightVisualRig } from './KnightMesh';
 import { MaterialLibrary } from './PixelTextures';
 import { SkyAndAtmosphere } from './SkyAndAtmosphere';
@@ -137,6 +138,11 @@ export class WorldRenderer {
 
     this.buildShowcasePedestal();
     this.rebuildPostProcessing(1, 'ultra');
+
+    // Start preloading official CC0 KayKit rigged .glb knight models immediately
+    kayKitAssets.preload().catch((err) => {
+      console.error('KayKit preload error:', err);
+    });
   }
 
   private setupLighting(sunPos: THREE.Vector3): void {

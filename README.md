@@ -44,3 +44,8 @@ npm run dev      # Запуск dev-сервера
 npm test         # Запуск модульных и симуляционных тестов
 npm run build    # Проверка типов TypeScript и сборка проекта
 ```
+
+## 3D-ассеты и лицензия
+
+- Риггированные 3D-модели персонажей и скелетные анимации (`public/models/kaykit/Knight.glb`, `Rogue_Hooded.glb`): **KayKit Character Pack: Adventures 1.0** от **Kay Lousberg** ([GitHub](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0)) — лицензия **CC0 1.0 Universal (Public Domain)**, см. `public/models/kaykit/LICENSE.txt`.
+
