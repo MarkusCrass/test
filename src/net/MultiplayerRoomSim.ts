@@ -684,7 +684,7 @@ export class ClientNetWorldSync {
     match.isOnlineMatch = true;
     match.localPlayerId = yourFighterId;
     match.spectatorTargetId = yourFighterId;
-    match.matchGeneration = matchGeneration;
+    match.matchGeneration = Math.max(match.matchGeneration + 1, matchGeneration);
     match.paused = false;
 
     const myFighter = match.getPlayer();

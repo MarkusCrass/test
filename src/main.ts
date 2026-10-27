@@ -260,6 +260,13 @@ class KnightsGameApp {
     });
 
     this.setupInputListeners();
+
+    const splash = document.getElementById('boot-splash');
+    if (splash) {
+      splash.classList.add('fade-out');
+      window.setTimeout(() => splash.remove(), 260);
+    }
+
     requestAnimationFrame(this.loop);
   }
 
@@ -733,4 +740,13 @@ class KnightsGameApp {
   };
 }
 
-new KnightsGameApp();
+try {
+  new KnightsGameApp();
+} catch (err) {
+  console.error('Boot error:', err);
+  const msg = err instanceof Error ? err.message : String(err);
+  const w = window as unknown as {
+    __reportBootIssue?: (m: string) => void;
+  };
+  w.__reportBootIssue?.(msg);
+}

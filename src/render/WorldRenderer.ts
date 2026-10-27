@@ -99,10 +99,16 @@ export class WorldRenderer {
   private currentQuality: GraphicsQuality = 'ultra';
 
   constructor(container: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: 'high-performance',
-    });
+    let glRenderer: THREE.WebGLRenderer;
+    try {
+      glRenderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: 'high-performance',
+      });
+    } catch {
+      glRenderer = new THREE.WebGLRenderer({ antialias: false });
+    }
+    this.renderer = glRenderer;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -123,9 +129,13 @@ export class WorldRenderer {
     this.scene.add(this.sky.group);
 
     // Apply procedural IBL environment map for authentic metallic armor & weapon sheen
-    const envTex = this.sky.generateEnvironmentMap(this.renderer);
-    this.scene.environment = envTex;
-    this.scene.environmentIntensity = 0.85;
+    try {
+      const envTex = this.sky.generateEnvironmentMap(this.renderer);
+      this.scene.environment = envTex;
+      this.scene.environmentIntensity = 0.85;
+    } catch (err) {
+      console.warn('Environment map fallback:', err);
+    }
 
     this.materials = new MaterialLibrary();
     this.arenaBuilder = new ArenaBuilder(ARENA_CONFIG, this.materials);
@@ -140,13 +150,17 @@ export class WorldRenderer {
     this.buildShowcasePedestal();
     this.rebuildPostProcessing(1, 'ultra');
 
-    // Start preloading official CC0 KayKit rigged .glb knight & dungeon models immediately
-    kayKitAssets.preload().catch((err) => {
-      console.error('KayKit character preload error:', err);
-    });
-    dungeonAssets.preload().catch((err) => {
-      console.error('KayKit dungeon preload error:', err);
-    });
+    // Defer 3D .glb asset streaming until after Main Menu UI has painted so initial page boot is instant
+    window.setTimeout(() => {
+      kayKitAssets
+        .preload()
+        .catch((err) => console.error('KayKit character preload error:', err))
+        .finally(() => {
+          dungeonAssets.preload().catch((err) => {
+            console.error('KayKit dungeon preload error:', err);
+          });
+        });
+    }, 180);
   }
 
   private setupLighting(sunPos: THREE.Vector3): void {
@@ -265,57 +279,61 @@ export class WorldRenderer {
     const h = Math.max(1, window.innerHeight);
     const dpr = this.renderer.getPixelRatio();
 
-    const rt = new THREE.WebGLRenderTarget(
-      Math.floor(w * dpr),
-      Math.floor(h * dpr),
-      {
-        type: THREE.HalfFloatType,
-        samples:
-          this.renderer.capabilities.isWebGL2 &&
-          pixelScale === 1 &&
-          quality === 'ultra'
-            ? 4
-            : 0,
-      }
-    );
-
-    this.composer = new EffectComposer(this.renderer, rt);
-    this.composer.setPixelRatio(dpr);
-    this.composer.setSize(w, h);
-
-    if (pixelScale > 1) {
-      // Genuine depth/normal edge-aware 3D pixelation pass!
-      const pixPass = new RenderPixelatedPass(
-        pixelScale * 2,
-        this.scene,
-        this.cameraRig.camera,
+    try {
+      const rt = new THREE.WebGLRenderTarget(
+        Math.floor(w * dpr),
+        Math.floor(h * dpr),
         {
-          normalEdgeStrength: 0.28,
-          depthEdgeStrength: 0.35,
+          type: THREE.HalfFloatType,
+          samples:
+            this.renderer.capabilities.isWebGL2 &&
+            pixelScale === 1 &&
+            quality === 'ultra'
+              ? 4
+              : 0,
         }
       );
-      this.composer.addPass(pixPass);
-    } else {
-      const renderPass = new RenderPass(this.scene, this.cameraRig.camera);
-      this.composer.addPass(renderPass);
+
+      this.composer = new EffectComposer(this.renderer, rt);
+      this.composer.setPixelRatio(dpr);
+      this.composer.setSize(w, h);
+
+      if (pixelScale > 1) {
+        const pixPass = new RenderPixelatedPass(
+          pixelScale * 2,
+          this.scene,
+          this.cameraRig.camera,
+          {
+            normalEdgeStrength: 0.28,
+            depthEdgeStrength: 0.35,
+          }
+        );
+        this.composer.addPass(pixPass);
+      } else {
+        const renderPass = new RenderPass(this.scene, this.cameraRig.camera);
+        this.composer.addPass(renderPass);
+      }
+
+      if (quality === 'ultra' || quality === 'high') {
+        this.bloomPass = new UnrealBloomPass(
+          new THREE.Vector2(w, h),
+          quality === 'ultra' ? 0.32 : 0.22,
+          0.42,
+          0.96
+        );
+        this.composer.addPass(this.bloomPass);
+      }
+
+      const gradePass = new ShaderPass(CINEMATIC_GRADE_SHADER);
+      this.composer.addPass(gradePass);
+
+      const outputPass = new OutputPass();
+      this.composer.addPass(outputPass);
+    } catch (err) {
+      console.warn('Post-processing fallback to direct render:', err);
+      this.composer = null;
+      this.bloomPass = null;
     }
-
-    if (quality === 'ultra' || quality === 'high') {
-      // Selective HDR Bloom: high threshold ensures zero screen haze — only flames & sparks glow!
-      this.bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(w, h),
-        quality === 'ultra' ? 0.32 : 0.22,
-        0.42,
-        0.96
-      );
-      this.composer.addPass(this.bloomPass);
-    }
-
-    const gradePass = new ShaderPass(CINEMATIC_GRADE_SHADER);
-    this.composer.addPass(gradePass);
-
-    const outputPass = new OutputPass();
-    this.composer.addPass(outputPass);
   }
 
   public syncShowcaseClass(classId: KnightClassId): void {

@@ -60,15 +60,26 @@ class DungeonAssetCache {
 
     const loader = new GLTFLoader();
     const keys = Object.keys(DUNGEON_MODEL_FILES) as DungeonAssetKey[];
+    let cursor = 0;
+    const workerCount = Math.min(3, keys.length);
+
+    const runWorker = async (): Promise<void> => {
+      while (cursor < keys.length) {
+        const key = keys[cursor++];
+        const filename = DUNGEON_MODEL_FILES[key];
+        try {
+          const gltf = await loader.loadAsync(`/models/dungeon/${filename}`);
+          const root = gltf.scene;
+          this.prepareTemplate(root);
+          this.templates.set(key, root);
+        } catch (err) {
+          console.error(`Failed to load dungeon asset ${filename}:`, err);
+        }
+      }
+    };
 
     this.loadingPromise = Promise.all(
-      keys.map(async (key) => {
-        const filename = DUNGEON_MODEL_FILES[key];
-        const gltf = await loader.loadAsync(`/models/dungeon/${filename}`);
-        const root = gltf.scene;
-        this.prepareTemplate(root);
-        this.templates.set(key, root);
-      })
+      Array.from({ length: workerCount }, () => runWorker())
     )
       .then(() => {
         this.loaded = true;

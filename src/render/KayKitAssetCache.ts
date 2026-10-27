@@ -30,10 +30,11 @@ class KayKitAssetRegistry {
     if (this.loadingPromise) return this.loadingPromise;
 
     const loader = new GLTFLoader();
-    this.loadingPromise = Promise.all([
-      loader.loadAsync('./models/kaykit/Knight.glb'),
-      loader.loadAsync('./models/kaykit/Rogue_Hooded.glb'),
-    ]).then(([knightGltf, rogueGltf]) => {
+    this.loadingPromise = (async () => {
+      const knightGltf = await loader.loadAsync('/models/kaykit/Knight.glb');
+      const rogueGltf = await loader.loadAsync(
+        '/models/kaykit/Rogue_Hooded.glb'
+      );
       const pack = this.extractPack(knightGltf, rogueGltf);
       this.pack = pack;
       for (const cb of this.readyCallbacks) {
@@ -41,7 +42,7 @@ class KayKitAssetRegistry {
       }
       this.readyCallbacks.length = 0;
       return pack;
-    });
+    })();
 
     return this.loadingPromise;
   }
@@ -56,9 +57,6 @@ class KayKitAssetRegistry {
       return;
     }
     this.readyCallbacks.push(cb);
-    this.preload().catch((err) => {
-      console.error('Failed to load KayKit GLB models:', err);
-    });
   }
 
   public cloneKnightRig(): THREE.Object3D | null {

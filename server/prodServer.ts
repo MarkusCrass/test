@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 import { attachMultiplayerHub } from './wsHub';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,20 +24,54 @@ const MIME_TYPES: Record<string, string> = {
   '.ogg': 'audio/ogg',
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
+  '.txt': 'text/plain; charset=utf-8',
   '.ico': 'image/x-icon',
 };
 
-const port = Number(process.env.PORT ?? 4173);
+const COMPRESSIBLE_EXTS = new Set([
+  '.html',
+  '.js',
+  '.css',
+  '.json',
+  '.svg',
+  '.glb',
+  '.txt',
+]);
+
+const port = Number(process.env.PORT ?? 5173);
 const host = process.env.HOST ?? '0.0.0.0';
 
 let hubRef: ReturnType<typeof attachMultiplayerHub> | null = null;
 
 const server = http.createServer((req, res) => {
+  const pathname = (req.url ?? '/').split('?')[0];
+
+  if (req.method === 'POST' && pathname === '/api/client-error') {
+    let body = '';
+    req.on('data', (chunk) => {
+      if (body.length < 4096) body += chunk.toString();
+    });
+    req.on('end', () => {
+      console.error('[Browser Client Boot Error]:', body);
+      res.statusCode = 204;
+      res.end();
+    });
+    return;
+  }
+
   if (hubRef && hubRef.handleApiRequest(req, res)) {
     return;
   }
 
-  const rawPath = decodeURIComponent((req.url ?? '/').split('?')[0]);
+  let rawPath = '/';
+  try {
+    rawPath = decodeURIComponent(pathname);
+  } catch {
+    res.statusCode = 400;
+    res.end('Bad Request');
+    return;
+  }
+
   const safeRel = path
     .normalize(rawPath)
     .replace(/^(\.\.(\/|\\|$))+/, '')
@@ -53,7 +88,14 @@ const server = http.createServer((req, res) => {
     filePath = path.join(filePath, 'index.html');
   }
   if (!fs.existsSync(filePath)) {
-    filePath = path.join(DIST_DIR, 'index.html');
+    // Only fall back to index.html for navigation routes, never for missing asset files
+    if (!path.extname(safeRel)) {
+      filePath = path.join(DIST_DIR, 'index.html');
+    } else {
+      res.statusCode = 404;
+      res.end('Not Found');
+      return;
+    }
   }
   if (!fs.existsSync(filePath)) {
     res.statusCode = 404;
@@ -62,11 +104,33 @@ const server = http.createServer((req, res) => {
   }
 
   const ext = path.extname(filePath).toLowerCase();
+  const mime = MIME_TYPES[ext] ?? 'application/octet-stream';
+  const stat = fs.statSync(filePath);
+
+  res.setHeader('Content-Type', mime);
+  if (ext === '.html') {
+    res.setHeader('Cache-Control', 'no-cache');
+  } else if (rawPath.startsWith('/assets/') || rawPath.startsWith('/models/')) {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
+
+  if (req.method === 'HEAD') {
+    res.statusCode = 200;
+    res.end();
+    return;
+  }
+
+  const acceptEncoding = String(req.headers['accept-encoding'] ?? '');
+  if (COMPRESSIBLE_EXTS.has(ext) && acceptEncoding.includes('gzip')) {
+    res.statusCode = 200;
+    res.setHeader('Content-Encoding', 'gzip');
+    res.setHeader('Vary', 'Accept-Encoding');
+    fs.createReadStream(filePath).pipe(zlib.createGzip()).pipe(res);
+    return;
+  }
+
   res.statusCode = 200;
-  res.setHeader(
-    'Content-Type',
-    MIME_TYPES[ext] ?? 'application/octet-stream'
-  );
+  res.setHeader('Content-Length', stat.size);
   fs.createReadStream(filePath).pipe(res);
 });
 
