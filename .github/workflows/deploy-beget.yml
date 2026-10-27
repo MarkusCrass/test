@@ -7,6 +7,9 @@ on:
       - 'arena/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -20,8 +23,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Validate PHP multiplayer relay syntax
-        run: php -l public/api/mp.php
+      - name: Validate PHP multiplayer relay syntax & functional smoke test
+        run: |
+          php -l public/api/mp.php
+          php -r '$_GET["action"]="connect"; $_SERVER["REQUEST_METHOD"]="POST"; ob_start(); include "public/api/mp.php";' | grep -q '"relayMode":"host_sim"'
 
       - name: Install dependencies, test & build production bundle
         run: |
@@ -31,6 +36,25 @@ jobs:
           test -f dist/index.html
           test -f dist/.htaccess
           test -f dist/api/mp.php
+
+      - name: Package Beget public_html archives (.zip & .tar.gz)
+        run: |
+          (cd dist && zip -rq ../knights-beget-public_html.zip . .htaccess)
+          (cd dist && tar -czf ../knights-beget-public_html.tar.gz .)
+          ls -lh knights-beget-public_html.zip knights-beget-public_html.tar.gz
+
+      - name: Publish public Beget release (beget-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view beget-latest >/dev/null 2>&1; then
+            gh release upload beget-latest knights-beget-public_html.zip knights-beget-public_html.tar.gz --clobber
+          else
+            gh release create beget-latest knights-beget-public_html.zip knights-beget-public_html.tar.gz \
+              --target "${{ github.sha }}" \
+              --title "KNIGHTS: LAST STANDING — Готовая сборка для Beget (public_html)" \
+              --notes "Готовый архив сайта для распаковки в \`ezekie6n.beget.tech/public_html\` на хостинге Beget (включает 3D-арену, звуки, иконки, \`.htaccess\` и PHP-сервер мультиплеера \`api/mp.php\`)."
+          fi
 
       - name: Upload ready-to-host Beget archive artifact
         uses: actions/upload-artifact@v4
@@ -47,7 +71,7 @@ jobs:
           BEGET_DIR_OVERRIDE: ${{ secrets.BEGET_SERVER_DIR }}
         run: |
           if [ -z "$BEGET_PASSWORD" ]; then
-            echo "### ℹ️ Автодеплой ожидает секрет BEGET_PASSWORD" >> "$GITHUB_STEP_SUMMARY"
+            echo "### ℹ️ Автодеплой по FTP ожидает секрет BEGET_PASSWORD" >> "$GITHUB_STEP_SUMMARY"
             echo "Добавьте секрет \`BEGET_PASSWORD\` (пароль от аккаунта/FTP Beget \`ezekie6n\`) в Settings → Secrets and variables → Actions, чтобы каждый push автоматически заливал сайт на http://ezekie6n.beget.tech/." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -60,10 +84,6 @@ jobs:
           set net:timeout 20
           set ftp:passive-mode true
 
-          # Auto-detect Beget directory layout:
-          # 1) Custom override if provided
-          # 2) Main Beget account: /ezekie6n.beget.tech/public_html
-          # 3) Site-rooted FTP account: /public_html or /
           cd "${BEGET_DIR_OVERRIDE:-/ezekie6n.beget.tech/public_html}" || cd "/public_html" || cd "/"
 
           mirror --reverse --delete --verbose --parallel=6 dist/ ./
