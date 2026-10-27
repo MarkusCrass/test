@@ -22,7 +22,7 @@ export interface UICallbacks {
   onResumeGame: () => void;
   onCycleSpectator: (delta: 1 | -1) => void;
   onSettingsChanged: (next: GameSettings) => void;
-  onSelectPreviewClass: (classId: KnightClassId) => void;
+  onSelectPreviewClass: (classId: KnightClassId, userInitiated?: boolean) => void;
   onTriggerSkillSlot?: (slotKey: SkillSlotKey) => void;
 }
 
@@ -615,9 +615,12 @@ export class UIManager {
     return refs;
   }
 
-  private renderSelectionClass(classId: KnightClassId): void {
+  private renderSelectionClass(
+    classId: KnightClassId,
+    userInitiated = false
+  ): void {
     this.currentSelectedClass = classId;
-    this.callbacks.onSelectPreviewClass(classId);
+    this.callbacks.onSelectPreviewClass(classId, userInitiated);
 
     const tabsEl = this.q('#class-tabs');
     tabsEl.innerHTML = CLASS_ORDER.map((cid) => {
@@ -633,7 +636,7 @@ export class UIManager {
     tabsEl.querySelectorAll('.class-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
         const cid = (btn as HTMLElement).dataset.cid as KnightClassId;
-        this.renderSelectionClass(cid);
+        this.renderSelectionClass(cid, true);
       });
     });
 

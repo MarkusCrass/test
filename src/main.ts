@@ -87,8 +87,10 @@ class KnightsGameApp {
           this.settings.graphicsQuality
         );
       },
-      onSelectPreviewClass: (classId) => {
-        this.sound.playClassSelect(classId);
+      onSelectPreviewClass: (classId, userInitiated) => {
+        if (userInitiated) {
+          this.sound.playClassSelect(classId);
+        }
         this.match.selectedPlayerClass = classId;
         this.world.syncShowcaseClass(classId);
       },

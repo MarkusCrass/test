@@ -233,11 +233,9 @@ export class SoundManager {
   private compressor: DynamicsCompressorNode | null = null;
   private volume = 0.7;
 
-  private readonly rawBuffers = new Map<string, ArrayBuffer>();
   private readonly decodedBanks = new Map<SfxBankId, AudioBuffer[]>();
   private readonly lastVariantByBank = new Map<SfxBankId, number>();
 
-  private rawPrefetchStarted = false;
   private decodeStarted = false;
 
   private listener: ListenerPose = {
@@ -248,17 +246,14 @@ export class SoundManager {
     rightZ: 0,
   };
 
-  constructor() {
-    // Begin quiet background fetch of compact CC0 MP3 assets (~316 KB total) in browser
-    if (typeof window !== 'undefined' && typeof fetch === 'function') {
-      this.prefetchRawFiles();
-    }
-  }
-
   public setVolume(vol: number): void {
     this.volume = Math.max(0, Math.min(1, vol));
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+      try {
+        this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+      } catch {
+        this.masterGain.gain.value = this.volume;
+      }
     }
   }
 
@@ -280,33 +275,39 @@ export class SoundManager {
   }
 
   public unlock(): void {
-    if (!this.ctx && typeof window !== 'undefined') {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-        this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = this.volume;
+    try {
+      if (!this.ctx && typeof window !== 'undefined') {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (AudioCtx) {
+          this.ctx = new AudioCtx();
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.value = this.volume;
 
-        this.compressor = this.ctx.createDynamicsCompressor();
-        this.compressor.threshold.value = -10;
-        this.compressor.knee.value = 12;
-        this.compressor.ratio.value = 4;
-        this.compressor.attack.value = 0.003;
-        this.compressor.release.value = 0.16;
+          if (typeof this.ctx.createDynamicsCompressor === 'function') {
+            this.compressor = this.ctx.createDynamicsCompressor();
+            this.compressor.threshold.value = -10;
+            this.compressor.knee.value = 12;
+            this.compressor.ratio.value = 4;
+            this.compressor.attack.value = 0.003;
+            this.compressor.release.value = 0.16;
+            this.compressor.connect(this.masterGain);
+          }
 
-        this.compressor.connect(this.masterGain);
-        this.masterGain.connect(this.ctx.destination);
+          this.masterGain.connect(this.ctx.destination);
+        }
       }
-    }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
-    if (this.ctx && !this.decodeStarted) {
-      this.decodeStarted = true;
-      void this.decodeAllBanks();
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      if (this.ctx && !this.decodeStarted) {
+        this.decodeStarted = true;
+        void this.decodeAllBanksThrottled();
+      }
+    } catch {
+      // Never allow restricted iframe/WebAudio policies to block gameplay
     }
   }
 
@@ -316,55 +317,50 @@ export class SoundManager {
     return base.endsWith('/') ? base : `${base}/`;
   }
 
-  private prefetchRawFiles(): void {
-    if (this.rawPrefetchStarted) return;
-    this.rawPrefetchStarted = true;
-    const baseUrl = this.getBaseUrl();
-
-    for (const files of Object.values(SFX_BANKS)) {
-      for (const file of files) {
-        if (this.rawBuffers.has(file)) continue;
-        fetch(`${baseUrl}audio/sfx/${file}`)
-          .then((res) => (res.ok ? res.arrayBuffer() : null))
-          .then((buf) => {
-            if (buf && buf.byteLength > 256) {
-              this.rawBuffers.set(file, buf);
-            }
-          })
-          .catch(() => {});
-      }
-    }
-  }
-
-  private async decodeAllBanks(): Promise<void> {
+  /**
+   * Loads and decodes CC0 MP3 banks using at most 4 concurrent HTTP requests
+   * after the user's first interaction, avoiding proxy connection saturation at boot.
+   */
+  private async decodeAllBanksThrottled(): Promise<void> {
     if (!this.ctx || typeof fetch !== 'function') return;
     const ctx = this.ctx;
     const baseUrl = this.getBaseUrl();
 
+    const queue: Array<{ bankId: SfxBankId; file: string }> = [];
     const entries = Object.entries(SFX_BANKS) as [SfxBankId, readonly string[]][];
-    await Promise.all(
-      entries.map(async ([bankId, files]) => {
-        const decoded: AudioBuffer[] = [];
-        for (const file of files) {
-          try {
-            let raw = this.rawBuffers.get(file);
-            if (!raw) {
-              const res = await fetch(`${baseUrl}audio/sfx/${file}`);
-              if (!res.ok) continue;
-              raw = await res.arrayBuffer();
-            }
-            const audioBuf = await ctx.decodeAudioData(raw.slice(0));
-            decoded.push(audioBuf);
-          } catch {
-            // Keep remaining variants or procedural fallback if a file cannot decode
+    for (const [bankId, files] of entries) {
+      for (const file of files) {
+        queue.push({ bankId, file });
+      }
+    }
+
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < queue.length) {
+        const idx = cursor++;
+        const item = queue[idx];
+        try {
+          const res = await fetch(`${baseUrl}audio/sfx/${item.file}`);
+          if (!res.ok) continue;
+          const raw = await res.arrayBuffer();
+          if (raw.byteLength < 256) continue;
+          const audioBuf = await ctx.decodeAudioData(raw.slice(0));
+          let list = this.decodedBanks.get(item.bankId);
+          if (!list) {
+            list = [];
+            this.decodedBanks.set(item.bankId, list);
           }
+          list.push(audioBuf);
+        } catch {
+          // Procedural fallback handles any unavailable clip
         }
-        if (decoded.length > 0) {
-          this.decodedBanks.set(bankId, decoded);
-        }
-      })
+      }
+    };
+
+    const concurrency = 4;
+    await Promise.all(
+      Array.from({ length: concurrency }, () => worker())
     );
-    this.rawBuffers.clear();
   }
 
   private getOutputNode(): AudioNode | null {
@@ -386,49 +382,53 @@ export class SoundManager {
     const effectiveGain = (opts.gain ?? 1.0) * spatial.gain;
     if (effectiveGain <= 0.008) return true;
 
-    const idx = pickVariantIndex(
-      buffers.length,
-      this.lastVariantByBank.get(bank)
-    );
-    this.lastVariantByBank.set(bank, idx);
+    try {
+      const idx = pickVariantIndex(
+        buffers.length,
+        this.lastVariantByBank.get(bank)
+      );
+      this.lastVariantByBank.set(bank, idx);
 
-    const startTime = this.ctx.currentTime + Math.max(0, opts.delaySec ?? 0);
-    const rMin = opts.rateMin ?? 0.95;
-    const rMax = opts.rateMax ?? 1.05;
-    const rate = rMin + Math.random() * (rMax - rMin);
+      const startTime = this.ctx.currentTime + Math.max(0, opts.delaySec ?? 0);
+      const rMin = opts.rateMin ?? 0.95;
+      const rMax = opts.rateMax ?? 1.05;
+      const rate = rMin + Math.random() * (rMax - rMin);
 
-    const src = this.ctx.createBufferSource();
-    src.buffer = buffers[idx];
-    src.playbackRate.setValueAtTime(rate, startTime);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buffers[idx];
+      src.playbackRate.setValueAtTime(rate, startTime);
 
-    const gainNode = this.ctx.createGain();
-    // Recorded clips are mastered at -20 dBFS; 1.85x brings primary hits right to vivid game presence
-    gainNode.gain.setValueAtTime(effectiveGain * 1.85, startTime);
+      const gainNode = this.ctx.createGain();
+      // Recorded clips are mastered at -20 dBFS; 1.85x brings primary hits right to vivid game presence
+      gainNode.gain.setValueAtTime(effectiveGain * 1.85, startTime);
 
-    let tail: AudioNode = src;
-    if (spatial.distantLowpassHz !== null) {
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(spatial.distantLowpassHz, startTime);
-      tail.connect(filter);
-      tail = filter;
+      let tail: AudioNode = src;
+      if (spatial.distantLowpassHz !== null) {
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(spatial.distantLowpassHz, startTime);
+        tail.connect(filter);
+        tail = filter;
+      }
+
+      tail.connect(gainNode);
+      if (
+        typeof this.ctx.createStereoPanner === 'function' &&
+        Math.abs(spatial.pan) > 0.02
+      ) {
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.setValueAtTime(spatial.pan, startTime);
+        gainNode.connect(panner);
+        panner.connect(out);
+      } else {
+        gainNode.connect(out);
+      }
+
+      src.start(startTime);
+      return true;
+    } catch {
+      return false;
     }
-
-    tail.connect(gainNode);
-    if (
-      typeof this.ctx.createStereoPanner === 'function' &&
-      Math.abs(spatial.pan) > 0.02
-    ) {
-      const panner = this.ctx.createStereoPanner();
-      panner.pan.setValueAtTime(spatial.pan, startTime);
-      gainNode.connect(panner);
-      panner.connect(out);
-    } else {
-      gainNode.connect(out);
-    }
-
-    src.start(startTime);
-    return true;
   }
 
   public playUiClick(): void {
