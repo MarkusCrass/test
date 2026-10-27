@@ -2,6 +2,7 @@ import http from 'node:http';
 import { describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { attachMultiplayerHub } from '../server/wsHub';
+import { createEmptyIntent } from '../src/core/Fighter';
 import { MatchManager } from '../src/core/MatchManager';
 import {
   AuthoritativeMatchSim,
@@ -37,6 +38,20 @@ function sendClientMsg(ws: WebSocket, msg: ClientMsg): void {
 }
 
 describe('Online Multiplayer Simulation, Sync & WebSocket Hub', () => {
+  it('keeps MatchManager in MultiplayerLobby across animation frames without false MatchFinished draw', () => {
+    const match = new MatchManager();
+    match.goToMultiplayerLobby();
+    expect(match.state).toBe('MultiplayerLobby');
+    expect(match.fighters).toHaveLength(0);
+
+    for (let i = 0; i < 120; i++) {
+      const out = match.update(1 / 60, createEmptyIntent(0));
+      expect(out.stateChangedTo).toBeNull();
+      expect(match.state).toBe('MultiplayerLobby');
+      expect(match.finishReason).toBeNull();
+    }
+  });
+
   it('spawns 2 human players + 3 tactical bots when fillBots=true, or exact humans when fillBots=false', () => {
     const simWithBots = new AuthoritativeMatchSim();
     simWithBots.start(
@@ -286,6 +301,96 @@ describe('Online Multiplayer Simulation, Sync & WebSocket Hub', () => {
     } finally {
       ws1.close();
       ws2.close();
+      hub.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('supports full HTTP fallback (/api/mp/connect & /api/mp/sync) when WebSocket upgrades are blocked', async () => {
+    const server = http.createServer((req, res) => {
+      if (hub.handleApiRequest(req, res)) return;
+      res.statusCode = 404;
+      res.end();
+    });
+    const hub = attachMultiplayerHub(server);
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const addr = server.address();
+    if (!addr || typeof addr === 'string') {
+      throw new Error('Failed to bind ephemeral server');
+    }
+    const baseHttp = `http://127.0.0.1:${addr.port}`;
+
+    try {
+      const c1Res = await fetch(`${baseHttp}/api/mp/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const c1 = (await c1Res.json()) as {
+        clientId: string;
+        messages: ServerMsg[];
+      };
+      expect(c1.clientId).toBeTruthy();
+      expect(c1.messages.some((m) => m.type === 'welcome')).toBe(true);
+
+      // Create room with bots via HTTP sync
+      const createRes = await fetch(`${baseHttp}/api/mp/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: c1.clientId,
+          messages: [
+            {
+              type: 'create_room',
+              playerName: 'Сэр Гавейн',
+              classId: 'hammer',
+              isPublic: true,
+              fillBots: true,
+            } satisfies ClientMsg,
+          ],
+        }),
+      });
+      const createJson = (await createRes.json()) as { messages: ServerMsg[] };
+      const joined = createJson.messages.find((m) => m.type === 'room_joined');
+      expect(joined).toBeDefined();
+
+      // Start match via HTTP sync (1 human + 4 bots = 5 fighters)
+      const startRes = await fetch(`${baseHttp}/api/mp/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: c1.clientId,
+          messages: [{ type: 'start_match' } satisfies ClientMsg],
+        }),
+      });
+      const startJson = (await startRes.json()) as { messages: ServerMsg[] };
+      const started = startJson.messages.find(
+        (m) => m.type === 'match_started'
+      );
+      expect(started).toBeDefined();
+      if (started && started.type === 'match_started') {
+        expect(started.snapshot.fighters).toHaveLength(5);
+      }
+
+      // Wait ~60ms for 60Hz loop to emit snapshots into HTTP outbox
+      await new Promise((r) => setTimeout(r, 65));
+      const pollRes = await fetch(`${baseHttp}/api/mp/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: c1.clientId, messages: [] }),
+      });
+      const pollJson = (await pollRes.json()) as { messages: ServerMsg[] };
+      expect(pollJson.messages.some((m) => m.type === 'snapshot')).toBe(true);
+
+      // Clean disconnect
+      const discRes = await fetch(`${baseHttp}/api/mp/disconnect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: c1.clientId }),
+      });
+      expect(discRes.status).toBe(200);
+    } finally {
       hub.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

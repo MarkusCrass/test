@@ -32,8 +32,13 @@ export interface MultiplayerClientCallbacks {
   onPingUpdate?: (pingMs: number) => void;
 }
 
+const WS_CONNECT_TIMEOUT_MS = 2200;
+const HTTP_LOBBY_POLL_MS = 380;
+const HTTP_MATCH_POLL_MS = 45;
+
 export class MultiplayerClient {
   private ws: WebSocket | null = null;
+  private transport: 'none' | 'ws' | 'http' = 'none';
   private status: NetConnectionStatus = 'disconnected';
   private readonly customWsUrl?: string;
   private readonly callbacks: MultiplayerClientCallbacks;
@@ -45,6 +50,12 @@ export class MultiplayerClient {
   public pingMs = 0;
 
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private httpPollTimer: ReturnType<typeof setTimeout> | null = null;
+  private httpInFlight = false;
+  private httpPendingImmediate = false;
+  private httpOutbox: ClientMsg[] = [];
+  private httpFailures = 0;
+
   private inputSendAccum = 0;
   private jumpSeq = 0;
   private dodgeSeq = 0;
@@ -53,7 +64,7 @@ export class MultiplayerClient {
   private lastAttackHeld = false;
   private lastBlockHeld = false;
 
-  private pendingConnectResolvers: Array<(ok: boolean) => void> = [];
+  private connectInFlight: Promise<boolean> | null = null;
 
   constructor(
     callbacks: MultiplayerClientCallbacks = {},
@@ -67,10 +78,16 @@ export class MultiplayerClient {
     return this.status;
   }
 
+  public getTransport(): 'none' | 'ws' | 'http' {
+    return this.transport;
+  }
+
   public isConnected(): boolean {
-    return (
-      this.status === 'connected' && this.ws?.readyState === WebSocket.OPEN
-    );
+    if (this.status !== 'connected') return false;
+    if (this.transport === 'ws') {
+      return this.ws?.readyState === WebSocket.OPEN;
+    }
+    return this.transport === 'http' && this.clientId !== null;
   }
 
   public isHost(): boolean {
@@ -87,38 +104,103 @@ export class MultiplayerClient {
     return `${proto}//${window.location.host}/ws`;
   }
 
+  private resolveHttpBaseUrl(): string {
+    if (this.customWsUrl) {
+      return this.customWsUrl
+        .replace(/^wss:/i, 'https:')
+        .replace(/^ws:/i, 'http:')
+        .replace(/\/ws\/?$/, '');
+    }
+    return '';
+  }
+
   public connect(): Promise<boolean> {
     if (this.isConnected()) {
       return Promise.resolve(true);
     }
-    if (this.status === 'connecting' && this.ws) {
-      return new Promise((resolve) => {
-        this.pendingConnectResolvers.push(resolve);
-      });
+    if (this.connectInFlight) {
+      return this.connectInFlight;
     }
 
-    this.cleanupSocket(false);
+    this.cleanupTransport(false);
     this.setStatus('connecting');
 
+    const attempt = (async (): Promise<boolean> => {
+      const wsOk = await this.tryConnectWebSocket();
+      if (wsOk) {
+        return true;
+      }
+      // Automatic HTTPS fallback when WebSocket Upgrade is blocked by proxy/DPI/firewall
+      const httpOk = await this.tryConnectHttpFallback();
+      if (httpOk) {
+        return true;
+      }
+      this.setStatus(
+        'error',
+        'Не удалось подключиться к серверу арены (WS и HTTPS недоступны).'
+      );
+      return false;
+    })();
+
+    this.connectInFlight = attempt.finally(() => {
+      this.connectInFlight = null;
+    });
+    return this.connectInFlight;
+  }
+
+  private tryConnectWebSocket(): Promise<boolean> {
+    if (typeof WebSocket === 'undefined') {
+      return Promise.resolve(false);
+    }
+
     return new Promise((resolve) => {
-      this.pendingConnectResolvers.push(resolve);
+      let settled = false;
       let socket: WebSocket;
+
+      const finish = (ok: boolean): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(ok);
+      };
+
       try {
         socket = new WebSocket(this.resolveWsUrl());
       } catch {
-        this.setStatus('error', 'Не удалось открыть сетевой сокет.');
-        this.flushConnectResolvers(false);
+        resolve(false);
         return;
       }
+
+      const timeoutId = setTimeout(() => {
+        if (!settled) {
+          try {
+            socket.close();
+          } catch {
+            // Ignore
+          }
+          if (this.ws === socket) {
+            this.ws = null;
+          }
+          finish(false);
+        }
+      }, WS_CONNECT_TIMEOUT_MS);
 
       this.ws = socket;
 
       socket.addEventListener('open', () => {
-        if (this.ws !== socket) return;
+        if (settled || this.ws !== socket) {
+          try {
+            socket.close();
+          } catch {
+            // Ignore
+          }
+          return;
+        }
+        this.transport = 'ws';
         this.setStatus('connected');
         this.startPingLoop();
         this.send({ type: 'list_rooms' });
-        this.flushConnectResolvers(true);
+        finish(true);
       });
 
       socket.addEventListener('message', (ev) => {
@@ -135,6 +217,11 @@ export class MultiplayerClient {
       socket.addEventListener('close', () => {
         if (this.ws !== socket) return;
         this.ws = null;
+        if (!settled) {
+          finish(false);
+          return;
+        }
+        this.transport = 'none';
         this.stopPingLoop();
         const hadRoom = this.currentRoom !== null;
         this.currentRoom = null;
@@ -143,22 +230,174 @@ export class MultiplayerClient {
           this.callbacks.onRoomUpdated?.(null);
         }
         this.setStatus('disconnected');
-        this.flushConnectResolvers(false);
       });
 
       socket.addEventListener('error', () => {
         if (this.ws !== socket) return;
-        this.setStatus('error', 'Потеряна связь с сервером арены.');
+        if (!settled) {
+          try {
+            socket.close();
+          } catch {
+            // Ignore
+          }
+          this.ws = null;
+          finish(false);
+        }
       });
     });
   }
 
-  public disconnect(): void {
-    this.cleanupSocket(true);
+  private async tryConnectHttpFallback(): Promise<boolean> {
+    try {
+      const base = this.resolveHttpBaseUrl();
+      const startedAt = performance.now();
+      const res = await fetch(`${base}/api/mp/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        return false;
+      }
+      const data = (await res.json()) as {
+        clientId?: string;
+        messages?: ServerMsg[];
+      };
+      if (!data.clientId) {
+        return false;
+      }
+
+      this.transport = 'http';
+      this.clientId = data.clientId;
+      this.httpOutbox = [];
+      this.httpFailures = 0;
+      this.pingMs = Math.max(1, Math.round(performance.now() - startedAt));
+      this.setStatus('connected');
+      this.callbacks.onPingUpdate?.(this.pingMs);
+
+      if (Array.isArray(data.messages)) {
+        for (const msg of data.messages) {
+          this.handleServerMessage(msg);
+        }
+      }
+
+      this.startPingLoop();
+      this.scheduleHttpPoll(80);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  private cleanupSocket(notifyStatus: boolean): void {
+  private scheduleHttpPoll(delayMs?: number): void {
+    if (this.transport !== 'http' || this.status !== 'connected') return;
+    if (this.httpPollTimer !== null) {
+      clearTimeout(this.httpPollTimer);
+      this.httpPollTimer = null;
+    }
+    const interval =
+      delayMs ??
+      (this.currentRoom?.phase === 'in_match'
+        ? HTTP_MATCH_POLL_MS
+        : HTTP_LOBBY_POLL_MS);
+    this.httpPollTimer = setTimeout(() => {
+      this.httpPollTimer = null;
+      void this.flushHttpSync();
+    }, interval);
+  }
+
+  private async flushHttpSync(): Promise<void> {
+    if (
+      this.transport !== 'http' ||
+      this.status !== 'connected' ||
+      !this.clientId
+    ) {
+      return;
+    }
+    if (this.httpInFlight) {
+      this.httpPendingImmediate = true;
+      return;
+    }
+
+    this.httpInFlight = true;
+    this.httpPendingImmediate = false;
+    const outgoing = this.httpOutbox.splice(0);
+    const base = this.resolveHttpBaseUrl();
+
+    try {
+      const res = await fetch(`${base}/api/mp/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: this.clientId,
+          messages: outgoing,
+        }),
+        cache: 'no-store',
+      });
+
+      if (res.status === 410) {
+        this.handleHttpDisconnect('Сессия истекла. Нажмите «Обновить» для переподключения.');
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      this.httpFailures = 0;
+      const payload = (await res.json()) as { messages?: ServerMsg[] };
+      if (Array.isArray(payload.messages)) {
+        for (const msg of payload.messages) {
+          this.handleServerMessage(msg);
+        }
+      }
+    } catch {
+      this.httpFailures += 1;
+      if (this.httpFailures >= 6) {
+        this.handleHttpDisconnect('Потеряна связь с сервером арены.');
+        return;
+      }
+    } finally {
+      this.httpInFlight = false;
+    }
+
+    if (this.transport === 'http' && this.status === 'connected') {
+      if (this.httpPendingImmediate || this.httpOutbox.length > 0) {
+        this.scheduleHttpPoll(8);
+      } else {
+        this.scheduleHttpPoll();
+      }
+    }
+  }
+
+  private handleHttpDisconnect(errMsg: string): void {
     this.stopPingLoop();
+    if (this.httpPollTimer !== null) {
+      clearTimeout(this.httpPollTimer);
+      this.httpPollTimer = null;
+    }
+    this.transport = 'none';
+    this.clientId = null;
+    const hadRoom = this.currentRoom !== null;
+    this.currentRoom = null;
+    this.yourFighterId = null;
+    if (hadRoom) {
+      this.callbacks.onRoomUpdated?.(null);
+    }
+    this.setStatus('error', errMsg);
+  }
+
+  public disconnect(): void {
+    this.cleanupTransport(true);
+  }
+
+  private cleanupTransport(notifyStatus: boolean): void {
+    this.stopPingLoop();
+    if (this.httpPollTimer !== null) {
+      clearTimeout(this.httpPollTimer);
+      this.httpPollTimer = null;
+    }
+
     if (this.ws) {
       const sock = this.ws;
       this.ws = null;
@@ -168,19 +407,26 @@ export class MultiplayerClient {
         // Ignore close error
       }
     }
+
+    if (this.transport === 'http' && this.clientId) {
+      const base = this.resolveHttpBaseUrl();
+      const cid = this.clientId;
+      fetch(`${base}/api/mp/disconnect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: cid }),
+        keepalive: true,
+      }).catch(() => {});
+    }
+
+    this.transport = 'none';
+    this.clientId = null;
+    this.httpOutbox = [];
     this.currentRoom = null;
     this.yourFighterId = null;
     if (notifyStatus) {
       this.setStatus('disconnected');
       this.callbacks.onRoomUpdated?.(null);
-    }
-    this.flushConnectResolvers(false);
-  }
-
-  private flushConnectResolvers(ok: boolean): void {
-    const list = this.pendingConnectResolvers.splice(0);
-    for (const fn of list) {
-      fn(ok);
     }
   }
 
@@ -211,12 +457,38 @@ export class MultiplayerClient {
   }
 
   private send(msg: ClientMsg): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
+    if (this.transport === 'ws') {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(msg));
+      }
+      return;
+    }
+
+    if (this.transport === 'http' && this.status === 'connected') {
+      if (msg.type === 'input') {
+        // Replace older unsent input intent while preserving cumulative sequence counters
+        for (let i = this.httpOutbox.length - 1; i >= 0; i--) {
+          if (this.httpOutbox[i].type === 'input') {
+            this.httpOutbox[i] = msg;
+            return;
+          }
+        }
+        this.httpOutbox.push(msg);
+        return;
+      }
+
+      this.httpOutbox.push(msg);
+      if (msg.type !== 'ping') {
+        void this.flushHttpSync();
+      }
     }
   }
 
   public requestRooms(): void {
+    if (!this.isConnected()) {
+      void this.connect();
+      return;
+    }
     this.send({ type: 'list_rooms' });
   }
 
@@ -345,7 +617,8 @@ export class MultiplayerClient {
     }
 
     this.inputSendAccum += dt;
-    if (!urgent && this.inputSendAccum < 0.03) {
+    const minInterval = this.transport === 'http' ? 0.04 : 0.03;
+    if (!urgent && this.inputSendAccum < minInterval) {
       return;
     }
     this.inputSendAccum = 0;
@@ -363,6 +636,10 @@ export class MultiplayerClient {
       ability1Seq: this.ability1Seq,
       ability2Seq: this.ability2Seq,
     });
+
+    if (urgent && this.transport === 'http') {
+      void this.flushHttpSync();
+    }
   }
 
   private handleServerMessage(msg: ServerMsg): void {
@@ -388,6 +665,9 @@ export class MultiplayerClient {
       case 'returned_to_lobby':
         this.currentRoom = msg.room;
         this.callbacks.onReturnedToLobby?.(msg.room);
+        if (this.transport === 'http') {
+          this.scheduleHttpPoll(HTTP_LOBBY_POLL_MS);
+        }
         break;
       case 'room_left':
         this.currentRoom = null;
@@ -409,6 +689,9 @@ export class MultiplayerClient {
           matchGeneration: msg.matchGeneration,
           snapshot: msg.snapshot,
         });
+        if (this.transport === 'http') {
+          this.scheduleHttpPoll(HTTP_MATCH_POLL_MS);
+        }
         break;
       case 'snapshot':
         this.callbacks.onSnapshot?.(msg);

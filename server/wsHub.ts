@@ -18,10 +18,15 @@ import {
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const SIM_DT = 1 / 60;
+const HTTP_SESSION_TIMEOUT_MS = 18_000;
+const MAX_HTTP_OUTBOX = 48;
 
 interface ClientSession {
   clientId: string;
-  ws: WebSocket;
+  transport: 'ws' | 'http';
+  ws: WebSocket | null;
+  httpOutbox: ServerMsg[];
+  lastSeenAt: number;
   name: string;
   classId: KnightClassId;
   ready: boolean;
@@ -64,16 +69,55 @@ function sanitizeClassId(raw: unknown): KnightClassId {
   return 'sword';
 }
 
+function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', (chunk) => {
+      raw += chunk.toString();
+      if (raw.length > 65536) {
+        reject(new Error('Payload too large'));
+      }
+    });
+    req.on('end', () => {
+      if (!raw) {
+        resolve({});
+        return;
+      }
+      try {
+        resolve(JSON.parse(raw));
+      } catch (err) {
+        reject(err);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function sendJson(res: ServerResponse, statusCode: number, data: unknown): void {
+  const payload = Buffer.from(JSON.stringify(data), 'utf8');
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Length', payload.byteLength);
+  res.end(payload);
+}
+
 export class MultiplayerHub {
   private readonly wss: WebSocketServer;
   private readonly clients = new Map<string, ClientSession>();
   private readonly rooms = new Map<string, RoomInstance>();
   private nextClientNum = 1;
   private simLoopTimer: ReturnType<typeof setInterval> | null = null;
+  private pruneTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.wss = new WebSocketServer({ noServer: true });
     this.wss.on('connection', (ws: WebSocket) => this.onSocketConnected(ws));
+    this.pruneTimer = setInterval(
+      () => this.pruneInactiveHttpSessions(),
+      4000
+    );
+    this.pruneTimer.unref?.();
   }
 
   public handleUpgrade(
@@ -93,17 +137,82 @@ export class MultiplayerHub {
 
   public handleApiRequest(req: IncomingMessage, res: ServerResponse): boolean {
     const pathname = (req.url ?? '/').split('?')[0];
+
     if (req.method === 'GET' && pathname === '/api/rooms') {
-      const payload = {
+      sendJson(res, 200, {
         status: 'ok',
         onlinePlayers: this.clients.size,
         rooms: this.getPublicRoomSummaries(),
-      };
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify(payload));
+      });
       return true;
     }
+
+    if (req.method === 'POST' && pathname === '/api/mp/connect') {
+      const session = this.createSession('http', null);
+      console.log(`[MP Hub] HTTP client connected: ${session.clientId}`);
+      this.sendSession(session, {
+        type: 'welcome',
+        clientId: session.clientId,
+        rooms: this.getPublicRoomSummaries(),
+      });
+      sendJson(res, 200, {
+        clientId: session.clientId,
+        messages: session.httpOutbox.splice(0),
+      });
+      return true;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/mp/sync') {
+      readJsonBody(req)
+        .then((body) => {
+          const obj = (body ?? {}) as {
+            clientId?: string;
+            messages?: ClientMsg[];
+          };
+          const session = obj.clientId
+            ? this.clients.get(obj.clientId)
+            : undefined;
+          if (!session || session.transport !== 'http') {
+            sendJson(res, 410, { error: 'session_expired' });
+            return;
+          }
+          session.lastSeenAt = Date.now();
+          if (Array.isArray(obj.messages)) {
+            for (const msg of obj.messages) {
+              if (msg && typeof msg === 'object' && 'type' in msg) {
+                this.onClientMessage(session, msg);
+              }
+            }
+          }
+          sendJson(res, 200, {
+            messages: session.httpOutbox.splice(0),
+          });
+        })
+        .catch(() => {
+          sendJson(res, 400, { error: 'bad_request' });
+        });
+      return true;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/mp/disconnect') {
+      readJsonBody(req)
+        .then((body) => {
+          const obj = (body ?? {}) as { clientId?: string };
+          if (obj.clientId) {
+            const session = this.clients.get(obj.clientId);
+            if (session) {
+              this.leaveCurrentRoom(session, false);
+              this.clients.delete(session.clientId);
+            }
+          }
+          sendJson(res, 200, { ok: true });
+        })
+        .catch(() => {
+          sendJson(res, 200, { ok: false });
+        });
+      return true;
+    }
+
     return false;
   }
 
@@ -112,9 +221,13 @@ export class MultiplayerHub {
       clearInterval(this.simLoopTimer);
       this.simLoopTimer = null;
     }
+    if (this.pruneTimer) {
+      clearInterval(this.pruneTimer);
+      this.pruneTimer = null;
+    }
     for (const session of this.clients.values()) {
       try {
-        session.ws.close();
+        session.ws?.close();
       } catch {
         // Ignore
       }
@@ -124,28 +237,54 @@ export class MultiplayerHub {
     this.wss.close();
   }
 
-  private onSocketConnected(ws: WebSocket): void {
+  private createSession(
+    transport: 'ws' | 'http',
+    ws: WebSocket | null
+  ): ClientSession {
     const num = this.nextClientNum++;
     const clientId = `c_${num}`;
     const session: ClientSession = {
       clientId,
+      transport,
       ws,
+      httpOutbox: [],
+      lastSeenAt: Date.now(),
       name: `Рыцарь #${num}`,
       classId: 'sword',
       ready: true,
-      pingMs: 12,
+      pingMs: 14,
       roomCode: null,
       fighterId: `human_${num}`,
     };
     this.clients.set(clientId, session);
+    return session;
+  }
 
-    this.send(ws, {
+  private pruneInactiveHttpSessions(): void {
+    const now = Date.now();
+    for (const [id, session] of this.clients.entries()) {
+      if (
+        session.transport === 'http' &&
+        now - session.lastSeenAt > HTTP_SESSION_TIMEOUT_MS
+      ) {
+        this.leaveCurrentRoom(session, false);
+        this.clients.delete(id);
+      }
+    }
+  }
+
+  private onSocketConnected(ws: WebSocket): void {
+    const session = this.createSession('ws', ws);
+    console.log(`[MP Hub] WS client connected: ${session.clientId}`);
+
+    this.sendSession(session, {
       type: 'welcome',
-      clientId,
+      clientId: session.clientId,
       rooms: this.getPublicRoomSummaries(),
     });
 
     ws.on('message', (data) => {
+      session.lastSeenAt = Date.now();
       let parsed: ClientMsg;
       try {
         const text = typeof data === 'string' ? data : data.toString('utf8');
@@ -158,7 +297,7 @@ export class MultiplayerHub {
 
     ws.on('close', () => {
       this.leaveCurrentRoom(session, false);
-      this.clients.delete(clientId);
+      this.clients.delete(session.clientId);
     });
 
     ws.on('error', () => {
@@ -179,7 +318,7 @@ export class MultiplayerHub {
         ) {
           session.pingMs = Math.min(999, Math.round(msg.lastPingMs));
         }
-        this.send(session.ws, {
+        this.sendSession(session, {
           type: 'pong',
           clientTime: msg.clientTime,
           serverTime: Date.now(),
@@ -188,7 +327,7 @@ export class MultiplayerHub {
       }
 
       case 'list_rooms': {
-        this.send(session.ws, {
+        this.sendSession(session, {
           type: 'rooms_list',
           rooms: this.getPublicRoomSummaries(),
         });
@@ -206,7 +345,10 @@ export class MultiplayerHub {
           Boolean(msg.isPublic),
           Boolean(msg.fillBots)
         );
-        this.send(session.ws, {
+        console.log(
+          `[MP Hub] Room ${room.roomCode} created by ${session.name} (bots=${room.fillBots})`
+        );
+        this.sendSession(session, {
           type: 'room_joined',
           room: this.serializeRoomLobby(room),
           yourFighterId: session.fighterId,
@@ -221,21 +363,22 @@ export class MultiplayerHub {
           .toUpperCase();
         const room = this.rooms.get(code);
         if (!room) {
-          this.send(session.ws, {
+          this.sendSession(session, {
             type: 'error',
             message: `Комната «${code || '????'}» не найдена.`,
           });
           return;
         }
         if (room.phase !== 'lobby') {
-          this.send(session.ws, {
+          this.sendSession(session, {
             type: 'error',
-            message: 'Бой в этой комнате уже начался. Дождитесь завершения раунда.',
+            message:
+              'Бой в этой комнате уже начался. Дождитесь завершения раунда.',
           });
           return;
         }
         if (room.players.length >= MAX_PLAYERS_PER_ROOM) {
-          this.send(session.ws, {
+          this.sendSession(session, {
             type: 'error',
             message: `Комната заполнена (${MAX_PLAYERS_PER_ROOM}/${MAX_PLAYERS_PER_ROOM}).`,
           });
@@ -249,7 +392,7 @@ export class MultiplayerHub {
         session.roomCode = room.roomCode;
         room.players.push(session);
 
-        this.send(session.ws, {
+        this.sendSession(session, {
           type: 'room_joined',
           room: this.serializeRoomLobby(room),
           yourFighterId: session.fighterId,
@@ -279,7 +422,7 @@ export class MultiplayerHub {
 
         if (!targetRoom) {
           targetRoom = this.createRoomInstance(session, true, true);
-          this.send(session.ws, {
+          this.sendSession(session, {
             type: 'room_joined',
             room: this.serializeRoomLobby(targetRoom),
             yourFighterId: session.fighterId,
@@ -287,7 +430,7 @@ export class MultiplayerHub {
         } else {
           session.roomCode = targetRoom.roomCode;
           targetRoom.players.push(session);
-          this.send(session.ws, {
+          this.sendSession(session, {
             type: 'room_joined',
             room: this.serializeRoomLobby(targetRoom),
             yourFighterId: session.fighterId,
@@ -333,7 +476,11 @@ export class MultiplayerHub {
 
       case 'set_room_options': {
         const room = this.getSessionRoom(session);
-        if (!room || room.hostClientId !== session.clientId || room.phase !== 'lobby') {
+        if (
+          !room ||
+          room.hostClientId !== session.clientId ||
+          room.phase !== 'lobby'
+        ) {
           return;
         }
         room.fillBots = Boolean(msg.fillBots);
@@ -347,14 +494,14 @@ export class MultiplayerHub {
         const room = this.getSessionRoom(session);
         if (!room || room.phase !== 'lobby') return;
         if (room.hostClientId !== session.clientId) {
-          this.send(session.ws, {
+          this.sendSession(session, {
             type: 'error',
             message: 'Только глава комнаты может начать поединок.',
           });
           return;
         }
         if (!room.fillBots && room.players.length < 2) {
-          this.send(session.ws, {
+          this.sendSession(session, {
             type: 'error',
             message:
               'Нужно минимум 2 игрока (или включите «Дополнить ботами до 5»).',
@@ -392,7 +539,7 @@ export class MultiplayerHub {
           }
           const lobbyState = this.serializeRoomLobby(room);
           for (const p of room.players) {
-            this.send(p.ws, {
+            this.sendSession(p, {
               type: 'returned_to_lobby',
               room: lobbyState,
             });
@@ -472,8 +619,8 @@ export class MultiplayerHub {
     session.roomCode = null;
 
     if (notifyCaller) {
-      this.send(session.ws, { type: 'room_left' });
-      this.send(session.ws, {
+      this.sendSession(session, { type: 'room_left' });
+      this.sendSession(session, {
         type: 'rooms_list',
         rooms: this.getPublicRoomSummaries(),
       });
@@ -529,9 +676,13 @@ export class MultiplayerHub {
     );
     room.sim = sim;
 
+    console.log(
+      `[MP Hub] Match #${room.matchGeneration} started in ${room.roomCode} (${room.players.length} human, ${sim.fighters.length} total)`
+    );
+
     const initialSnapshot = sim.buildSnapshot(0);
     for (const p of room.players) {
-      this.send(p.ws, {
+      this.sendSession(p, {
         type: 'match_started',
         matchGeneration: room.matchGeneration,
         roomCode: room.roomCode,
@@ -554,7 +705,10 @@ export class MultiplayerHub {
     }
 
     if (anyActive && !this.simLoopTimer) {
-      this.simLoopTimer = setInterval(() => this.tickActiveMatches(), 1000 / 60);
+      this.simLoopTimer = setInterval(
+        () => this.tickActiveMatches(),
+        1000 / 60
+      );
     } else if (!anyActive && this.simLoopTimer) {
       clearInterval(this.simLoopTimer);
       this.simLoopTimer = null;
@@ -595,24 +749,20 @@ export class MultiplayerHub {
         room.pendingFinalPhase ||
         stepRes.phaseChangedTo !== null;
 
-      // Broadcast at 30 Hz (every 2 ticks) or immediately on combat/movement impulse
       if (room.serverTick % 2 === 0 || hasImmediateImpulse) {
         const snapshot = room.sim.buildSnapshot(room.serverTick);
         const msg: ServerMsg = {
           type: 'snapshot',
           snapshot,
-          events: room.pendingEvents,
-          footsteps: room.pendingFootsteps,
-          jumps: room.pendingJumps,
-          dodges: room.pendingDodges,
-          landings: room.pendingLandings,
+          events: [...room.pendingEvents],
+          footsteps: [...room.pendingFootsteps],
+          jumps: [...room.pendingJumps],
+          dodges: [...room.pendingDodges],
+          landings: [...room.pendingLandings],
           enteredFinalPhase: room.pendingFinalPhase,
         };
-        const raw = JSON.stringify(msg);
         for (const p of room.players) {
-          if (p.ws.readyState === WebSocket.OPEN) {
-            p.ws.send(raw);
-          }
+          this.sendSession(p, msg);
         }
 
         room.pendingEvents = [];
@@ -677,7 +827,7 @@ export class MultiplayerHub {
     };
     for (const p of room.players) {
       if (p.clientId === excludeClientId) continue;
-      this.send(p.ws, payload);
+      this.sendSession(p, payload);
     }
   }
 
@@ -686,15 +836,49 @@ export class MultiplayerHub {
     const payload: ServerMsg = { type: 'rooms_list', rooms };
     for (const session of this.clients.values()) {
       if (!session.roomCode) {
-        this.send(session.ws, payload);
+        this.sendSession(session, payload);
       }
     }
   }
 
-  private send(ws: WebSocket, msg: ServerMsg): void {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg));
+  private sendSession(session: ClientSession, msg: ServerMsg): void {
+    if (session.transport === 'ws') {
+      if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(JSON.stringify(msg));
+      }
+      return;
     }
+
+    // For HTTP transport: coalesce pure position-only snapshots when queue is backed up,
+    // while ALWAYS preserving snapshots that carry events/jumps/dodges and all control messages!
+    if (
+      msg.type === 'snapshot' &&
+      msg.events.length === 0 &&
+      msg.jumps.length === 0 &&
+      msg.dodges.length === 0 &&
+      msg.landings.length === 0 &&
+      !msg.enteredFinalPhase
+    ) {
+      for (let i = session.httpOutbox.length - 1; i >= 0; i--) {
+        const prev = session.httpOutbox[i];
+        if (
+          prev.type === 'snapshot' &&
+          prev.events.length === 0 &&
+          prev.jumps.length === 0 &&
+          prev.dodges.length === 0 &&
+          prev.landings.length === 0 &&
+          !prev.enteredFinalPhase
+        ) {
+          session.httpOutbox[i] = msg;
+          return;
+        }
+      }
+    }
+
+    if (session.httpOutbox.length >= MAX_HTTP_OUTBOX) {
+      session.httpOutbox.shift();
+    }
+    session.httpOutbox.push(msg);
   }
 }
 

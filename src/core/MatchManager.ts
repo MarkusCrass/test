@@ -288,9 +288,12 @@ export class MatchManager {
 
     if (
       this.paused ||
+      this.isOnlineMatch ||
       this.state === 'MainMenu' ||
       this.state === 'CharacterSelection' ||
-      this.state === 'MatchFinished'
+      this.state === 'MultiplayerLobby' ||
+      this.state === 'MatchFinished' ||
+      this.fighters.length === 0
     ) {
       return output;
     }
