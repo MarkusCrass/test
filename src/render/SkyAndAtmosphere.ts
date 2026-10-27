@@ -44,34 +44,33 @@ const SKY_FRAGMENT_SHADER = /* glsl */ `
     vec3 dir = normalize(vWorldDir);
     float y = clamp(dir.y, -0.2, 1.0);
 
-    // Bright, clean sunlit fantasy sky gradient (matches crisp low-poly pixel art!)
-    vec3 zenithCol  = vec3(0.24, 0.52, 0.84);
-    vec3 midSkyCol  = vec3(0.52, 0.76, 0.92);
-    vec3 horizonCol = vec3(0.86, 0.94, 0.86);
-    vec3 groundBounce = vec3(0.38, 0.44, 0.42);
+    // Rich golden-hour medieval sky gradient
+    vec3 zenithCol  = vec3(0.14, 0.28, 0.52);
+    vec3 midSkyCol  = vec3(0.36, 0.55, 0.76);
+    vec3 horizonCol = vec3(0.92, 0.69, 0.46);
+    vec3 groundBounce = vec3(0.24, 0.22, 0.21);
 
     vec3 col;
     if (y >= 0.0) {
-      float t1 = pow(1.0 - y, 2.6);
-      col = mix(zenithCol, midSkyCol, smoothstep(0.0, 0.58, 1.0 - y));
+      float t1 = pow(1.0 - y, 2.8);
+      col = mix(zenithCol, midSkyCol, smoothstep(0.0, 0.55, 1.0 - y));
       col = mix(col, horizonCol, t1);
     } else {
       col = mix(horizonCol, groundBounce, clamp(-y * 5.0, 0.0, 1.0));
     }
 
-    // Stepped pixel-cel solar disc & halo
+    // Sun halo & crisp solar disc
     float sunDot = max(dot(dir, normalize(uSunDir)), 0.0);
-    col += vec3(1.0, 0.88, 0.56) * pow(sunDot, 9.0) * 0.34;
-    col += vec3(1.4, 1.32, 0.98) * step(0.9965, sunDot);
+    col += vec3(1.0, 0.68, 0.32) * pow(sunDot, 7.0) * 0.42;
+    col += vec3(1.4, 1.15, 0.78) * pow(sunDot, 160.0) * 1.1;
 
-    // Crisp stepped pixel-art clouds above horizon!
+    // Stylized drifting high clouds above horizon
     if (dir.y > 0.04) {
-      vec2 uv = floor((dir.xz / (dir.y + 0.3) * 1.4 + vec2(uTime * 0.01, uTime * 0.005)) * 28.0) / 28.0;
+      vec2 uv = dir.xz / (dir.y + 0.28) * 1.35 + vec2(uTime * 0.012, uTime * 0.006);
       float c = fbm(uv);
-      float cloudBand = step(0.56, c) * 0.55 + step(0.68, c) * 0.45;
-      float cloudMask = cloudBand * smoothstep(0.04, 0.22, dir.y);
-      vec3 cloudLit = mix(vec3(0.92, 0.96, 1.0), vec3(1.04, 0.99, 0.92), step(0.68, c));
-      col = mix(col, cloudLit, cloudMask * 0.78);
+      float cloudMask = smoothstep(0.50, 0.76, c) * smoothstep(0.04, 0.26, dir.y);
+      vec3 cloudLit = mix(vec3(0.86, 0.88, 0.94), vec3(1.05, 0.84, 0.62), pow(sunDot, 2.5));
+      col = mix(col, cloudLit, cloudMask * 0.62);
     }
 
     gl_FragColor = vec4(col, 1.0);

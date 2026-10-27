@@ -235,15 +235,14 @@ export class ArenaBuilder {
     this.group.add(outerGround);
 
     const slateRoofMat = new THREE.MeshStandardMaterial({
-      color: 0x445a7d,
-      roughness: 0.92,
-      metalness: 0.0,
+      color: 0x2b394d,
+      roughness: 0.74,
+      metalness: 0.16,
       flatShading: true,
     });
     const crimsonVelvetMat = new THREE.MeshStandardMaterial({
-      color: 0xc43238,
-      roughness: 0.94,
-      flatShading: true,
+      color: 0xa82428,
+      roughness: 0.84,
     });
 
     // 1. GRAND NORTH CASTLE GATEHOUSE KEEP (z = -19.2)
@@ -608,8 +607,7 @@ export class ArenaBuilder {
       // Mounted Heraldic Trophy Shield + Crossed Blades on inward face of column!
       const trophyMat = new THREE.MeshStandardMaterial({
         color: shieldColors[idx % shieldColors.length],
-        roughness: 0.92,
-        flatShading: true,
+        roughness: 0.78,
       });
       const trophyShield = new THREE.Mesh(
         new THREE.CylinderGeometry(0.42, 0.24, 0.08, 6),
@@ -632,14 +630,12 @@ export class ArenaBuilder {
 
   private buildWoodenStructures(arena: ArenaConfig, mats: MaterialLibrary): void {
     const shieldPaintRed = new THREE.MeshStandardMaterial({
-      color: 0xc93b3b,
-      roughness: 0.92,
-      flatShading: true,
+      color: 0xb83333,
+      roughness: 0.82,
     });
     const shieldPaintBlue = new THREE.MeshStandardMaterial({
-      color: 0x3478c6,
-      roughness: 0.92,
-      flatShading: true,
+      color: 0x2b6cb0,
+      roughness: 0.82,
     });
 
     for (const b of arena.boxes) {
@@ -943,9 +939,8 @@ export class ArenaBuilder {
       const clothMat = new THREE.MeshStandardMaterial({
         map: tex,
         alphaTest: 0.45,
-        roughness: 0.94,
-        metalness: 0.0,
-        flatShading: true,
+        roughness: 0.84,
+        metalness: 0.04,
         side: THREE.DoubleSide,
       });
       const cloth = new THREE.Mesh(bannerClothGeo, clothMat);
