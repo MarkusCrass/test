@@ -9,8 +9,13 @@ import './style.css';
 import { KnightClassId } from './config/classes';
 import { loadSettings, saveSettings } from './config/settings';
 import { createEmptyIntent, FighterInputIntent } from './core/Fighter';
-import { MatchManager, MatchMode } from './core/MatchManager';
+import { MatchManager, MatchMode, MatchState } from './core/MatchManager';
 import { SoundManager } from './audio/SoundManager';
+import {
+  MultiplayerClient,
+  ServerSnapshotMsg,
+} from './net/MultiplayerClient';
+import { ClientNetWorldSync } from './net/MultiplayerRoomSim';
 import { WorldRenderer } from './render/WorldRenderer';
 import { UIManager } from './ui/UIManager';
 
@@ -20,6 +25,8 @@ class KnightsGameApp {
   private readonly sound = new SoundManager();
   private readonly world: WorldRenderer;
   private readonly ui: UIManager;
+  private readonly net: MultiplayerClient;
+  private readonly netSync = new ClientNetWorldSync();
 
   private readonly keysDown = new Set<string>();
   private lmbHeld = false;
@@ -49,23 +56,97 @@ class KnightsGameApp {
       this.settings.graphicsQuality
     );
 
+    this.net = new MultiplayerClient({
+      onStatusChange: (status, errText) => {
+        this.ui.updateMultiplayerStatus(status, this.net.pingMs, errText);
+        if (status === 'disconnected' && this.match.isOnlineMatch) {
+          this.releasePointerLock();
+          this.match.goToMultiplayerLobby();
+          this.ui.showMultiplayerNotice(
+            'Соединение с сервером прервано.',
+            'error'
+          );
+        }
+      },
+      onPingUpdate: (pingMs) => {
+        this.ui.updateMultiplayerStatus(this.net.getStatus(), pingMs);
+      },
+      onRoomsList: (rooms) => {
+        this.ui.updatePublicRooms(rooms);
+      },
+      onRoomUpdated: (room) => {
+        this.ui.updateMultiplayerRoom(room, this.net.clientId);
+      },
+      onErrorMsg: (message) => {
+        this.ui.showMultiplayerNotice(message, 'error');
+      },
+      onMatchStarted: ({ yourFighterId, matchGeneration, snapshot }) => {
+        this.sound.unlock();
+        this.clearActionInputs();
+        this.netSync.initMatchFromSnapshot(
+          this.match,
+          yourFighterId,
+          matchGeneration,
+          snapshot
+        );
+        this.lastCountdownWhole = Math.ceil(this.match.countdownTimer);
+        this.sound.playCountdownTick(false);
+        this.world.resetCameraBehindPlayer(this.match);
+        this.requestPointerLockSafe();
+      },
+      onSnapshot: (msg) => {
+        if (!this.match.isOnlineMatch) return;
+        this.handleOnlineSnapshot(msg);
+      },
+      onReturnedToLobby: (room) => {
+        this.releasePointerLock();
+        this.clearActionInputs();
+        this.match.goToMultiplayerLobby();
+        this.ui.updateMultiplayerRoom(room, this.net.clientId);
+      },
+    });
+
     this.ui = new UIManager(uiRoot, this.settings, {
       onOpenSelection: () => {
         this.sound.playUiClick();
         this.releasePointerLock();
         this.match.goToCharacterSelection();
       },
+      onOpenMultiplayer: () => {
+        this.sound.playUiClick();
+        this.releasePointerLock();
+        this.match.goToMultiplayerLobby();
+        this.net.connect().then((ok) => {
+          if (ok) {
+            this.net.requestRooms();
+          }
+        });
+      },
       onStartMatch: (classId: KnightClassId, mode: MatchMode) => {
         this.sound.unlock();
+        this.net.leaveRoom();
         this.beginMatch(classId, mode);
       },
       onRestartMatch: () => {
         this.sound.unlock();
+        if (this.match.isOnlineMatch && this.net.currentRoom) {
+          this.net.requestRematch();
+          return;
+        }
         this.beginMatch(this.match.selectedPlayerClass, this.match.mode);
       },
       onReturnMainMenu: () => {
         this.sound.playUiClick();
         this.releasePointerLock();
+        if (this.match.isOnlineMatch) {
+          this.net.leaveRoom();
+          this.match.goToMultiplayerLobby();
+          this.net.requestRooms();
+          return;
+        }
+        if (this.net.currentRoom) {
+          this.net.leaveRoom();
+        }
         this.match.goToMainMenu();
       },
       onResumeGame: () => {
@@ -102,7 +183,10 @@ class KnightsGameApp {
         this.world.syncShowcaseClass(classId);
       },
       onTriggerSkillSlot: (slotKey) => {
-        if (!this.isCombatInteractive() || this.match.state === 'PlayerEliminated') {
+        if (
+          !this.isCombatInteractive() ||
+          this.match.state === 'PlayerEliminated'
+        ) {
           return;
         }
         this.sound.unlock();
@@ -118,6 +202,60 @@ class KnightsGameApp {
             this.lmbHeld = false;
           }, 60);
         }
+      },
+
+      // Online Multiplayer UI actions
+      onMpQuickJoin: (playerName, classId) => {
+        this.sound.playUiClick();
+        this.net.quickJoin(playerName, classId);
+      },
+      onMpCreateRoom: (opts) => {
+        this.sound.playUiClick();
+        this.net.createRoom(opts);
+      },
+      onMpJoinRoom: (roomCode, playerName, classId) => {
+        this.sound.playUiClick();
+        this.net.joinRoom(roomCode, playerName, classId);
+      },
+      onMpRefreshRooms: () => {
+        this.sound.playUiClick();
+        this.net.connect().then((ok) => {
+          if (ok) this.net.requestRooms();
+        });
+      },
+      onMpLeaveRoom: () => {
+        this.sound.playUiClick();
+        this.net.leaveRoom();
+        this.net.requestRooms();
+      },
+      onMpSelectClass: (classId) => {
+        this.sound.playClassSelect(classId);
+        this.match.selectedPlayerClass = classId;
+        if (this.net.currentRoom) {
+          this.net.selectClass(classId);
+        }
+      },
+      onMpSetName: (playerName) => {
+        if (this.net.currentRoom) {
+          this.net.setName(playerName);
+        }
+      },
+      onMpToggleReady: (ready) => {
+        this.sound.playUiClick();
+        this.net.setReady(ready);
+      },
+      onMpRoomOptions: (opts) => {
+        this.sound.playUiClick();
+        this.net.setRoomOptions(opts);
+      },
+      onMpStartMatch: () => {
+        this.sound.unlock();
+        this.sound.playUiClick();
+        this.net.startMatch();
+      },
+      onMpReturnToLobby: () => {
+        this.sound.playUiClick();
+        this.net.returnToLobby();
       },
     });
 
@@ -216,8 +354,6 @@ class KnightsGameApp {
       const wasLocked = this.pointerLocked;
       this.pointerLocked = locked;
 
-      // Browser exits pointer lock on Escape press before keydown fires:
-      // automatically open Pause menu unless we unlocked intentionally!
       if (
         wasLocked &&
         !locked &&
@@ -234,6 +370,11 @@ class KnightsGameApp {
     });
 
     window.addEventListener('keydown', (e) => {
+      const activeTag = document.activeElement?.tagName;
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') {
+        return;
+      }
+
       if (e.code === 'Escape') {
         e.preventDefault();
         this.togglePause();
@@ -307,7 +448,6 @@ class KnightsGameApp {
       this.clearActionInputs();
     });
 
-    // Mouse buttons on canvas
     canvas.addEventListener('mousedown', (e) => {
       this.sound.unlock();
       if (!this.isCombatInteractive()) return;
@@ -351,7 +491,6 @@ class KnightsGameApp {
         dx = e.movementX || 0;
         dy = e.movementY || 0;
       } else {
-        // Smooth fallback camera rotation if pointer lock isn't active in iframe
         if (this.lastClientX !== null && this.lastClientY !== null) {
           dx = e.clientX - this.lastClientX;
           dy = e.clientY - this.lastClientY;
@@ -360,7 +499,6 @@ class KnightsGameApp {
         this.lastClientY = e.clientY;
       }
 
-      // Guard against occasional browser pointer-lock jump spikes
       if (Math.abs(dx) < 280 && Math.abs(dy) < 280) {
         this.world.cameraRig.applyMouseDelta(
           dx,
@@ -402,7 +540,7 @@ class KnightsGameApp {
     intent.moveX = wx;
     intent.moveZ = wz;
     intent.aimYaw = camYaw;
-    intent.hasAimOverride = true; // Attacks & blocks align toward camera view direction
+    intent.hasAimOverride = true;
     intent.sprint =
       this.keysDown.has('ShiftLeft') || this.keysDown.has('ShiftRight');
     intent.attackHeld = this.lmbHeld;
@@ -417,6 +555,121 @@ class KnightsGameApp {
     this.ability2Queued = false;
 
     return intent;
+  }
+
+  private handleStateAudioAndEffects(
+    stateChangedTo: MatchState | null,
+    enteredFinalPhase: boolean,
+    footstepIds: string[],
+    jumpedIds: string[],
+    dodgedIds: string[],
+    landedFighters: Array<{ id: string; x: number; y: number; z: number }>,
+    events: ServerSnapshotMsg['events']
+  ): void {
+    if (this.match.state === 'Countdown') {
+      const whole = Math.ceil(this.match.countdownTimer);
+      if (whole !== this.lastCountdownWhole && whole > 0) {
+        this.lastCountdownWhole = whole;
+        this.sound.playCountdownTick(false);
+      }
+    }
+
+    if (stateChangedTo === 'InProgress') {
+      this.sound.playCountdownTick(true);
+    } else if (stateChangedTo === 'MatchFinished') {
+      this.releasePointerLock();
+      const player = this.match.getPlayer();
+      this.sound.playMatchEnd(
+        Boolean(player && this.match.winnerId === player.id)
+      );
+    } else if (stateChangedTo === 'PlayerEliminated') {
+      this.releasePointerLock();
+    }
+
+    if (enteredFinalPhase) {
+      this.sound.playSuddenDeathBell();
+    }
+
+    const obs = this.match.getObservedFighter();
+    const obsId = obs ? obs.id : null;
+
+    for (const fid of footstepIds) {
+      const f = this.match.fighters.find((item) => item.id === fid);
+      if (f) {
+        this.sound.playFootstep(
+          fid === obsId,
+          f.body.x,
+          f.body.y,
+          f.body.z,
+          f.classId
+        );
+      }
+    }
+    for (const fid of jumpedIds) {
+      const f = this.match.fighters.find((item) => item.id === fid);
+      if (f) {
+        this.sound.playJump(
+          fid === obsId,
+          f.body.x,
+          f.body.y,
+          f.body.z,
+          f.classId
+        );
+      }
+    }
+    for (const fid of dodgedIds) {
+      const f = this.match.fighters.find((item) => item.id === fid);
+      if (f) {
+        this.sound.playDodge(
+          fid === obsId,
+          f.body.x,
+          f.body.y,
+          f.body.z,
+          f.classId
+        );
+      }
+    }
+    for (const landed of landedFighters) {
+      const f = this.match.fighters.find((item) => item.id === landed.id);
+      this.sound.playLanding(
+        landed.id === obsId,
+        landed.x,
+        landed.y,
+        landed.z,
+        f?.classId ?? 'sword'
+      );
+      this.world.effects.spawnLandingDust(landed.x, landed.y, landed.z);
+    }
+
+    if (events.length > 0) {
+      this.sound.handleCombatEvents(events, this.match.fighters, obsId);
+      this.world.processCombatEvents(events, obsId);
+
+      for (const ev of events) {
+        if (
+          (ev.attackerId === obsId || ev.victimId === obsId) &&
+          (ev.type === 'heavy_hit' ||
+            ev.type === 'parried' ||
+            ev.type === 'guard_broken')
+        ) {
+          this.hitStopTimer = 0.032;
+          break;
+        }
+      }
+    }
+  }
+
+  private handleOnlineSnapshot(msg: ServerSnapshotMsg): void {
+    const stateChangedTo = this.netSync.applySnapshot(this.match, msg.snapshot);
+    this.handleStateAudioAndEffects(
+      stateChangedTo,
+      msg.enteredFinalPhase,
+      msg.footsteps,
+      msg.jumps,
+      msg.dodges,
+      msg.landings,
+      msg.events
+    );
   }
 
   private loop = (now: number): void => {
@@ -436,36 +689,28 @@ class KnightsGameApp {
       return;
     }
 
-    const humanIntent = this.buildHumanIntent();
-    const stepOut = this.match.update(dt, humanIntent);
-
-    // Countdown audio ticks
-    if (this.match.state === 'Countdown') {
-      const whole = Math.ceil(this.match.countdownTimer);
-      if (whole !== this.lastCountdownWhole && whole > 0) {
-        this.lastCountdownWhole = whole;
-        this.sound.playCountdownTick(false);
-      }
-    }
-    if (stepOut.stateChangedTo === 'InProgress') {
-      this.sound.playCountdownTick(true);
-    } else if (stepOut.stateChangedTo === 'MatchFinished') {
-      this.releasePointerLock();
-      const player = this.match.getPlayer();
-      this.sound.playMatchEnd(
-        Boolean(player && this.match.winnerId === player.id)
+    if (this.match.isOnlineMatch) {
+      const intent =
+        this.match.paused || this.match.state === 'PlayerEliminated'
+          ? createEmptyIntent(this.world.cameraRig.yaw)
+          : this.buildHumanIntent();
+      this.net.streamInputIntent(dt, intent);
+      this.netSync.interpolateFrame(this.match, dt);
+    } else {
+      const humanIntent = this.buildHumanIntent();
+      const stepOut = this.match.update(dt, humanIntent);
+      this.handleStateAudioAndEffects(
+        stepOut.stateChangedTo,
+        stepOut.enteredFinalPhase,
+        stepOut.footstepFighterIds,
+        stepOut.jumpedFighterIds,
+        stepOut.dodgedFighterIds,
+        stepOut.landedFighters,
+        stepOut.events
       );
-    } else if (stepOut.stateChangedTo === 'PlayerEliminated') {
-      // Allow comfortable mouse buttons on spectator controls
-      this.releasePointerLock();
-    }
-
-    if (stepOut.enteredFinalPhase) {
-      this.sound.playSuddenDeathBell();
     }
 
     const obs = this.match.getObservedFighter();
-    const obsId = obs ? obs.id : null;
     if (obs) {
       const camBasis = this.world.cameraRig.getHorizontalBasis();
       this.sound.updateListener(
@@ -475,76 +720,6 @@ class KnightsGameApp {
         camBasis.rightX,
         camBasis.rightZ
       );
-    }
-
-    // Surface-aware 3D footsteps, jumps, dodges, landings & combat audio + VFX
-    for (const fid of stepOut.footstepFighterIds) {
-      const f = this.match.fighters.find((item) => item.id === fid);
-      if (f) {
-        this.sound.playFootstep(
-          fid === obsId,
-          f.body.x,
-          f.body.y,
-          f.body.z,
-          f.classId
-        );
-      }
-    }
-    for (const fid of stepOut.jumpedFighterIds) {
-      const f = this.match.fighters.find((item) => item.id === fid);
-      if (f) {
-        this.sound.playJump(
-          fid === obsId,
-          f.body.x,
-          f.body.y,
-          f.body.z,
-          f.classId
-        );
-      }
-    }
-    for (const fid of stepOut.dodgedFighterIds) {
-      const f = this.match.fighters.find((item) => item.id === fid);
-      if (f) {
-        this.sound.playDodge(
-          fid === obsId,
-          f.body.x,
-          f.body.y,
-          f.body.z,
-          f.classId
-        );
-      }
-    }
-    for (const landed of stepOut.landedFighters) {
-      const f = this.match.fighters.find((item) => item.id === landed.id);
-      this.sound.playLanding(
-        landed.id === obsId,
-        landed.x,
-        landed.y,
-        landed.z,
-        f?.classId ?? 'sword'
-      );
-      this.world.effects.spawnLandingDust(landed.x, landed.y, landed.z);
-    }
-    if (stepOut.events.length > 0) {
-      this.sound.handleCombatEvents(
-        stepOut.events,
-        this.match.fighters,
-        obsId
-      );
-      this.world.processCombatEvents(stepOut.events, obsId);
-
-      // Brief, tactile 32ms hit-stop when observed knight lands/receives a heavy strike or parry
-      for (const ev of stepOut.events) {
-        if (
-          (ev.attackerId === obsId || ev.victimId === obsId) &&
-          (ev.type === 'heavy_hit' ||
-            ev.type === 'parried' ||
-            ev.type === 'guard_broken')
-        ) {
-          this.hitStopTimer = 0.032;
-          break;
-        }
-      }
     }
 
     const projectedLabels = this.world.renderFrame(

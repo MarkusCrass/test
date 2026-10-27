@@ -6,6 +6,12 @@ import {
 import { GameSettings, GraphicsQuality } from '../config/settings';
 import { Fighter, FighterState } from '../core/Fighter';
 import { MatchManager, MatchMode, MatchState } from '../core/MatchManager';
+import { NetConnectionStatus } from '../net/MultiplayerClient';
+import {
+  MAX_PLAYERS_PER_ROOM,
+  RoomLobbyState,
+  RoomSummary,
+} from '../net/protocol';
 import { ProjectedFighterLabel } from '../render/WorldRenderer';
 import {
   buildClassSkillBar,
@@ -16,6 +22,7 @@ import {
 
 export interface UICallbacks {
   onOpenSelection: () => void;
+  onOpenMultiplayer: () => void;
   onStartMatch: (classId: KnightClassId, mode: MatchMode) => void;
   onRestartMatch: () => void;
   onReturnMainMenu: () => void;
@@ -27,7 +34,31 @@ export interface UICallbacks {
     userInitiated?: boolean
   ) => void;
   onTriggerSkillSlot?: (slotKey: SkillSlotKey) => void;
+
+  // Multiplayer callbacks
+  onMpQuickJoin: (playerName: string, classId: KnightClassId) => void;
+  onMpCreateRoom: (opts: {
+    playerName: string;
+    classId: KnightClassId;
+    fillBots: boolean;
+    isPublic: boolean;
+  }) => void;
+  onMpJoinRoom: (
+    roomCode: string,
+    playerName: string,
+    classId: KnightClassId
+  ) => void;
+  onMpRefreshRooms: () => void;
+  onMpLeaveRoom: () => void;
+  onMpSelectClass: (classId: KnightClassId) => void;
+  onMpSetName: (playerName: string) => void;
+  onMpToggleReady: (ready: boolean) => void;
+  onMpRoomOptions: (opts: { fillBots: boolean; isPublic: boolean }) => void;
+  onMpStartMatch: () => void;
+  onMpReturnToLobby: () => void;
 }
+
+const MP_NAME_STORAGE_KEY = 'kls_mp_player_name_v1';
 
 const STATE_LABELS_RU: Record<FighterState, string> = {
   Idle: 'Готовность',
@@ -91,6 +122,15 @@ const CREST_SWORDS_SVG = `
   </svg>
 `;
 
+const CREST_NETWORK_SVG = `
+  <svg class="window-crest-svg sm" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <circle cx="32" cy="32" r="20" fill="#172430" stroke="#f0c362" stroke-width="2.4"/>
+    <ellipse cx="32" cy="32" rx="10" ry="20" stroke="#7dd3fc" stroke-width="1.8"/>
+    <path d="M13 26H51M13 38H51" stroke="#7dd3fc" stroke-width="1.6"/>
+    <path d="M22 12L27 7L32 12L37 7L42 12" stroke="#ffe8a3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+`;
+
 const CREST_GEAR_SVG = `
   <svg class="window-crest-svg sm" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <circle cx="32" cy="32" r="19" stroke="#e5b24c" stroke-width="2.4" stroke-dasharray="6 4"/>
@@ -108,6 +148,34 @@ const CREST_TROPHY_SVG = `
   </svg>
 `;
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function loadSavedPlayerName(): string {
+  try {
+    const saved = localStorage.getItem(MP_NAME_STORAGE_KEY);
+    if (saved && saved.trim().length >= 2) {
+      return saved.trim().slice(0, 18);
+    }
+  } catch {
+    // Ignore storage block
+  }
+  return `Сэр Артур`;
+}
+
+function savePlayerName(name: string): void {
+  try {
+    localStorage.setItem(MP_NAME_STORAGE_KEY, name.trim().slice(0, 18));
+  } catch {
+    // Ignore
+  }
+}
+
 interface ActionBarSlotRefs {
   descriptor: SkillSlotDescriptor;
   rootEl: HTMLElement;
@@ -117,8 +185,9 @@ interface ActionBarSlotRefs {
 
 /**
  * Manages all UI screens, royal medieval windows, class selection showcase stats,
- * bottom square skill hotbar with hover tooltips, compact combat HUD, spectator controls,
- * pause/settings modals, and match results table.
+ * online multiplayer lobby & 5-slot waiting room, bottom square skill hotbar with
+ * hover tooltips, compact combat HUD, spectator controls, pause/settings modals,
+ * and match results table.
  */
 export class UIManager {
   private readonly root: HTMLElement;
@@ -129,14 +198,37 @@ export class UIManager {
   private readonly mainMenuEl: HTMLElement;
   private readonly selectionEl: HTMLElement;
   private readonly selectionSkillBarEl: HTMLElement;
+  private readonly multiplayerEl: HTMLElement;
   private readonly hudEl: HTMLElement;
   private readonly pauseModalEl: HTMLElement;
   private readonly settingsModalEl: HTMLElement;
   private readonly resultsModalEl: HTMLElement;
 
+  // Multiplayer elements
+  private readonly mpConnPillEl: HTMLElement;
+  private readonly mpAlertEl: HTMLElement;
+  private readonly mpBrowserViewEl: HTMLElement;
+  private readonly mpRoomViewEl: HTMLElement;
+  private readonly mpNameInputEl: HTMLInputElement;
+  private readonly mpCodeInputEl: HTMLInputElement;
+  private readonly mpOptBotsEl: HTMLInputElement;
+  private readonly mpOptPublicEl: HTMLInputElement;
+  private readonly mpClassTabsEl: HTMLElement;
+  private readonly mpRoomsListEl: HTMLElement;
+  private readonly mpRoomCodeTextEl: HTMLElement;
+  private readonly mpRoomBotsToggleEl: HTMLInputElement;
+  private readonly mpRoomPublicToggleEl: HTMLInputElement;
+  private readonly mpRoomClassTabsEl: HTMLElement;
+  private readonly mpSlotsGridEl: HTMLElement;
+  private readonly mpReadyBtnEl: HTMLButtonElement;
+  private readonly mpStartBtnEl: HTMLButtonElement;
+  private readonly mpCopyCodeBtnEl: HTMLButtonElement;
+
   // Dynamic HUD sub-elements
   private readonly timerEl: HTMLElement;
   private readonly alivePillEl: HTMLElement;
+  private readonly netHudPillEl: HTMLElement;
+  private readonly netHudSepEl: HTMLElement;
   private readonly rosterListEl: HTMLElement;
   private readonly killFeedEl: HTMLElement;
   private readonly vitalsBoxEl: HTMLElement;
@@ -159,6 +251,15 @@ export class UIManager {
   private readonly spectatorBarEl: HTMLElement;
   private readonly spectatorSubEl: HTMLElement;
 
+  // Modal dynamic buttons
+  private readonly pauseRestartBtnEl: HTMLButtonElement;
+  private readonly pauseMenuBtnEl: HTMLButtonElement;
+  private readonly specRestartBtnEl: HTMLButtonElement;
+  private readonly specMenuBtnEl: HTMLButtonElement;
+  private readonly resAgainBtnEl: HTMLButtonElement;
+  private readonly resClassBtnEl: HTMLButtonElement;
+  private readonly resMenuBtnEl: HTMLButtonElement;
+
   private readonly labelPool = new Map<string, HTMLElement>();
   private renderedActionBarClass: KnightClassId | null = null;
   private renderedVitalsClass: KnightClassId | null = null;
@@ -166,7 +267,14 @@ export class UIManager {
   private lastRenderedState: MatchState | null = null;
   private lastPaused = false;
   private selectedMode: MatchMode = 'ffa5';
-  private resultsRenderedGen = -1;
+  private resultsRenderedKey = '';
+
+  // Multiplayer UI state
+  private mpStatus: NetConnectionStatus = 'disconnected';
+  private mpPingMs = 0;
+  private mpRoom: RoomLobbyState | null = null;
+  private mpMyClientId: string | null = null;
+  private mpAlertTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     root: HTMLElement,
@@ -176,6 +284,8 @@ export class UIManager {
     this.root = root;
     this.settings = { ...initialSettings };
     this.callbacks = callbacks;
+
+    const initialName = escapeHtml(loadSavedPlayerName());
 
     this.root.innerHTML = `
       <!-- MAIN MENU -->
@@ -190,13 +300,17 @@ export class UIManager {
             Пять рыцарей выходят во двор древней цитадели. Четыре ордена клинка и стали. На ногах останется только один.
           </p>
           <div class="menu-actions">
-            <button id="btn-menu-select" class="btn btn-primary btn-hero">
+            <button id="btn-menu-multiplayer" class="btn btn-online btn-hero">
+              <span class="btn-emblem">🌐</span>
+              <span>Сетевая игра · Мультиплеер</span>
+            </button>
+            <button id="btn-menu-select" class="btn btn-primary">
               <span class="btn-emblem">⚔</span>
-              <span>Выбрать рыцаря и в бой</span>
+              <span>Одиночный бой · Выбор рыцаря</span>
             </button>
             <button id="btn-menu-quick" class="btn btn-gold">
               <span class="btn-emblem">♛</span>
-              <span>Быстрый бой (5 бойцов)</span>
+              <span>Быстрый бой с ботами (5 бойцов)</span>
             </button>
             <div class="menu-secondary-row">
               <button id="btn-menu-duel" class="btn">
@@ -225,7 +339,7 @@ export class UIManager {
         </div>
       </div>
 
-      <!-- CHARACTER SELECTION -->
+      <!-- CHARACTER SELECTION (SINGLEPLAYER) -->
       <div id="screen-selection" class="selection-layout hidden">
         <div class="stone-panel royal-window selection-panel pointer-auto">
           ${CORNER_STUDS_HTML}
@@ -264,6 +378,142 @@ export class UIManager {
         </div>
       </div>
 
+      <!-- ONLINE MULTIPLAYER LOBBY & 5-PLAYER WAITING ROOM -->
+      <div id="screen-multiplayer" class="screen-overlay menu-vignette hidden">
+        <div class="stone-panel royal-window mp-window-card pointer-auto">
+          ${CORNER_STUDS_HTML}
+          <div class="mp-header-row">
+            <div class="mp-header-left">
+              <div class="crest-wrap mp-crest">${CREST_NETWORK_SVG}</div>
+              <div>
+                <div class="title-badge">⚔ Королевская сеть цитадели ⚔</div>
+                <h2 class="window-heading mp-heading">Сетевая арена · до 5 рыцарей</h2>
+              </div>
+            </div>
+            <div id="mp-conn-pill" class="mp-conn-pill connecting">◌ Подключение...</div>
+          </div>
+
+          <div id="mp-alert-banner" class="mp-alert-banner hidden"></div>
+
+          ${ORNAMENT_DIVIDER_HTML}
+
+          <!-- VIEW 1: ROOM BROWSER & MATCHMAKING -->
+          <div id="mp-browser-view" class="mp-browser-view">
+            <div class="mp-profile-bar">
+              <div class="mp-name-field">
+                <label for="mp-name-input" class="section-kicker">Имя вашего рыцаря</label>
+                <input
+                  id="mp-name-input"
+                  type="text"
+                  maxlength="18"
+                  value="${initialName}"
+                  placeholder="Введите имя..."
+                  class="mp-text-input"
+                />
+              </div>
+              <div class="mp-class-picker-wrap">
+                <div class="section-kicker">Ваш орден для боя</div>
+                <div id="mp-class-tabs" class="mp-mini-class-tabs"></div>
+              </div>
+            </div>
+
+            <div class="mp-columns">
+              <!-- Left column: Quick Join / Create / Code Join -->
+              <div class="mp-col-actions">
+                <button id="btn-mp-quick" class="btn btn-online btn-hero">
+                  <span class="btn-emblem">⚡</span>
+                  <span>Быстрый поиск боя</span>
+                </button>
+
+                <div class="mp-card-box">
+                  <div class="mp-box-title">♛ Создать свою комнату</div>
+                  <label for="mp-opt-bots" class="mp-check-line">
+                    <input id="mp-opt-bots" type="checkbox" class="royal-checkbox" checked />
+                    <span>🤖 Дополнить ботами ИИ до 5 бойцов</span>
+                  </label>
+                  <label for="mp-opt-public" class="mp-check-line">
+                    <input id="mp-opt-public" type="checkbox" class="royal-checkbox" checked />
+                    <span>🌐 Показывать комнату в общем списке</span>
+                  </label>
+                  <button id="btn-mp-create" class="btn btn-gold" style="width: 100%; margin-top: 6px;">
+                    <span class="btn-emblem">🏰</span>
+                    <span>Создать комнату</span>
+                  </button>
+                </div>
+
+                <div class="mp-card-box">
+                  <div class="mp-box-title">🔑 Вход по коду комнаты</div>
+                  <div class="mp-code-join-row">
+                    <input
+                      id="mp-code-input"
+                      type="text"
+                      maxlength="6"
+                      placeholder="КОД"
+                      class="mp-text-input mp-code-field"
+                    />
+                    <button id="btn-mp-join-code" class="btn btn-primary">Войти</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right column: Live Public Rooms List -->
+              <div class="mp-col-rooms">
+                <div class="mp-rooms-head">
+                  <span class="mp-box-title">🌐 Открытые залы арены</span>
+                  <button id="btn-mp-refresh" class="btn btn-sm">↻ Обновить</button>
+                </div>
+                <div id="mp-rooms-list" class="mp-rooms-list"></div>
+              </div>
+            </div>
+
+            <div class="mp-footer-bar">
+              <button id="btn-mp-back" class="btn">◀ Главное меню</button>
+              <span class="mp-footer-note">До 5 живых игроков в одной битве · Серверная физика 60 Гц</span>
+            </div>
+          </div>
+
+          <!-- VIEW 2: 5-SLOT WAITING ROOM -->
+          <div id="mp-room-view" class="mp-room-view hidden">
+            <div class="mp-room-top-bar">
+              <div class="mp-room-code-plaque">
+                <span class="mp-code-kicker">КОД ЗАЛА:</span>
+                <strong id="mp-room-code-text" class="mp-code-big">----</strong>
+                <button id="btn-mp-copy-code" class="btn btn-sm">📋 Копировать</button>
+              </div>
+
+              <div class="mp-room-toggles">
+                <label for="mp-room-bots-toggle" class="mp-check-line compact">
+                  <input id="mp-room-bots-toggle" type="checkbox" class="royal-checkbox" checked />
+                  <span>🤖 Боты до 5</span>
+                </label>
+                <label for="mp-room-public-toggle" class="mp-check-line compact">
+                  <input id="mp-room-public-toggle" type="checkbox" class="royal-checkbox" checked />
+                  <span>🌐 Публичная</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="mp-room-class-strip">
+              <span class="section-kicker" style="margin: 0;">Сменить орден перед боем:</span>
+              <div id="mp-room-class-tabs" class="mp-mini-class-tabs"></div>
+            </div>
+
+            <div id="mp-slots-grid" class="mp-slots-grid"></div>
+
+            <div class="mp-footer-bar">
+              <button id="btn-mp-leave" class="btn">◀ Покинуть зал</button>
+              <div class="mp-room-cta-right">
+                <button id="btn-mp-ready" class="btn btn-gold">✓ Готов к бою</button>
+                <button id="btn-mp-start" class="btn btn-primary">
+                  <span class="btn-emblem">⚔</span>
+                  <span>Начать битву!</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- IN-GAME HUD -->
       <div id="screen-hud" class="hud-layer hidden">
         <div id="world-labels-layer"></div>
@@ -276,6 +526,8 @@ export class UIManager {
           </div>
           <span class="hud-top-divider" aria-hidden="true"></span>
           <div id="hud-alive-pill" class="hud-alive-pill">⚔ ЖИВЫХ: 5 / 5</div>
+          <span id="hud-net-sep" class="hud-top-divider hidden" aria-hidden="true"></span>
+          <div id="hud-net-pill" class="hud-net-pill hidden">🌐 ОНЛАЙН</div>
         </div>
 
         <div id="hud-pointer-prompt" class="pointer-prompt hidden">
@@ -472,13 +724,37 @@ export class UIManager {
     this.mainMenuEl = this.q('#screen-main-menu');
     this.selectionEl = this.q('#screen-selection');
     this.selectionSkillBarEl = this.q('#selection-skill-bar');
+    this.multiplayerEl = this.q('#screen-multiplayer');
     this.hudEl = this.q('#screen-hud');
     this.pauseModalEl = this.q('#modal-pause');
     this.settingsModalEl = this.q('#modal-settings');
     this.resultsModalEl = this.q('#modal-results');
 
+    this.mpConnPillEl = this.q('#mp-conn-pill');
+    this.mpAlertEl = this.q('#mp-alert-banner');
+    this.mpBrowserViewEl = this.q('#mp-browser-view');
+    this.mpRoomViewEl = this.q('#mp-room-view');
+    this.mpNameInputEl = this.q('#mp-name-input') as HTMLInputElement;
+    this.mpCodeInputEl = this.q('#mp-code-input') as HTMLInputElement;
+    this.mpOptBotsEl = this.q('#mp-opt-bots') as HTMLInputElement;
+    this.mpOptPublicEl = this.q('#mp-opt-public') as HTMLInputElement;
+    this.mpClassTabsEl = this.q('#mp-class-tabs');
+    this.mpRoomsListEl = this.q('#mp-rooms-list');
+    this.mpRoomCodeTextEl = this.q('#mp-room-code-text');
+    this.mpRoomBotsToggleEl = this.q('#mp-room-bots-toggle') as HTMLInputElement;
+    this.mpRoomPublicToggleEl = this.q(
+      '#mp-room-public-toggle'
+    ) as HTMLInputElement;
+    this.mpRoomClassTabsEl = this.q('#mp-room-class-tabs');
+    this.mpSlotsGridEl = this.q('#mp-slots-grid');
+    this.mpReadyBtnEl = this.q('#btn-mp-ready') as HTMLButtonElement;
+    this.mpStartBtnEl = this.q('#btn-mp-start') as HTMLButtonElement;
+    this.mpCopyCodeBtnEl = this.q('#btn-mp-copy-code') as HTMLButtonElement;
+
     this.timerEl = this.q('#hud-timer');
     this.alivePillEl = this.q('#hud-alive-pill');
+    this.netHudPillEl = this.q('#hud-net-pill');
+    this.netHudSepEl = this.q('#hud-net-sep');
     this.rosterListEl = this.q('#hud-roster-list');
     this.killFeedEl = this.q('#hud-kill-feed');
     this.vitalsBoxEl = this.q('#hud-vitals-box');
@@ -503,14 +779,246 @@ export class UIManager {
     this.spectatorBarEl = this.q('#hud-spectator-bar');
     this.spectatorSubEl = this.q('#spectator-sub');
 
+    this.pauseRestartBtnEl = this.q('#btn-pause-restart') as HTMLButtonElement;
+    this.pauseMenuBtnEl = this.q('#btn-pause-menu') as HTMLButtonElement;
+    this.specRestartBtnEl = this.q('#btn-spec-restart') as HTMLButtonElement;
+    this.specMenuBtnEl = this.q('#btn-spec-menu') as HTMLButtonElement;
+    this.resAgainBtnEl = this.q('#btn-res-again') as HTMLButtonElement;
+    this.resClassBtnEl = this.q('#btn-res-class') as HTMLButtonElement;
+    this.resMenuBtnEl = this.q('#btn-res-menu') as HTMLButtonElement;
+
     this.bindEvents();
     this.renderSelectionClass('sword', false);
+    this.renderMpClassButtons();
+    this.updatePublicRooms([]);
     this.syncSettingsControls();
   }
 
   public updateSettingsExternal(next: GameSettings): void {
     this.settings = { ...next };
     this.syncSettingsControls();
+  }
+
+  public getEnteredPlayerName(): string {
+    const val = this.mpNameInputEl.value.trim();
+    const clean = val.length >= 2 ? val.slice(0, 18) : 'Сэр Артур';
+    savePlayerName(clean);
+    return clean;
+  }
+
+  public getSelectedClass(): KnightClassId {
+    return this.currentSelectedClass;
+  }
+
+  public updateMultiplayerStatus(
+    status: NetConnectionStatus,
+    pingMs: number,
+    errorText?: string
+  ): void {
+    this.mpStatus = status;
+    this.mpPingMs = pingMs;
+
+    this.mpConnPillEl.classList.remove('online', 'connecting', 'offline');
+    if (status === 'connected') {
+      this.mpConnPillEl.classList.add('online');
+      this.mpConnPillEl.textContent =
+        pingMs > 0 ? `● В СЕТИ · ${pingMs} мс` : `● В СЕТИ`;
+    } else if (status === 'connecting') {
+      this.mpConnPillEl.classList.add('connecting');
+      this.mpConnPillEl.textContent = `◌ ПОДКЛЮЧЕНИЕ...`;
+    } else {
+      this.mpConnPillEl.classList.add('offline');
+      this.mpConnPillEl.textContent = `✕ ОФФЛАЙН`;
+    }
+
+    if (errorText) {
+      this.showMultiplayerNotice(errorText, 'error');
+    }
+  }
+
+  public showMultiplayerNotice(
+    message: string,
+    tone: 'error' | 'info' = 'error'
+  ): void {
+    if (this.mpAlertTimer) {
+      clearTimeout(this.mpAlertTimer);
+    }
+    this.mpAlertEl.textContent = message;
+    this.mpAlertEl.classList.remove('hidden', 'tone-error', 'tone-info');
+    this.mpAlertEl.classList.add(
+      tone === 'info' ? 'tone-info' : 'tone-error'
+    );
+    this.mpAlertTimer = setTimeout(() => {
+      this.mpAlertEl.classList.add('hidden');
+    }, 4500);
+  }
+
+  public updatePublicRooms(rooms: RoomSummary[]): void {
+    if (rooms.length === 0) {
+      this.mpRoomsListEl.innerHTML = `
+        <div class="mp-empty-rooms">
+          <div class="mp-empty-title">Открытых залов пока нет</div>
+          <div class="mp-empty-sub">
+            Нажмите «Быстрый поиск боя» или «Создать комнату» — другие игроки смогут сразу присоединиться к вам!
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    this.mpRoomsListEl.innerHTML = rooms
+      .map((r) => {
+        const canJoin = r.phase === 'lobby' && r.playerCount < r.maxPlayers;
+        const statusBadge =
+          r.phase === 'lobby'
+            ? `<span class="mp-room-badge open">Ожидание · ${r.playerCount}/${r.maxPlayers}</span>`
+            : `<span class="mp-room-badge busy">Идёт бой · ${r.playerCount}/${r.maxPlayers}</span>`;
+        const botTag = r.fillBots ? '🤖 +Боты до 5' : '⚔ Только игроки';
+        return `
+          <div class="mp-room-row">
+            <div class="mp-room-row-info">
+              <div class="mp-room-row-top">
+                <span class="mp-room-code-chip">${escapeHtml(r.roomCode)}</span>
+                <strong class="mp-room-host">Зал: ${escapeHtml(r.hostName)}</strong>
+              </div>
+              <div class="mp-room-row-meta">
+                ${statusBadge}
+                <span class="mp-room-meta-tag">${botTag}</span>
+              </div>
+            </div>
+            ${
+              canJoin
+                ? `<button class="btn btn-primary btn-sm mp-join-row-btn" data-code="${escapeHtml(
+                    r.roomCode
+                  )}">Войти</button>`
+                : `<span class="mp-room-locked">${
+                    r.phase === 'in_match' ? 'В бою' : 'Полон'
+                  }</span>`
+            }
+          </div>
+        `;
+      })
+      .join('');
+
+    this.mpRoomsListEl
+      .querySelectorAll('.mp-join-row-btn')
+      .forEach((btnEl) => {
+        btnEl.addEventListener('click', () => {
+          const code = (btnEl as HTMLElement).dataset.code ?? '';
+          if (code) {
+            this.callbacks.onMpJoinRoom(
+              code,
+              this.getEnteredPlayerName(),
+              this.currentSelectedClass
+            );
+          }
+        });
+      });
+  }
+
+  public updateMultiplayerRoom(
+    room: RoomLobbyState | null,
+    myClientId: string | null
+  ): void {
+    this.mpRoom = room;
+    this.mpMyClientId = myClientId;
+
+    const inLobbyRoom = Boolean(room && room.phase === 'lobby');
+    this.mpBrowserViewEl.classList.toggle('hidden', inLobbyRoom);
+    this.mpRoomViewEl.classList.toggle('hidden', !inLobbyRoom);
+
+    if (!room) {
+      return;
+    }
+
+    const me = room.players.find((p) => p.clientId === myClientId) ?? null;
+    if (me && me.classId !== this.currentSelectedClass) {
+      this.currentSelectedClass = me.classId;
+      this.renderMpClassButtons();
+    }
+
+    const isHost = room.hostClientId === myClientId;
+    this.mpRoomCodeTextEl.textContent = room.roomCode;
+    this.mpRoomBotsToggleEl.checked = room.fillBots;
+    this.mpRoomPublicToggleEl.checked = room.isPublic;
+    this.mpRoomBotsToggleEl.disabled = !isHost;
+    this.mpRoomPublicToggleEl.disabled = !isHost;
+
+    // Render 5 Arena Fighter Slots
+    const slotsHtml: string[] = [];
+    for (let idx = 0; idx < MAX_PLAYERS_PER_ROOM; idx++) {
+      const p = room.players[idx];
+      if (p) {
+        const clsCfg = KNIGHT_CLASSES[p.classId];
+        const iconUrl = getSkillIconUrl(CLASS_EMBLEM_ICON[p.classId]);
+        const isMe = p.clientId === myClientId;
+        const readyPill = p.isHost
+          ? `<span class="mp-slot-pill host">♛ ГЛАВА ЗАЛА</span>`
+          : p.ready
+          ? `<span class="mp-slot-pill ready">✓ ГОТОВ</span>`
+          : `<span class="mp-slot-pill wait">◌ НЕ ГОТОВ</span>`;
+
+        slotsHtml.push(`
+          <div class="mp-slot-card occupied ${isMe ? 'me' : ''}">
+            <img class="mp-slot-emblem" src="${iconUrl}" alt="" draggable="false" />
+            <div class="mp-slot-body">
+              <div class="mp-slot-name-row">
+                <strong class="mp-slot-name">${escapeHtml(p.name)}${
+          isMe ? ' (Вы)' : ''
+        }</strong>
+                <span class="mp-slot-ping">${p.pingMs} мс</span>
+              </div>
+              <div class="mp-slot-sub">${clsCfg.name} · ${clsCfg.maxHp} HP</div>
+            </div>
+            ${readyPill}
+          </div>
+        `);
+      } else if (room.fillBots) {
+        slotsHtml.push(`
+          <div class="mp-slot-card bot-slot">
+            <div class="mp-slot-bot-badge">🤖</div>
+            <div class="mp-slot-body">
+              <div class="mp-slot-name-row">
+                <span class="mp-slot-name muted">Слот #${idx + 1} · Тактический бот ИИ</span>
+              </div>
+              <div class="mp-slot-sub">Заменится живым игроком при входе в зал</div>
+            </div>
+            <span class="mp-slot-pill bot">ИИ</span>
+          </div>
+        `);
+      } else {
+        slotsHtml.push(`
+          <div class="mp-slot-card empty-slot">
+            <div class="mp-slot-bot-badge">⚔</div>
+            <div class="mp-slot-body">
+              <div class="mp-slot-name-row">
+                <span class="mp-slot-name muted">Слот #${idx + 1} · Ожидание рыцаря...</span>
+              </div>
+              <div class="mp-slot-sub">Отправьте код ${escapeHtml(
+                room.roomCode
+              )} другу для входа</div>
+            </div>
+          </div>
+        `);
+      }
+    }
+    this.mpSlotsGridEl.innerHTML = slotsHtml.join('');
+
+    // Host vs Guest buttons
+    if (isHost) {
+      this.mpReadyBtnEl.classList.add('hidden');
+      this.mpStartBtnEl.classList.remove('hidden');
+      const canStart = room.fillBots || room.players.length >= 2;
+      this.mpStartBtnEl.disabled = !canStart;
+      this.mpStartBtnEl.style.opacity = canStart ? '1' : '0.55';
+    } else {
+      this.mpStartBtnEl.classList.add('hidden');
+      this.mpReadyBtnEl.classList.remove('hidden');
+      const readyNow = me ? me.ready : true;
+      this.mpReadyBtnEl.textContent = readyNow
+        ? '✓ Вы готовы (Снять)'
+        : 'Подтвердить готовность';
+    }
   }
 
   public update(
@@ -526,6 +1034,7 @@ export class UIManager {
 
       this.mainMenuEl.classList.toggle('hidden', st !== 'MainMenu');
       this.selectionEl.classList.toggle('hidden', st !== 'CharacterSelection');
+      this.multiplayerEl.classList.toggle('hidden', st !== 'MultiplayerLobby');
 
       const inHud =
         st === 'Countdown' ||
@@ -539,16 +1048,27 @@ export class UIManager {
       }
 
       this.resultsModalEl.classList.toggle('hidden', st !== 'MatchFinished');
+
+      // Online-aware Pause & Spectator button labels
+      this.pauseRestartBtnEl.classList.toggle('hidden', match.isOnlineMatch);
+      this.pauseMenuBtnEl.innerHTML = match.isOnlineMatch
+        ? `<span class="btn-emblem">🚪</span><span>Покинуть сетевой бой</span>`
+        : `<span class="btn-emblem">🏛</span><span>Главное меню</span>`;
+
+      this.specRestartBtnEl.classList.toggle('hidden', match.isOnlineMatch);
+      this.specMenuBtnEl.textContent = match.isOnlineMatch
+        ? 'Покинуть комнату'
+        : 'В меню';
     }
 
     if (st === 'MatchFinished') {
-      if (
-        this.resultsRenderedGen !==
-        match.fighters.length + Math.round(match.matchElapsed * 10)
-      ) {
-        this.resultsRenderedGen =
-          match.fighters.length + Math.round(match.matchElapsed * 10);
-        this.renderResults(match);
+      const isHost = Boolean(
+        this.mpRoom && this.mpRoom.hostClientId === this.mpMyClientId
+      );
+      const key = `${match.matchGeneration}_${match.isOnlineMatch}_${isHost}_${match.fighters.length}`;
+      if (this.resultsRenderedKey !== key) {
+        this.resultsRenderedKey = key;
+        this.renderResults(match, isHost);
       }
       return;
     }
@@ -564,6 +1084,9 @@ export class UIManager {
 
   private bindEvents(): void {
     // Main Menu
+    this.q('#btn-menu-multiplayer').addEventListener('click', () => {
+      this.callbacks.onOpenMultiplayer();
+    });
     this.q('#btn-menu-select').addEventListener('click', () => {
       this.callbacks.onOpenSelection();
     });
@@ -597,17 +1120,97 @@ export class UIManager {
       this.callbacks.onStartMatch(this.currentSelectedClass, this.selectedMode);
     });
 
+    // Multiplayer Lobby & Waiting Room
+    this.mpNameInputEl.addEventListener('change', () => {
+      const name = this.getEnteredPlayerName();
+      this.callbacks.onMpSetName(name);
+    });
+    this.q('#btn-mp-quick').addEventListener('click', () => {
+      this.callbacks.onMpQuickJoin(
+        this.getEnteredPlayerName(),
+        this.currentSelectedClass
+      );
+    });
+    this.q('#btn-mp-create').addEventListener('click', () => {
+      this.callbacks.onMpCreateRoom({
+        playerName: this.getEnteredPlayerName(),
+        classId: this.currentSelectedClass,
+        fillBots: this.mpOptBotsEl.checked,
+        isPublic: this.mpOptPublicEl.checked,
+      });
+    });
+    this.q('#btn-mp-join-code').addEventListener('click', () => {
+      const code = this.mpCodeInputEl.value.trim().toUpperCase();
+      if (code.length < 3) {
+        this.showMultiplayerNotice('Введите 4-буквенный код комнаты.', 'error');
+        return;
+      }
+      this.callbacks.onMpJoinRoom(
+        code,
+        this.getEnteredPlayerName(),
+        this.currentSelectedClass
+      );
+    });
+    this.mpCodeInputEl.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        (this.q('#btn-mp-join-code') as HTMLButtonElement).click();
+      }
+    });
+    this.q('#btn-mp-refresh').addEventListener('click', () => {
+      this.callbacks.onMpRefreshRooms();
+    });
+    this.q('#btn-mp-back').addEventListener('click', () => {
+      this.callbacks.onReturnMainMenu();
+    });
+
+    this.mpCopyCodeBtnEl.addEventListener('click', () => {
+      if (!this.mpRoom) return;
+      const code = this.mpRoom.roomCode;
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(code).catch(() => {});
+      }
+      this.showMultiplayerNotice(
+        `Код комнаты «${code}» скопирован в буфер обмена!`,
+        'info'
+      );
+    });
+    this.mpRoomBotsToggleEl.addEventListener('change', () => {
+      this.callbacks.onMpRoomOptions({
+        fillBots: this.mpRoomBotsToggleEl.checked,
+        isPublic: this.mpRoomPublicToggleEl.checked,
+      });
+    });
+    this.mpRoomPublicToggleEl.addEventListener('change', () => {
+      this.callbacks.onMpRoomOptions({
+        fillBots: this.mpRoomBotsToggleEl.checked,
+        isPublic: this.mpRoomPublicToggleEl.checked,
+      });
+    });
+    this.q('#btn-mp-leave').addEventListener('click', () => {
+      this.callbacks.onMpLeaveRoom();
+    });
+    this.mpReadyBtnEl.addEventListener('click', () => {
+      const me = this.mpRoom?.players.find(
+        (p) => p.clientId === this.mpMyClientId
+      );
+      this.callbacks.onMpToggleReady(!(me?.ready ?? true));
+    });
+    this.mpStartBtnEl.addEventListener('click', () => {
+      this.callbacks.onMpStartMatch();
+    });
+
     // Pause Modal
     this.q('#btn-pause-resume').addEventListener('click', () => {
       this.callbacks.onResumeGame();
     });
-    this.q('#btn-pause-restart').addEventListener('click', () => {
+    this.pauseRestartBtnEl.addEventListener('click', () => {
       this.callbacks.onRestartMatch();
     });
     this.q('#btn-pause-settings').addEventListener('click', () => {
       this.settingsModalEl.classList.remove('hidden');
     });
-    this.q('#btn-pause-menu').addEventListener('click', () => {
+    this.pauseMenuBtnEl.addEventListener('click', () => {
       this.callbacks.onReturnMainMenu();
     });
 
@@ -618,21 +1221,25 @@ export class UIManager {
     this.q('#btn-spec-next').addEventListener('click', () => {
       this.callbacks.onCycleSpectator(1);
     });
-    this.q('#btn-spec-restart').addEventListener('click', () => {
+    this.specRestartBtnEl.addEventListener('click', () => {
       this.callbacks.onRestartMatch();
     });
-    this.q('#btn-spec-menu').addEventListener('click', () => {
+    this.specMenuBtnEl.addEventListener('click', () => {
       this.callbacks.onReturnMainMenu();
     });
 
     // Results buttons
-    this.q('#btn-res-again').addEventListener('click', () => {
+    this.resAgainBtnEl.addEventListener('click', () => {
       this.callbacks.onRestartMatch();
     });
-    this.q('#btn-res-class').addEventListener('click', () => {
-      this.callbacks.onOpenSelection();
+    this.resClassBtnEl.addEventListener('click', () => {
+      if (this.mpRoom) {
+        this.callbacks.onMpReturnToLobby();
+      } else {
+        this.callbacks.onOpenSelection();
+      }
     });
-    this.q('#btn-res-menu').addEventListener('click', () => {
+    this.resMenuBtnEl.addEventListener('click', () => {
       this.callbacks.onReturnMainMenu();
     });
 
@@ -671,6 +1278,38 @@ export class UIManager {
   }
 
   private currentSelectedClass: KnightClassId = 'sword';
+
+  private renderMpClassButtons(): void {
+    const html = CLASS_ORDER.map((cid) => {
+      const c = KNIGHT_CLASSES[cid];
+      const iconUrl = getSkillIconUrl(CLASS_EMBLEM_ICON[cid]);
+      return `
+        <button class="mp-cls-btn ${
+          cid === this.currentSelectedClass ? 'active' : ''
+        }" data-cid="${cid}" title="${c.name} (${c.maxHp} HP)">
+          <img src="${iconUrl}" alt="" draggable="false" />
+          <span>${c.name}</span>
+        </button>
+      `;
+    }).join('');
+
+    this.mpClassTabsEl.innerHTML = html;
+    this.mpRoomClassTabsEl.innerHTML = html;
+
+    const bindContainer = (el: HTMLElement) => {
+      el.querySelectorAll('.mp-cls-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const cid = (btn as HTMLElement).dataset.cid as KnightClassId;
+          this.currentSelectedClass = cid;
+          this.renderMpClassButtons();
+          this.callbacks.onMpSelectClass(cid);
+        });
+      });
+    };
+
+    bindContainer(this.mpClassTabsEl);
+    bindContainer(this.mpRoomClassTabsEl);
+  }
 
   private populateSkillSquares(
     container: HTMLElement,
@@ -783,6 +1422,7 @@ export class UIManager {
       btn.addEventListener('click', () => {
         const cid = (btn as HTMLElement).dataset.cid as KnightClassId;
         this.renderSelectionClass(cid, true);
+        this.renderMpClassButtons();
       });
     });
 
@@ -1013,7 +1653,7 @@ export class UIManager {
     labels: ProjectedFighterLabel[],
     pointerLocked: boolean
   ): void {
-    // 1. Timer & Alive Pill
+    // 1. Timer, Alive Pill & Online Room/Ping Pill
     const secs = Math.ceil(match.matchTimeRemaining);
     const mm = String(Math.floor(secs / 60)).padStart(2, '0');
     const ss = String(secs % 60).padStart(2, '0');
@@ -1024,6 +1664,19 @@ export class UIManager {
 
     const aliveCount = match.getLivingFighters().length;
     this.alivePillEl.textContent = `⚔ ЖИВЫХ: ${aliveCount} / ${match.fighters.length}`;
+
+    if (match.isOnlineMatch) {
+      this.netHudSepEl.classList.remove('hidden');
+      this.netHudPillEl.classList.remove('hidden');
+      const code = this.mpRoom ? this.mpRoom.roomCode : 'ОНЛАЙН';
+      this.netHudPillEl.textContent =
+        this.mpPingMs > 0
+          ? `🌐 ЗАЛ ${code} · ${this.mpPingMs} мс`
+          : `🌐 ЗАЛ ${code}`;
+    } else {
+      this.netHudSepEl.classList.add('hidden');
+      this.netHudPillEl.classList.add('hidden');
+    }
 
     // 2. Countdown Banner
     if (match.state === 'Countdown') {
@@ -1043,15 +1696,17 @@ export class UIManager {
     // 4. Roster Top-Right
     this.rosterListEl.innerHTML = match.fighters
       .map((f) => {
+        const isMe = f.id === match.localPlayerId;
         const pct = Math.max(0, Math.round((f.hp / f.maxHp) * 100));
+        const badgePrefix = isMe ? '♛ ' : f.isHuman ? '👤 ' : '';
         return `
           <div class="roster-item cls-${f.classId} ${
-          f.isHuman ? 'human' : ''
+          isMe ? 'human' : ''
         } ${f.isAlive ? '' : 'dead'}">
             <div class="roster-row-top">
-              <span class="roster-name">${f.isHuman ? '♛ ' : ''}${
+              <span class="roster-name">${badgePrefix}${escapeHtml(
           f.displayName
-        }</span>
+        )}</span>
               <span class="roster-hp-tag">${
                 f.isAlive ? `${Math.ceil(f.hp)} HP` : '☠ ПАЛ'
               }</span>
@@ -1069,8 +1724,14 @@ export class UIManager {
       .slice(0, 4)
       .map((kf) =>
         kf.killerName
-          ? `<div class="kill-feed-item"><strong>${kf.killerName}</strong> <span class="kf-sword">⚔</span> поверг <strong>${kf.victimName}</strong></div>`
-          : `<div class="kill-feed-item"><strong>${kf.victimName}</strong> пал на арене</div>`
+          ? `<div class="kill-feed-item"><strong>${escapeHtml(
+              kf.killerName
+            )}</strong> <span class="kf-sword">⚔</span> поверг <strong>${escapeHtml(
+              kf.victimName
+            )}</strong></div>`
+          : `<div class="kill-feed-item"><strong>${escapeHtml(
+              kf.victimName
+            )}</strong> пал на арене</div>`
       )
       .join('');
 
@@ -1179,7 +1840,7 @@ export class UIManager {
     }
   }
 
-  private renderResults(match: MatchManager): void {
+  private renderResults(match: MatchManager, isHost: boolean): void {
     const standings = match.getStandings();
     const winner = standings[0];
     const playerWon = Boolean(winner && winner.isHuman);
@@ -1203,7 +1864,28 @@ export class UIManager {
     sub.textContent =
       match.finishReason === 'time_up'
         ? 'Время схватки истекло — чемпион определён по запасу здоровья и нанесённому урону.'
-        : `Длительность битвы: ${Math.round(match.matchElapsed)} сек.`;
+        : `Длительность битвы: ${Math.round(match.matchElapsed)} сек.${
+            match.isOnlineMatch && this.mpStatus === 'connected'
+              ? ' · Сетевой зал активен'
+              : ''
+          }`;
+
+    if (match.isOnlineMatch && this.mpRoom) {
+      this.resMenuBtnEl.textContent = 'Покинуть комнату';
+      if (isHost) {
+        this.resClassBtnEl.classList.remove('hidden');
+        this.resClassBtnEl.textContent = 'В зал комнаты (смена класса)';
+        this.resAgainBtnEl.innerHTML = `<span class="btn-emblem">⚔</span><span>Новый раунд (Реванш)!</span>`;
+      } else {
+        this.resClassBtnEl.classList.add('hidden');
+        this.resAgainBtnEl.innerHTML = `<span class="btn-emblem">✓</span><span>Готов к реваншу (ждём главу)</span>`;
+      }
+    } else {
+      this.resMenuBtnEl.textContent = 'Главное меню';
+      this.resClassBtnEl.classList.remove('hidden');
+      this.resClassBtnEl.textContent = 'Сменить рыцаря';
+      this.resAgainBtnEl.innerHTML = `<span class="btn-emblem">⚔</span><span>Сразиться снова!</span>`;
+    }
 
     const tbody = this.q('#res-tbody');
     tbody.innerHTML = standings
@@ -1220,7 +1902,7 @@ export class UIManager {
         return `
           <tr class="${rowCls}">
             <td class="res-place">${placeBadge}</td>
-            <td class="res-fighter">${s.name}</td>
+            <td class="res-fighter">${escapeHtml(s.name)}</td>
             <td>
               <span class="res-class-cell">
                 <img src="${iconUrl}" alt="" class="res-class-icon" draggable="false" />

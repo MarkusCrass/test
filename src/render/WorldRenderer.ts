@@ -380,7 +380,7 @@ export class WorldRenderer {
     this.sky.update(dt, this.totalElapsed);
     this.arenaBuilder.update(this.totalElapsed, match.isFinalPhase);
 
-    if (match.state === 'MainMenu') {
+    if (match.state === 'MainMenu' || match.state === 'MultiplayerLobby') {
       this.showcaseGroup.visible = false;
       this.fightersGroup.visible = false;
       this.trailsGroup.visible = false;
@@ -464,12 +464,13 @@ export class WorldRenderer {
       this.renderedGeneration = match.matchGeneration;
 
       match.fighters.forEach((f, idx) => {
-        const clothOverride = f.isHuman
+        const isLocal = f.id === match.localPlayerId;
+        const clothOverride = isLocal
           ? undefined
           : BOT_CLOTH_ACCENTS[idx % BOT_CLOTH_ACCENTS.length];
         const rig = new KnightVisualRig(f.classId, this.materials, {
           clothOverride,
-          isHuman: f.isHuman,
+          isHuman: isLocal,
         });
         this.fightersGroup.add(rig.root);
         this.trailsGroup.add(rig.trail.mesh);
@@ -495,7 +496,7 @@ export class WorldRenderer {
     const tempV = new THREE.Vector3();
 
     for (const f of match.fighters) {
-      if (!f.isAlive || f.isHuman) continue;
+      if (!f.isAlive || f.id === match.localPlayerId) continue;
       tempV.set(f.body.x, f.body.y + 2.42, f.body.z);
       tempV.project(this.cameraRig.camera);
 

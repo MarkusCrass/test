@@ -12,6 +12,7 @@ import {
 export type MatchState =
   | 'MainMenu'
   | 'CharacterSelection'
+  | 'MultiplayerLobby'
   | 'Countdown'
   | 'InProgress'
   | 'PlayerEliminated'
@@ -64,6 +65,8 @@ export class MatchManager {
   public state: MatchState = 'MainMenu';
   public mode: MatchMode = 'ffa5';
   public selectedPlayerClass: KnightClassId = 'sword';
+  public localPlayerId = 'player';
+  public isOnlineMatch = false;
   public paused = false;
 
   public readonly arena: ArenaConfig;
@@ -98,14 +101,26 @@ export class MatchManager {
 
   public goToMainMenu(): void {
     this.clearMatchEntities();
+    this.isOnlineMatch = false;
+    this.localPlayerId = 'player';
     this.paused = false;
     this.state = 'MainMenu';
   }
 
   public goToCharacterSelection(): void {
     this.clearMatchEntities();
+    this.isOnlineMatch = false;
+    this.localPlayerId = 'player';
     this.paused = false;
     this.state = 'CharacterSelection';
+  }
+
+  public goToMultiplayerLobby(): void {
+    this.clearMatchEntities();
+    this.isOnlineMatch = false;
+    this.localPlayerId = 'player';
+    this.paused = false;
+    this.state = 'MultiplayerLobby';
   }
 
   /**
@@ -117,6 +132,8 @@ export class MatchManager {
   ): void {
     this.clearMatchEntities();
     this.matchGeneration += 1;
+    this.isOnlineMatch = false;
+    this.localPlayerId = 'player';
     this.selectedPlayerClass = playerClass;
     this.mode = mode;
     this.paused = false;
@@ -213,7 +230,11 @@ export class MatchManager {
   }
 
   public getPlayer(): Fighter | null {
-    return this.fighters.find((f) => f.isHuman) ?? null;
+    return (
+      this.fighters.find((f) => f.id === this.localPlayerId) ??
+      this.fighters.find((f) => f.isHuman) ??
+      null
+    );
   }
 
   public getLivingFighters(): Fighter[] {
@@ -532,7 +553,7 @@ export class MatchManager {
       fighterId: f.id,
       name: f.displayName,
       classId: f.classId,
-      isHuman: f.isHuman,
+      isHuman: f.id === this.localPlayerId,
       isAlive: f.isAlive,
       hp: Math.round(f.hp),
       maxHp: f.maxHp,
