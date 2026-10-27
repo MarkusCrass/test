@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ARENA_CONFIG } from '../config/arenaConfig';
@@ -30,12 +29,12 @@ export interface ProjectedFighterLabel {
   visible: boolean;
 }
 
-const BOT_CLOTH_ACCENTS = [0xc93838, 0x2979c9, 0xd99b26, 0x2f8f4e, 0xa843c9];
+const BOT_CLOTH_ACCENTS = [0xc93838, 0x2c7ac9, 0xd99b26, 0x2f8f5b, 0x9b4bc4];
 
 const CINEMATIC_GRADE_SHADER = {
   uniforms: {
     tDiffuse: { value: null },
-    uVignette: { value: 0.24 },
+    uVignette: { value: 0.14 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -52,11 +51,11 @@ const CINEMATIC_GRADE_SHADER = {
       vec4 texel = texture2D(tDiffuse, vUv);
       vec3 col = texel.rgb;
 
-      // Gentle corner vignette & subtle golden-hour warmth in linear HDR space
-      col *= vec3(1.02, 1.0, 0.98);
+      // Subtle sunlit warmth & gentle framing without darkening shadows
+      col *= vec3(1.02, 1.01, 0.99);
       vec2 centered = vUv - 0.5;
       float distSq = dot(centered, centered);
-      col *= 1.0 - distSq * uVignette * 1.45;
+      col *= 1.0 - distSq * uVignette * 1.1;
 
       gl_FragColor = vec4(col, texel.a);
     }
@@ -64,9 +63,9 @@ const CINEMATIC_GRADE_SHADER = {
 };
 
 /**
- * High-Fidelity Stylized 3D World Renderer for KNIGHTS: LAST STANDING.
- * Combines GLSL Golden-Hour Sky, PMREM IBL Environment Reflections, Normal-Mapped Masonry & Steel,
- * 2048px Soft Shadows, Rim Backlighting, 3D Weapon Ribbon Trails, and HDR Post-Processing.
+ * Crisp Low-Poly Pixel-Art & Stylized 3D World Renderer for KNIGHTS: LAST STANDING.
+ * Renders flat-shaded Blockbench-style knights with NearestFilter pixel-art faces, tunics & weapons
+ * at authentic integer pixel resolution (2x default, matching the reference pixel-art look) or HD.
  */
 export class WorldRenderer {
   public readonly renderer: THREE.WebGLRenderer;
@@ -93,37 +92,36 @@ export class WorldRenderer {
   private readonly showcasePos = new THREE.Vector3(0, 0.24, 4.2);
 
   private totalElapsed = 0;
-  private currentPixelScale: 1 | 2 | 3 = 1;
+  private currentPixelScale: 1 | 2 | 3 = 2;
   private currentQuality: GraphicsQuality = 'ultra';
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: false,
       powerPreference: 'high-performance',
     });
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.BasicShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.02;
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0xc49c74, 0.0085);
+    this.scene.fog = new THREE.FogExp2(0xc4ded0, 0.0062);
 
     this.cameraRig = new CameraRig(
       window.innerWidth / Math.max(1, window.innerHeight)
     );
 
-    const sunPos = new THREE.Vector3(15, 21, 12);
+    const sunPos = new THREE.Vector3(14, 22, 13);
     this.setupLighting(sunPos);
 
     this.sky = new SkyAndAtmosphere(sunPos);
     this.scene.add(this.sky.group);
 
-    // Apply procedural IBL environment map for authentic metallic armor & weapon sheen
     const envTex = this.sky.generateEnvironmentMap(this.renderer);
     this.scene.environment = envTex;
-    this.scene.environmentIntensity = 0.85;
+    this.scene.environmentIntensity = 0.35;
 
     this.materials = new MaterialLibrary();
     this.arenaBuilder = new ArenaBuilder(ARENA_CONFIG, this.materials);
@@ -136,16 +134,16 @@ export class WorldRenderer {
     this.scene.add(this.effects.group);
 
     this.buildShowcasePedestal();
-    this.rebuildPostProcessing(1, 'ultra');
+    this.applyGraphicsConfig(2, 'ultra');
   }
 
   private setupLighting(sunPos: THREE.Vector3): void {
-    // Sky-to-stone hemisphere fill
-    const hemi = new THREE.HemisphereLight(0xcbe2ff, 0x615244, 0.85);
+    // Clean, bright pastel sky-to-stone bounce fill so shadow facets stay colorful & readable (like reference!)
+    const hemi = new THREE.HemisphereLight(0xfff9ec, 0x8ba2b5, 1.32);
     this.scene.add(hemi);
 
-    // Golden-hour main directional sun with crisp 2048px shadows
-    this.sunLight = new THREE.DirectionalLight(0xffe9c4, 2.35);
+    // Warm sunlit key light with crisp pixel-clean shadows
+    this.sunLight = new THREE.DirectionalLight(0xfff1d4, 2.02);
     this.sunLight.position.copy(sunPos);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(2048, 2048);
@@ -156,12 +154,12 @@ export class WorldRenderer {
     this.sunLight.shadow.camera.right = d;
     this.sunLight.shadow.camera.top = d;
     this.sunLight.shadow.camera.bottom = -d;
-    this.sunLight.shadow.bias = -0.0005;
-    this.sunLight.shadow.normalBias = 0.02;
+    this.sunLight.shadow.bias = -0.0006;
+    this.sunLight.shadow.normalBias = 0.025;
     this.scene.add(this.sunLight);
 
-    // Cool azure rim backlight from opposite side so dark graphite armor silhouettes pop!
-    const rimLight = new THREE.DirectionalLight(0x7cb8ff, 0.85);
+    // Subtle cool sky rim light from behind
+    const rimLight = new THREE.DirectionalLight(0xaad8ff, 0.58);
     rimLight.position.set(-14, 11, -13);
     this.scene.add(rimLight);
   }
@@ -170,7 +168,7 @@ export class WorldRenderer {
     this.showcaseGroup.position.copy(this.showcasePos);
 
     const pedBase = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.18, 1.32, 0.2, 16),
+      new THREE.CylinderGeometry(1.12, 1.26, 0.2, 10),
       this.materials.curbStoneMat
     );
     pedBase.position.y = -0.14;
@@ -179,7 +177,7 @@ export class WorldRenderer {
     this.showcaseGroup.add(pedBase);
 
     const pedTop = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.02, 1.08, 0.08, 16),
+      new THREE.CylinderGeometry(0.98, 1.04, 0.08, 10),
       this.materials.pillarMat
     );
     pedTop.position.y = -0.02;
@@ -187,16 +185,16 @@ export class WorldRenderer {
     this.showcaseGroup.add(pedTop);
 
     const goldRing = new THREE.Mesh(
-      new THREE.RingGeometry(0.88, 0.96, 24),
+      new THREE.RingGeometry(0.84, 0.93, 12),
       this.materials.bronzeTrimMat
     );
     goldRing.rotateX(-Math.PI / 2);
     goldRing.position.y = 0.024;
     this.showcaseGroup.add(goldRing);
 
-    // Dedicated warm key spotlight on showcase knight
-    const keyLight = new THREE.PointLight(0xffe6ba, 6.0, 7.5, 1.4);
-    keyLight.position.set(-1.3, 2.6, 2.2);
+    // Soft warm front key fill on showcase character
+    const keyLight = new THREE.PointLight(0xfff2d6, 3.8, 7.5, 1.4);
+    keyLight.position.set(-1.2, 2.4, 2.3);
     this.showcaseGroup.add(keyLight);
 
     this.showcaseGroup.visible = false;
@@ -216,17 +214,32 @@ export class WorldRenderer {
 
     this.sky.setMotesVisible(quality !== 'low');
     this.sunLight.castShadow = quality !== 'low';
+    this.renderer.shadowMap.type =
+      pixelScale > 1 ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
 
-    const maxDpr =
-      quality === 'ultra' ? 2 : quality === 'high' ? 1.5 : 1;
-    const dpr = pixelScale === 1 ? Math.min(window.devicePixelRatio || 1, maxDpr) : 1;
+    if (pixelScale > 1) {
+      // Authentic crisp integer pixel-art rendering (2x = reference-grade fine pixel art, 3x = chunky retro)
+      const step = pixelScale === 2 ? 2 : 3;
+      const rw = Math.max(160, Math.floor(w / step));
+      const rh = Math.max(90, Math.floor(h / step));
 
-    this.renderer.setPixelRatio(dpr);
-    this.renderer.setSize(w, h, true);
-    this.renderer.domElement.style.imageRendering =
-      pixelScale > 1 ? 'pixelated' : 'auto';
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(rw, rh, false);
+      this.renderer.domElement.style.width = `${w}px`;
+      this.renderer.domElement.style.height = `${h}px`;
+      this.renderer.domElement.style.imageRendering = 'pixelated';
 
-    this.rebuildPostProcessing(pixelScale, quality);
+      this.rebuildPostProcessing(pixelScale, quality, rw, rh);
+    } else {
+      const maxDpr = quality === 'ultra' ? 2 : quality === 'high' ? 1.5 : 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+
+      this.renderer.setPixelRatio(dpr);
+      this.renderer.setSize(w, h, true);
+      this.renderer.domElement.style.imageRendering = 'auto';
+
+      this.rebuildPostProcessing(pixelScale, quality, w, h);
+    }
   }
 
   public handleResize(
@@ -238,7 +251,9 @@ export class WorldRenderer {
 
   private rebuildPostProcessing(
     pixelScale: 1 | 2 | 3,
-    quality: GraphicsQuality
+    quality: GraphicsQuality,
+    rw: number,
+    rh: number
   ): void {
     if (this.composer) {
       this.composer.dispose();
@@ -246,56 +261,35 @@ export class WorldRenderer {
       this.bloomPass = null;
     }
 
-    if (quality === 'low' && pixelScale === 1) {
-      // Direct single-pass WebGL render for maximum FPS on low-spec hardware
+    if (quality === 'low' || pixelScale > 1) {
+      // In pixel-art mode (pixelScale 2 or 3) or low quality, render directly to the un-antialiased
+      // low-res WebGL framebuffer so every pixel edge is 100% razor-sharp with zero bloom blur!
       return;
     }
 
-    const w = Math.max(1, window.innerWidth);
-    const h = Math.max(1, window.innerHeight);
     const dpr = this.renderer.getPixelRatio();
-
     const rt = new THREE.WebGLRenderTarget(
-      Math.floor(w * dpr),
-      Math.floor(h * dpr),
+      Math.floor(rw * dpr),
+      Math.floor(rh * dpr),
       {
         type: THREE.HalfFloatType,
         samples:
-          this.renderer.capabilities.isWebGL2 &&
-          pixelScale === 1 &&
-          quality === 'ultra'
-            ? 4
-            : 0,
+          this.renderer.capabilities.isWebGL2 && quality === 'ultra' ? 4 : 0,
       }
     );
 
     this.composer = new EffectComposer(this.renderer, rt);
     this.composer.setPixelRatio(dpr);
-    this.composer.setSize(w, h);
+    this.composer.setSize(rw, rh);
 
-    if (pixelScale > 1) {
-      // Genuine depth/normal edge-aware 3D pixelation pass!
-      const pixPass = new RenderPixelatedPass(
-        pixelScale * 2,
-        this.scene,
-        this.cameraRig.camera,
-        {
-          normalEdgeStrength: 0.28,
-          depthEdgeStrength: 0.35,
-        }
-      );
-      this.composer.addPass(pixPass);
-    } else {
-      const renderPass = new RenderPass(this.scene, this.cameraRig.camera);
-      this.composer.addPass(renderPass);
-    }
+    const renderPass = new RenderPass(this.scene, this.cameraRig.camera);
+    this.composer.addPass(renderPass);
 
     if (quality === 'ultra' || quality === 'high') {
-      // Selective HDR Bloom: high threshold ensures zero screen haze — only flames & sparks glow!
       this.bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(w, h),
-        quality === 'ultra' ? 0.32 : 0.22,
-        0.42,
+        new THREE.Vector2(rw, rh),
+        quality === 'ultra' ? 0.26 : 0.18,
+        0.4,
         0.96
       );
       this.composer.addPass(this.bloomPass);
@@ -378,8 +372,9 @@ export class WorldRenderer {
       this.syncShowcaseClass(match.selectedPlayerClass);
       if (this.showcaseRig) {
         this.showcaseRig.updatePreviewIdle(this.totalElapsed);
+        // Gentle 3/4 turn arc (like reference angle!) so face, eyes, hair, boots & weapon shine!
         this.showcaseRig.root.rotation.y =
-          Math.sin(this.totalElapsed * 0.72) * 0.92 + 0.22;
+          Math.sin(this.totalElapsed * 0.72) * 0.58 + 0.34;
       }
       this.cameraRig.updateShowcaseCamera(
         this.showcasePos.x,
@@ -474,7 +469,7 @@ export class WorldRenderer {
 
     for (const f of match.fighters) {
       if (!f.isAlive || f.isHuman) continue;
-      tempV.set(f.body.x, 2.42, f.body.z);
+      tempV.set(f.body.x, 2.38, f.body.z);
       tempV.project(this.cameraRig.camera);
 
       const inFront = tempV.z >= -1 && tempV.z <= 1;
