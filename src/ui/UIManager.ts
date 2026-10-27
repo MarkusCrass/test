@@ -22,7 +22,10 @@ export interface UICallbacks {
   onResumeGame: () => void;
   onCycleSpectator: (delta: 1 | -1) => void;
   onSettingsChanged: (next: GameSettings) => void;
-  onSelectPreviewClass: (classId: KnightClassId, userInitiated?: boolean) => void;
+  onSelectPreviewClass: (
+    classId: KnightClassId,
+    userInitiated?: boolean
+  ) => void;
   onTriggerSkillSlot?: (slotKey: SkillSlotKey) => void;
 }
 
@@ -38,6 +41,73 @@ const STATE_LABELS_RU: Record<FighterState, string> = {
   Dead: 'Пал в бою',
 };
 
+const CLASS_EMBLEM_ICON: Record<KnightClassId, string> = {
+  sword: 'sword_light.svg',
+  dual: 'dual_light.svg',
+  spear: 'spear_light.svg',
+  hammer: 'hammer_light.svg',
+};
+
+const CORNER_STUDS_HTML = `
+  <span class="corner-orn tl" aria-hidden="true"></span>
+  <span class="corner-orn tr" aria-hidden="true"></span>
+  <span class="corner-orn bl" aria-hidden="true"></span>
+  <span class="corner-orn br" aria-hidden="true"></span>
+`;
+
+const ORNAMENT_DIVIDER_HTML = `
+  <div class="ornament-divider" aria-hidden="true">
+    <span class="ornament-line"></span>
+    <span class="ornament-gem">❖</span>
+    <span class="ornament-line"></span>
+  </div>
+`;
+
+const CREST_SHIELD_SVG = `
+  <svg class="window-crest-svg" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <linearGradient id="crestGold" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#fff4c2"/>
+        <stop offset="50%" stop-color="#e5b24c"/>
+        <stop offset="100%" stop-color="#8f5e14"/>
+      </linearGradient>
+      <linearGradient id="crestCrimson" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#8f1d28"/>
+        <stop offset="100%" stop-color="#2e090f"/>
+      </linearGradient>
+    </defs>
+    <path d="M12 12L52 52M52 12L12 52" stroke="url(#crestGold)" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M18 14L23 8L32 14L41 8L46 14H18Z" fill="url(#crestGold)"/>
+    <path d="M16 17H48V33C48 45 32 54 32 54C32 54 16 45 16 33V17Z" fill="url(#crestCrimson)" stroke="url(#crestGold)" stroke-width="2.6"/>
+    <path d="M32 22V46M23 31H41" stroke="url(#crestGold)" stroke-width="2.4" stroke-linecap="round"/>
+  </svg>
+`;
+
+const CREST_SWORDS_SVG = `
+  <svg class="window-crest-svg sm" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M14 50L50 14M42 14H50V22M14 14L50 50M22 14H14V22" stroke="#f0c362" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="32" cy="32" r="9" fill="#251a12" stroke="#f0c362" stroke-width="2.4"/>
+    <circle cx="32" cy="32" r="3.5" fill="#ffe8a3"/>
+  </svg>
+`;
+
+const CREST_GEAR_SVG = `
+  <svg class="window-crest-svg sm" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <circle cx="32" cy="32" r="19" stroke="#e5b24c" stroke-width="2.4" stroke-dasharray="6 4"/>
+    <polygon points="32,12 37,25 51,25 40,34 44,48 32,39 20,48 24,34 13,25 27,25" fill="#362512" stroke="#f3c969" stroke-width="2"/>
+    <circle cx="32" cy="32" r="5" fill="#ffe9a8"/>
+  </svg>
+`;
+
+const CREST_TROPHY_SVG = `
+  <svg class="window-crest-svg sm" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M16 18H48V28C48 37 41 43 32 43C23 43 16 37 16 28V18Z" fill="#472f10" stroke="#f5cb6c" stroke-width="2.6"/>
+    <path d="M16 21H10C10 29 14 33 18 33M48 21H54C54 29 50 33 46 33" stroke="#f5cb6c" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M32 43V51M22 52H42" stroke="#f5cb6c" stroke-width="3" stroke-linecap="round"/>
+    <path d="M24 13L28 8L32 13L36 8L40 13" stroke="#ffeaa6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+`;
+
 interface ActionBarSlotRefs {
   descriptor: SkillSlotDescriptor;
   rootEl: HTMLElement;
@@ -46,9 +116,9 @@ interface ActionBarSlotRefs {
 }
 
 /**
- * Manages all UI screens, class selection showcase stats, bottom square skill hotbar
- * with hover tooltips, compact combat HUD, spectator controls, pause/settings modals,
- * and match results table.
+ * Manages all UI screens, royal medieval windows, class selection showcase stats,
+ * bottom square skill hotbar with hover tooltips, compact combat HUD, spectator controls,
+ * pause/settings modals, and match results table.
  */
 export class UIManager {
   private readonly root: HTMLElement;
@@ -70,6 +140,7 @@ export class UIManager {
   private readonly rosterListEl: HTMLElement;
   private readonly killFeedEl: HTMLElement;
   private readonly vitalsBoxEl: HTMLElement;
+  private readonly playerClassIconEl: HTMLImageElement;
   private readonly playerClassLabelEl: HTMLElement;
   private readonly playerStatePillEl: HTMLElement;
   private readonly hpFillEl: HTMLElement;
@@ -90,6 +161,7 @@ export class UIManager {
 
   private readonly labelPool = new Map<string, HTMLElement>();
   private renderedActionBarClass: KnightClassId | null = null;
+  private renderedVitalsClass: KnightClassId | null = null;
   private actionBarRefs: ActionBarSlotRefs[] = [];
   private lastRenderedState: MatchState | null = null;
   private lastPaused = false;
@@ -107,61 +179,87 @@ export class UIManager {
 
     this.root.innerHTML = `
       <!-- MAIN MENU -->
-      <div id="screen-main-menu" class="screen-overlay">
-        <div class="stone-panel main-menu-card pointer-auto">
-          <div class="title-badge">Third-Person Medieval Arena</div>
-          <h1 class="game-title">KNIGHTS:<br/>LAST STANDING</h1>
+      <div id="screen-main-menu" class="screen-overlay menu-vignette">
+        <div class="stone-panel royal-window main-menu-card pointer-auto">
+          ${CORNER_STUDS_HTML}
+          <div class="crest-wrap">${CREST_SHIELD_SVG}</div>
+          <div class="title-badge">⚔ Средневековая арена на выживание ⚔</div>
+          <h1 class="game-title">KNIGHTS:<br/><span>LAST STANDING</span></h1>
+          ${ORNAMENT_DIVIDER_HTML}
           <p class="game-subtitle">
-            Пять рыцарей на каменной арене. Четыре боевых стиля. Выживет только один.
+            Пять рыцарей выходят во двор древней цитадели. Четыре ордена клинка и стали. На ногах останется только один.
           </p>
           <div class="menu-actions">
-            <button id="btn-menu-select" class="btn btn-primary">Выбрать класс и в бой</button>
-            <button id="btn-menu-quick" class="btn btn-gold">Быстрый бой (5 бойцов)</button>
-            <button id="btn-menu-duel" class="btn">Тестовый режим (1 против 1 бота)</button>
-            <button id="btn-menu-settings" class="btn">Настройки</button>
+            <button id="btn-menu-select" class="btn btn-primary btn-hero">
+              <span class="btn-emblem">⚔</span>
+              <span>Выбрать рыцаря и в бой</span>
+            </button>
+            <button id="btn-menu-quick" class="btn btn-gold">
+              <span class="btn-emblem">♛</span>
+              <span>Быстрый бой (5 бойцов)</span>
+            </button>
+            <div class="menu-secondary-row">
+              <button id="btn-menu-duel" class="btn">
+                <span class="btn-emblem">🛡</span>
+                <span>Дуэль 1 на 1</span>
+              </button>
+              <button id="btn-menu-settings" class="btn">
+                <span class="btn-emblem">⚙</span>
+                <span>Настройки</span>
+              </button>
+            </div>
           </div>
           <div class="controls-box">
-            <div><span class="key-chip">WASD</span> Движение</div>
-            <div><span class="key-chip">Мышь</span> Обзор 360°</div>
-            <div><span class="key-chip">ЛКМ</span> Лёгкий удар</div>
-            <div><span class="key-chip">Удерж. ЛКМ</span> Тяжёлый удар</div>
-            <div><span class="key-chip">ПКМ</span> Блок / Парирование</div>
-            <div><span class="key-chip">1 / 2</span> Способности класса</div>
-            <div><span class="key-chip">Space</span> Прыжок · <span class="key-chip">Alt / C</span> Рывок</div>
-            <div><span class="key-chip">Tab</span> Курсор к скиллам · <span class="key-chip">Esc</span> Пауза</div>
+            <div class="controls-box-title">Боевое управление</div>
+            <div class="controls-grid">
+              <div><span class="key-chip">WASD</span> Движение</div>
+              <div><span class="key-chip">Мышь</span> Камера 360°</div>
+              <div><span class="key-chip">ЛКМ</span> Серия ударов</div>
+              <div><span class="key-chip">Удерж. ЛКМ</span> Силовой удар</div>
+              <div><span class="key-chip">ПКМ</span> Блок / Парир.</div>
+              <div><span class="key-chip">1 / 2</span> Скиллы ордена</div>
+              <div><span class="key-chip">Space</span> Прыжок · <span class="key-chip">Alt</span> Рывок</div>
+              <div><span class="key-chip">Tab</span> Курсор · <span class="key-chip">Esc</span> Пауза</div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- CHARACTER SELECTION -->
       <div id="screen-selection" class="selection-layout hidden">
-        <div class="stone-panel selection-panel pointer-auto">
+        <div class="stone-panel royal-window selection-panel pointer-auto">
+          ${CORNER_STUDS_HTML}
           <div>
-            <div class="title-badge">Подготовка к бою</div>
-            <h2 style="margin: 2px 0 6px; font-size: 22px;">Выбор класса рыцаря</h2>
+            <div class="selection-header-top">
+              <div class="title-badge">Оружейная цитадели</div>
+              <h2 class="window-heading">Выбор класса рыцаря</h2>
+            </div>
+            ${ORNAMENT_DIVIDER_HTML}
             <div id="class-tabs" class="class-tabs"></div>
             <div id="class-details"></div>
           </div>
-          <div>
-            <div style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">
-              Режим схватки
-            </div>
+          <div class="selection-footer">
+            <div class="section-kicker">Режим схватки</div>
             <div class="mode-toggle-row">
-              <button id="mode-ffa5" class="mode-btn active">5 бойцов (Все против всех)</button>
-              <button id="mode-duel" class="mode-btn">Тест 1 на 1 (Отладка: 1 бот)</button>
+              <button id="mode-ffa5" class="mode-btn active">♛ 5 бойцов · Все против всех</button>
+              <button id="mode-duel" class="mode-btn">⚔ Дуэль 1 на 1 · Тренировка</button>
             </div>
-            <div style="display: flex; gap: 10px;">
-              <button id="btn-sel-back" class="btn" style="flex: 0 0 auto;">Назад</button>
-              <button id="btn-sel-start" class="btn btn-primary" style="flex: 1;">Начать битву!</button>
+            <div class="selection-cta-row">
+              <button id="btn-sel-back" class="btn" style="flex: 0 0 auto;">◀ В меню</button>
+              <button id="btn-sel-start" class="btn btn-primary" style="flex: 1;">
+                <span class="btn-emblem">⚔</span>
+                <span>Выйти на арену!</span>
+              </button>
             </div>
           </div>
         </div>
 
         <!-- Bottom Showcase Skill Squares with Hover Tooltips -->
-        <div class="selection-showcase-dock pointer-auto">
+        <div class="selection-showcase-dock royal-subframe pointer-auto">
+          ${CORNER_STUDS_HTML}
           <div id="selection-skill-bar" class="skill-squares-row"></div>
           <div class="skill-dock-caption">
-            Наведите курсор на квадратик скилла для подробного описания
+            ❖ Наведите курсор на иконку приёма для подробного описания ❖
           </div>
         </div>
       </div>
@@ -171,19 +269,24 @@ export class UIManager {
         <div id="world-labels-layer"></div>
 
         <div class="stone-panel hud-top-bar">
-          <div id="hud-timer" class="hud-timer">03:10</div>
-          <div id="hud-alive-pill" class="hud-alive-pill">ЖИВЫХ: 5 / 5</div>
+          ${CORNER_STUDS_HTML}
+          <div class="hud-clock-group">
+            <span class="hud-clock-icon" aria-hidden="true">⏳</span>
+            <div id="hud-timer" class="hud-timer">03:10</div>
+          </div>
+          <span class="hud-top-divider" aria-hidden="true"></span>
+          <div id="hud-alive-pill" class="hud-alive-pill">⚔ ЖИВЫХ: 5 / 5</div>
         </div>
 
         <div id="hud-pointer-prompt" class="pointer-prompt hidden">
-          Кликните по арене для боя · Наведите мышь на скиллы снизу для описания
+          ⚔ Кликните по арене для боя · Наведите мышь на скиллы снизу для описания
         </div>
 
         <div id="hud-countdown" class="countdown-banner hidden">3</div>
 
         <div class="stone-panel hud-roster">
-          <div class="roster-title">Участники арены</div>
-          <div id="hud-roster-list"></div>
+          <div class="roster-title"><span>⚔</span> Летопись арены</div>
+          <div id="hud-roster-list" class="roster-list-inner"></div>
         </div>
 
         <div id="hud-kill-feed" class="kill-feed"></div>
@@ -197,15 +300,21 @@ export class UIManager {
 
         <!-- Bottom-Left Vitals (HP, Stamina & Active Buff) -->
         <div id="hud-vitals-box" class="stone-panel hud-vitals">
+          ${CORNER_STUDS_HTML}
           <div class="vitals-header">
-            <span id="hud-player-class">Рыцарь</span>
+            <div class="vitals-identity">
+              <img id="hud-player-class-icon" class="vitals-class-emblem" src="${getSkillIconUrl(
+                'sword_light.svg'
+              )}" alt="" draggable="false" />
+              <span id="hud-player-class">Рыцарь</span>
+            </div>
             <span id="hud-player-state" class="state-pill">Готовность</span>
           </div>
-          <div class="bar-container">
+          <div class="bar-container hp-bar-frame">
             <div id="hud-hp-fill" class="hp-fill" style="width: 100%"></div>
             <div id="hud-hp-text" class="bar-text">ЗДОРОВЬЕ: 100 / 100</div>
           </div>
-          <div class="bar-container" style="height: 15px; margin-bottom: 4px;">
+          <div class="bar-container stam-bar-frame">
             <div id="hud-stam-fill" class="stamina-fill" style="width: 100%"></div>
             <div id="hud-stam-text" class="bar-text">ВЫНОСЛИВОСТЬ: 100</div>
           </div>
@@ -214,6 +323,7 @@ export class UIManager {
 
         <!-- Bottom-Center Square Skill Bar with Hover Descriptions -->
         <div id="hud-actionbar" class="hud-actionbar pointer-auto">
+          ${CORNER_STUDS_HTML}
           <div id="hud-actionbar-slots" class="skill-squares-row"></div>
           <div id="hud-actionbar-hint" class="hud-actionbar-hint">
             Наведите курсор на иконку для описания · [Tab] показать курсор в бою
@@ -221,13 +331,14 @@ export class UIManager {
         </div>
 
         <!-- SPECTATOR DEATH OVERLAY -->
-        <div id="hud-spectator-bar" class="stone-panel spectator-bar pointer-auto hidden">
-          <div class="spectator-title">ВЫ ПАЛИ В БОЮ — РЕЖИМ НАБЛЮДЕНИЯ</div>
+        <div id="hud-spectator-bar" class="stone-panel royal-window spectator-bar pointer-auto hidden">
+          ${CORNER_STUDS_HTML}
+          <div class="spectator-title">☠ ВЫ ПАЛИ В БОЮ — РЕЖИМ НАБЛЮДЕНИЯ ☠</div>
           <div id="spectator-sub" class="spectator-sub">Наблюдение за оставшимися рыцарями...</div>
           <div class="spectator-actions">
             <button id="btn-spec-prev" class="btn btn-sm">◀ Пред. боец (Q)</button>
             <button id="btn-spec-next" class="btn btn-sm">След. боец (E) ▶</button>
-            <button id="btn-spec-restart" class="btn btn-primary btn-sm">Перезапустить матч</button>
+            <button id="btn-spec-restart" class="btn btn-primary btn-sm">⚔ Снова в бой</button>
             <button id="btn-spec-menu" class="btn btn-sm">В меню</button>
           </div>
         </div>
@@ -235,96 +346,124 @@ export class UIManager {
 
       <!-- PAUSE MODAL -->
       <div id="modal-pause" class="modal-backdrop hidden">
-        <div class="stone-panel settings-card" style="text-align: center;">
-          <div class="title-badge">Пауза</div>
-          <h2 style="margin: 4px 0 18px;">Бой приостановлен</h2>
+        <div class="stone-panel royal-window settings-card pause-card">
+          ${CORNER_STUDS_HTML}
+          <div class="crest-wrap">${CREST_SWORDS_SVG}</div>
+          <div class="title-badge">Передышка в бою</div>
+          <h2 class="window-heading">Бой приостановлен</h2>
+          ${ORNAMENT_DIVIDER_HTML}
           <div class="menu-actions" style="margin-bottom: 0;">
-            <button id="btn-pause-resume" class="btn btn-primary">Продолжить</button>
-            <button id="btn-pause-restart" class="btn btn-gold">Начать заново</button>
-            <button id="btn-pause-settings" class="btn">Настройки</button>
-            <button id="btn-pause-menu" class="btn">Главное меню</button>
+            <button id="btn-pause-resume" class="btn btn-primary">
+              <span class="btn-emblem">⚔</span>
+              <span>Продолжить схватку</span>
+            </button>
+            <button id="btn-pause-restart" class="btn btn-gold">
+              <span class="btn-emblem">↻</span>
+              <span>Начать заново</span>
+            </button>
+            <button id="btn-pause-settings" class="btn">
+              <span class="btn-emblem">⚙</span>
+              <span>Настройки</span>
+            </button>
+            <button id="btn-pause-menu" class="btn">
+              <span class="btn-emblem">🏛</span>
+              <span>Главное меню</span>
+            </button>
           </div>
         </div>
       </div>
 
       <!-- RESULTS MODAL -->
       <div id="modal-results" class="modal-backdrop hidden">
-        <div class="stone-panel results-card">
-          <div id="res-badge" class="title-badge">Итоги схватки</div>
-          <h2 id="res-headline" style="margin: 4px 0 6px; font-size: 28px;">ПОБЕДА!</h2>
-          <div id="res-sub" style="color: var(--text-muted); font-size: 14px;"></div>
-          <table class="standings-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Боец</th>
-                <th>Класс</th>
-                <th>Статус</th>
-                <th>Убийств</th>
-                <th>Урон</th>
-              </tr>
-            </thead>
-            <tbody id="res-tbody"></tbody>
-          </table>
-          <div style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+        <div class="stone-panel royal-window results-card">
+          ${CORNER_STUDS_HTML}
+          <div class="results-header">
+            <div class="crest-wrap">${CREST_TROPHY_SVG}</div>
+            <div id="res-badge" class="title-badge">Итоги турнира</div>
+            <h2 id="res-headline" class="window-heading results-headline">ПОБЕДА!</h2>
+            <div id="res-sub" class="results-sub"></div>
+          </div>
+          ${ORNAMENT_DIVIDER_HTML}
+          <div class="standings-scroll-wrap">
+            <table class="standings-table">
+              <thead>
+                <tr>
+                  <th>Место</th>
+                  <th>Рыцарь</th>
+                  <th>Орден</th>
+                  <th>Исход</th>
+                  <th>Побед</th>
+                  <th>Урон</th>
+                </tr>
+              </thead>
+              <tbody id="res-tbody"></tbody>
+            </table>
+          </div>
+          <div class="results-actions">
             <button id="btn-res-menu" class="btn">Главное меню</button>
-            <button id="btn-res-class" class="btn">Сменить класс</button>
-            <button id="btn-res-again" class="btn btn-primary">Сразиться снова!</button>
+            <button id="btn-res-class" class="btn btn-gold">Сменить рыцаря</button>
+            <button id="btn-res-again" class="btn btn-primary">
+              <span class="btn-emblem">⚔</span>
+              <span>Сразиться снова!</span>
+            </button>
           </div>
         </div>
       </div>
 
       <!-- SETTINGS MODAL -->
       <div id="modal-settings" class="modal-backdrop hidden">
-        <div class="stone-panel settings-card">
-          <div class="title-badge">Параметры игры</div>
-          <h2 style="margin: 4px 0 18px;">Настройки</h2>
+        <div class="stone-panel royal-window settings-card">
+          ${CORNER_STUDS_HTML}
+          <div class="modal-header-center">
+            <div class="crest-wrap">${CREST_GEAR_SVG}</div>
+            <div class="title-badge">Параметры цитадели</div>
+            <h2 class="window-heading">Настройки игры</h2>
+          </div>
+          ${ORNAMENT_DIVIDER_HTML}
 
-          <div class="setting-group">
+          <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Громкость звука</span>
-              <span id="lbl-vol">70%</span>
+              <span>🔊 Громкость звука</span>
+              <span id="lbl-vol" class="setting-val-pill">70%</span>
             </div>
             <input id="inp-vol" type="range" min="0" max="100" step="1" class="setting-slider" />
           </div>
 
-          <div class="setting-group">
+          <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Чувствительность мыши</span>
-              <span id="lbl-sens">1.0x</span>
+              <span>🎯 Чувствительность мыши</span>
+              <span id="lbl-sens" class="setting-val-pill">1.0x</span>
             </div>
             <input id="inp-sens" type="range" min="20" max="250" step="5" class="setting-slider" />
           </div>
 
-          <div class="setting-group">
+          <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Качество графики</span>
-              <span id="lbl-qual">Ультра (HDR + Тени 2K)</span>
+              <span>✨ Качество графики</span>
+              <span id="lbl-qual" class="setting-val-pill">Ультра</span>
             </div>
-            <div class="mode-toggle-row" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 4px;">
+            <div class="mode-toggle-row" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 0;">
               <button id="qual-ultra" class="mode-btn active">Ультра</button>
               <button id="qual-high" class="mode-btn">Высокое</button>
               <button id="qual-low" class="mode-btn">Быстрое</button>
             </div>
           </div>
 
-          <div class="setting-group">
+          <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Стиль рендера</span>
-              <span id="lbl-pix">Чёткий HD 3D (1x)</span>
+              <span>🖼 Стиль рендера</span>
+              <span id="lbl-pix" class="setting-val-pill">Чёткий HD 3D (1x)</span>
             </div>
             <input id="inp-pix" type="range" min="1" max="3" step="1" class="setting-slider" />
           </div>
 
-          <div class="setting-group" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-            <input id="inp-debug" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;" />
-            <label for="inp-debug" style="font-size: 13px; font-weight: 700; cursor: pointer;">
-              Отладочное отображение хитбоксов и ИИ (F3)
-            </label>
-          </div>
+          <label for="inp-debug" class="setting-plaque setting-check-row">
+            <input id="inp-debug" type="checkbox" class="royal-checkbox" />
+            <span>Показывать сектора ударов, хитбоксы и цели ИИ (F3)</span>
+          </label>
 
-          <div style="display: flex; justify-content: flex-end; margin-top: 18px;">
-            <button id="btn-settings-close" class="btn btn-primary">Готово</button>
+          <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+            <button id="btn-settings-close" class="btn btn-primary" style="min-width: 150px;">Сохранить</button>
           </div>
         </div>
       </div>
@@ -343,6 +482,9 @@ export class UIManager {
     this.rosterListEl = this.q('#hud-roster-list');
     this.killFeedEl = this.q('#hud-kill-feed');
     this.vitalsBoxEl = this.q('#hud-vitals-box');
+    this.playerClassIconEl = this.q(
+      '#hud-player-class-icon'
+    ) as HTMLImageElement;
     this.playerClassLabelEl = this.q('#hud-player-class');
     this.playerStatePillEl = this.q('#hud-player-state');
     this.hpFillEl = this.q('#hud-hp-fill');
@@ -362,7 +504,7 @@ export class UIManager {
     this.spectatorSubEl = this.q('#spectator-sub');
 
     this.bindEvents();
-    this.renderSelectionClass('sword');
+    this.renderSelectionClass('sword', false);
     this.syncSettingsControls();
   }
 
@@ -400,7 +542,10 @@ export class UIManager {
     }
 
     if (st === 'MatchFinished') {
-      if (this.resultsRenderedGen !== match.fighters.length + Math.round(match.matchElapsed * 10)) {
+      if (
+        this.resultsRenderedGen !==
+        match.fighters.length + Math.round(match.matchElapsed * 10)
+      ) {
         this.resultsRenderedGen =
           match.fighters.length + Math.round(match.matchElapsed * 10);
         this.renderResults(match);
@@ -527,10 +672,6 @@ export class UIManager {
 
   private currentSelectedClass: KnightClassId = 'sword';
 
-  /**
-   * Builds a row of 6 beveled square skill icons with hover description tooltips.
-   * Returns live DOM element references so HUD updates never recreate nodes or break :hover.
-   */
   private populateSkillSquares(
     container: HTMLElement,
     classId: KnightClassId,
@@ -541,7 +682,6 @@ export class UIManager {
     const refs: ActionBarSlotRefs[] = [];
 
     descriptors.forEach((slot, index) => {
-      // Insert subtle heraldic divider flanking the two central [1] & [2] signature abilities
       if (index === 3 || index === 5) {
         const sep = document.createElement('div');
         sep.className = 'skill-bar-sep';
@@ -549,7 +689,9 @@ export class UIManager {
       }
 
       const rootEl = document.createElement('div');
-      rootEl.className = `skill-sq ${slot.isSignature ? 'signature' : 'core'} ready`;
+      rootEl.className = `skill-sq ${
+        slot.isSignature ? 'signature' : 'core'
+      } ready`;
       rootEl.dataset.slot = slot.slotKey;
 
       const cdMeta =
@@ -625,10 +767,14 @@ export class UIManager {
     const tabsEl = this.q('#class-tabs');
     tabsEl.innerHTML = CLASS_ORDER.map((cid) => {
       const c = KNIGHT_CLASSES[cid];
+      const iconUrl = getSkillIconUrl(CLASS_EMBLEM_ICON[cid]);
       return `
         <button class="class-tab ${cid === classId ? 'active' : ''}" data-cid="${cid}">
-          <div class="class-tab-code">${c.codeLabel} · ${c.role}</div>
-          <div class="class-tab-name">${c.name}</div>
+          <img class="class-tab-emblem" src="${iconUrl}" alt="" draggable="false" />
+          <div class="class-tab-text">
+            <div class="class-tab-code">${c.codeLabel} · ${c.role}</div>
+            <div class="class-tab-name">${c.name}</div>
+          </div>
         </button>
       `;
     }).join('');
@@ -645,39 +791,51 @@ export class UIManager {
     const bar = (val: number) => Math.min(100, Math.round((val / 5) * 100));
 
     detailsEl.innerHTML = `
-      <div style="font-size: 13px; color: #cfd7e6; line-height: 1.45; margin-bottom: 10px;">
+      <div class="class-summary-box">
         ${cfg.summary}
       </div>
       <div class="stat-grid">
         <div class="stat-row">
-          <span>Здоровье</span>
-          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(cfg.uiRatings.hp)}%"></div></div>
-          <strong style="text-align:right">${cfg.maxHp} HP</strong>
+          <span class="stat-lbl">♥ Здоровье</span>
+          <div class="stat-bar-bg"><div class="stat-bar-fill hp-tone" style="width:${bar(
+            cfg.uiRatings.hp
+          )}%"></div></div>
+          <strong class="stat-num">${cfg.maxHp} HP</strong>
         </div>
         <div class="stat-row">
-          <span>Скорость</span>
-          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(cfg.uiRatings.speed)}%"></div></div>
-          <strong style="text-align:right">${cfg.moveSpeed.toFixed(1)} м/с</strong>
+          <span class="stat-lbl">⚡ Скорость</span>
+          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
+            cfg.uiRatings.speed
+          )}%"></div></div>
+          <strong class="stat-num">${cfg.moveSpeed.toFixed(1)} м/с</strong>
         </div>
         <div class="stat-row">
-          <span>Сила атаки</span>
-          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(cfg.uiRatings.attack)}%"></div></div>
-          <strong style="text-align:right">${cfg.lightCombo[0].damage}/${cfg.heavyAttack.damage}</strong>
+          <span class="stat-lbl">⚔ Сила атаки</span>
+          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
+            cfg.uiRatings.attack
+          )}%"></div></div>
+          <strong class="stat-num">${cfg.lightCombo[0].damage}/${
+      cfg.heavyAttack.damage
+    }</strong>
         </div>
         <div class="stat-row">
-          <span>Защита</span>
-          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(cfg.uiRatings.defense)}%"></div></div>
-          <strong style="text-align:right">${Math.round(cfg.defense.damageReduction * 100)}%</strong>
+          <span class="stat-lbl">🛡 Защита</span>
+          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
+            cfg.uiRatings.defense
+          )}%"></div></div>
+          <strong class="stat-num">${Math.round(
+            cfg.defense.damageReduction * 100
+          )}%</strong>
         </div>
         <div class="stat-row">
-          <span>Дальность</span>
-          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(cfg.uiRatings.reach)}%"></div></div>
-          <strong style="text-align:right">${cfg.heavyAttack.range.toFixed(1)} м</strong>
+          <span class="stat-lbl">⌖ Дальность</span>
+          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
+            cfg.uiRatings.reach
+          )}%"></div></div>
+          <strong class="stat-num">${cfg.heavyAttack.range.toFixed(1)} м</strong>
         </div>
       </div>
-      <div style="font-size: 11px; font-weight: 800; color: var(--border-gold); text-transform: uppercase; margin-bottom: 6px;">
-        Активные способности [1] и [2]
-      </div>
+      <div class="section-kicker gold">Активные способности ордена [1] и [2]</div>
       <div class="sel-abilities-grid">
         ${cfg.abilities
           .map(
@@ -690,7 +848,9 @@ export class UIManager {
               <div class="sel-ability-head">
                 <span class="sel-ability-key">[${ab.slot}]</span>
                 <span class="sel-ability-name">${ab.name}</span>
-                <span class="sel-ability-meta">${ab.cooldown}с · ${ab.staminaCost} СТ</span>
+                <span class="sel-ability-meta">${ab.cooldown}с · ${
+              ab.staminaCost
+            } СТ</span>
               </div>
               <div class="sel-ability-desc">${ab.description}</div>
             </div>
@@ -701,7 +861,6 @@ export class UIManager {
       </div>
     `;
 
-    // Populate the 6 square skill icons dock at the bottom of the showcase screen
     this.populateSkillSquares(this.selectionSkillBarEl, classId, false);
   }
 
@@ -747,7 +906,7 @@ export class UIManager {
     this.q('#qual-low').classList.toggle('active', q === 'low');
     this.q('#lbl-qual').textContent =
       q === 'ultra'
-        ? 'Ультра (HDR Bloom + Тени 2K)'
+        ? 'Ультра (HDR + Тени 2K)'
         : q === 'high'
         ? 'Высокое (HDR + Тени)'
         : 'Производительность';
@@ -809,8 +968,7 @@ export class UIManager {
             descriptor.cooldownSec && descriptor.cooldownSec > 0
               ? Math.min(100, (cdRem / descriptor.cooldownSec) * 100)
               : 0;
-          isActiveNow =
-            fighter.activeAbility?.slot === 1;
+          isActiveNow = fighter.activeAbility?.slot === 1;
           break;
         case 'ability2':
           cdRem = fighter.abilityCooldowns[1];
@@ -818,8 +976,7 @@ export class UIManager {
             descriptor.cooldownSec && descriptor.cooldownSec > 0
               ? Math.min(100, (cdRem / descriptor.cooldownSec) * 100)
               : 0;
-          isActiveNow =
-            fighter.activeAbility?.slot === 2;
+          isActiveNow = fighter.activeAbility?.slot === 2;
           break;
         case 'dodge':
           isActiveNow = fighter.state === 'Dodging';
@@ -842,7 +999,8 @@ export class UIManager {
       if (cdRem > 0.04 && !isActiveNow) {
         cdVeilEl.style.height = `${Math.round(cdPct)}%`;
         cdNumEl.classList.remove('hidden');
-        cdNumEl.textContent = cdRem >= 9.95 ? `${Math.ceil(cdRem)}` : cdRem.toFixed(1);
+        cdNumEl.textContent =
+          cdRem >= 9.95 ? `${Math.ceil(cdRem)}` : cdRem.toFixed(1);
       } else {
         cdVeilEl.style.height = '0%';
         cdNumEl.classList.add('hidden');
@@ -865,7 +1023,7 @@ export class UIManager {
     this.timerEl.classList.toggle('final-phase', match.isFinalPhase);
 
     const aliveCount = match.getLivingFighters().length;
-    this.alivePillEl.textContent = `ЖИВЫХ: ${aliveCount} / ${match.fighters.length}`;
+    this.alivePillEl.textContent = `⚔ ЖИВЫХ: ${aliveCount} / ${match.fighters.length}`;
 
     // 2. Countdown Banner
     if (match.state === 'Countdown') {
@@ -887,12 +1045,16 @@ export class UIManager {
       .map((f) => {
         const pct = Math.max(0, Math.round((f.hp / f.maxHp) * 100));
         return `
-          <div class="roster-item ${f.isHuman ? 'human' : ''} ${
-          f.isAlive ? '' : 'dead'
-        }">
+          <div class="roster-item cls-${f.classId} ${
+          f.isHuman ? 'human' : ''
+        } ${f.isAlive ? '' : 'dead'}">
             <div class="roster-row-top">
-              <span>${f.displayName}</span>
-              <span>${f.isAlive ? `${Math.ceil(f.hp)} HP` : 'ВЫБЫЛ'}</span>
+              <span class="roster-name">${f.isHuman ? '♛ ' : ''}${
+          f.displayName
+        }</span>
+              <span class="roster-hp-tag">${
+                f.isAlive ? `${Math.ceil(f.hp)} HP` : '☠ ПАЛ'
+              }</span>
             </div>
             <div class="roster-mini-hp">
               <div class="roster-mini-hp-fill" style="width:${pct}%"></div>
@@ -907,7 +1069,7 @@ export class UIManager {
       .slice(0, 4)
       .map((kf) =>
         kf.killerName
-          ? `<div class="kill-feed-item"><strong>${kf.killerName}</strong> ⚔️ поверг <strong>${kf.victimName}</strong></div>`
+          ? `<div class="kill-feed-item"><strong>${kf.killerName}</strong> <span class="kf-sword">⚔</span> поверг <strong>${kf.victimName}</strong></div>`
           : `<div class="kill-feed-item"><strong>${kf.victimName}</strong> пал на арене</div>`
       )
       .join('');
@@ -928,6 +1090,13 @@ export class UIManager {
       this.vitalsBoxEl.classList.remove('hidden');
       this.spectatorBarEl.classList.add('hidden');
 
+      if (this.renderedVitalsClass !== player.classId) {
+        this.renderedVitalsClass = player.classId;
+        this.playerClassIconEl.src = getSkillIconUrl(
+          CLASS_EMBLEM_ICON[player.classId]
+        );
+      }
+
       this.playerClassLabelEl.textContent = KNIGHT_CLASSES[player.classId].name;
       this.playerStatePillEl.textContent = STATE_LABELS_RU[player.state];
 
@@ -937,7 +1106,9 @@ export class UIManager {
 
       const stPct = Math.max(0, (player.stamina / player.maxStamina) * 100);
       this.stamFillEl.style.width = `${stPct}%`;
-      this.stamTextEl.textContent = `ВЫНОСЛИВОСТЬ: ${Math.floor(player.stamina)} / ${player.maxStamina}`;
+      this.stamTextEl.textContent = `ВЫНОСЛИВОСТЬ: ${Math.floor(
+        player.stamina
+      )} / ${player.maxStamina}`;
 
       if (player.damageAuraTimer > 0) {
         this.activeBuffEl.classList.remove('hidden');
@@ -947,7 +1118,7 @@ export class UIManager {
         this.activeBuffEl.textContent = `💨 ШАГ ТЕНЕЙ: +25% СКОРОСТЬ (${player.hasteTimer.toFixed(1)}с)`;
       } else if (player.ironBastionTimer > 0) {
         this.activeBuffEl.classList.remove('hidden');
-        this.activeBuffEl.textContent = `🛡️ ЖЕЛЕЗНЫЙ БАСТИОН: -35% УРОН (${player.ironBastionTimer.toFixed(1)}с)`;
+        this.activeBuffEl.textContent = `🛡 ЖЕЛЕЗНЫЙ БАСТИОН: -35% УРОН (${player.ironBastionTimer.toFixed(1)}с)`;
       } else {
         this.activeBuffEl.classList.add('hidden');
       }
@@ -1018,37 +1189,47 @@ export class UIManager {
     const badge = this.q('#res-badge');
 
     if (playerWon) {
-      badge.textContent = 'Триумф на арене';
+      badge.textContent = '♛ Триумф в цитадели ♛';
       headline.textContent = 'ПОБЕДА! ВЫ — ПОСЛЕДНИЙ ВЫЖИВШИЙ!';
-      headline.style.color = '#ffe066';
+      headline.classList.add('victory-gold');
     } else {
-      badge.textContent = 'Матч завершён';
+      badge.textContent = '⚔ Турнир завершён ⚔';
       headline.textContent = winner
         ? `ПОБЕДИТЕЛЬ: ${winner.name.toUpperCase()}`
         : 'НИЧЬЯ НА АРЕНЕ';
-      headline.style.color = '#f3efe6';
+      headline.classList.remove('victory-gold');
     }
 
     sub.textContent =
       match.finishReason === 'time_up'
-        ? 'Время схватки истекло — победитель определён по запасу здоровья и урону.'
-        : `Длительность боя: ${Math.round(match.matchElapsed)} сек.`;
+        ? 'Время схватки истекло — чемпион определён по запасу здоровья и нанесённому урону.'
+        : `Длительность битвы: ${Math.round(match.matchElapsed)} сек.`;
 
     const tbody = this.q('#res-tbody');
     tbody.innerHTML = standings
       .map((s) => {
         const clsName = KNIGHT_CLASSES[s.classId].name;
+        const iconUrl = getSkillIconUrl(CLASS_EMBLEM_ICON[s.classId]);
         const rowCls = `${s.place === 1 ? 'winner-row' : ''} ${
           s.isHuman ? 'human-row' : ''
         }`;
+        const placeBadge = s.place === 1 ? '♛ #1' : `#${s.place}`;
+        const statusPill = s.isAlive
+          ? `<span class="res-status alive">Жив · ${s.hp} HP</span>`
+          : `<span class="res-status fallen">Пал в бою</span>`;
         return `
           <tr class="${rowCls}">
-            <td>#${s.place}</td>
-            <td>${s.name}</td>
-            <td>${clsName}</td>
-            <td>${s.isAlive ? `Жив (${s.hp} HP)` : 'Выбыл'}</td>
-            <td>${s.kills}</td>
-            <td>${s.damageDealt}</td>
+            <td class="res-place">${placeBadge}</td>
+            <td class="res-fighter">${s.name}</td>
+            <td>
+              <span class="res-class-cell">
+                <img src="${iconUrl}" alt="" class="res-class-icon" draggable="false" />
+                <span>${clsName}</span>
+              </span>
+            </td>
+            <td>${statusPill}</td>
+            <td class="res-num">${s.kills}</td>
+            <td class="res-num">${s.damageDealt}</td>
           </tr>
         `;
       })
