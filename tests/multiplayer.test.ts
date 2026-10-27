@@ -8,6 +8,7 @@ import {
   AuthoritativeMatchSim,
   ClientNetWorldSync,
 } from '../src/net/MultiplayerRoomSim';
+import { MultiplayerClient } from '../src/net/MultiplayerClient';
 import { ClientMsg, ServerMsg } from '../src/net/protocol';
 
 function waitForMsg<T extends ServerMsg['type']>(
@@ -393,6 +394,274 @@ describe('Online Multiplayer Simulation, Sync & WebSocket Hub', () => {
     } finally {
       hub.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('runs Host-Authoritative MultiplayerClient sync over Beget /api/mp.php relay without Node WS', async () => {
+    let nextId = 1;
+    const clients = new Map<
+      string,
+      {
+        clientId: string;
+        fighterId: string;
+        name: string;
+        classId: 'sword' | 'dual' | 'spear' | 'hammer';
+        roomCode: string | null;
+        outbox: ServerMsg[];
+      }
+    >();
+    const rooms = new Map<
+      string,
+      {
+        roomCode: string;
+        hostClientId: string;
+        isPublic: boolean;
+        fillBots: boolean;
+        phase: 'lobby' | 'in_match';
+        matchGeneration: number;
+        players: string[];
+      }
+    >();
+
+    // Minimal HTTP server speaking ONLY /api/mp.php?action=... (simulating Beget shared PHP hosting)
+    const phpLikeServer = http.createServer((req, res) => {
+      const urlObj = new URL(req.url ?? '/', 'http://127.0.0.1');
+      if (urlObj.pathname !== '/api/mp.php') {
+        res.statusCode = 404;
+        res.end('Not Found');
+        return;
+      }
+      const action = urlObj.searchParams.get('action');
+      let raw = '';
+      req.on('data', (c) => (raw += c.toString()));
+      req.on('end', () => {
+        const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+
+        if (action === 'connect') {
+          const n = nextId++;
+          const cid = `c_${n}`;
+          clients.set(cid, {
+            clientId: cid,
+            fighterId: `human_${n}`,
+            name: `Knight ${n}`,
+            classId: 'sword',
+            roomCode: null,
+            outbox: [],
+          });
+          res.end(
+            JSON.stringify({
+              clientId: cid,
+              messages: [
+                {
+                  type: 'welcome',
+                  clientId: cid,
+                  rooms: [],
+                  relayMode: 'host_sim',
+                } satisfies ServerMsg,
+              ],
+            })
+          );
+          return;
+        }
+
+        if (action === 'sync') {
+          const cid = String(body.clientId ?? '');
+          const sess = clients.get(cid);
+          if (!sess) {
+            res.statusCode = 410;
+            res.end(JSON.stringify({ error: 'expired' }));
+            return;
+          }
+          const msgs = (body.messages as ClientMsg[] | undefined) ?? [];
+          for (const m of msgs) {
+            if (m.type === 'create_room') {
+              sess.name = m.playerName;
+              sess.classId = m.classId;
+              sess.roomCode = 'BEGT';
+              rooms.set('BEGT', {
+                roomCode: 'BEGT',
+                hostClientId: cid,
+                isPublic: m.isPublic,
+                fillBots: m.fillBots,
+                phase: 'lobby',
+                matchGeneration: 0,
+                players: [cid],
+              });
+              sess.outbox.push({
+                type: 'room_joined',
+                yourFighterId: sess.fighterId,
+                room: {
+                  roomCode: 'BEGT',
+                  hostClientId: cid,
+                  isPublic: m.isPublic,
+                  fillBots: m.fillBots,
+                  phase: 'lobby',
+                  players: [
+                    {
+                      clientId: cid,
+                      fighterId: sess.fighterId,
+                      name: sess.name,
+                      classId: sess.classId,
+                      ready: true,
+                      isHost: true,
+                      pingMs: 12,
+                    },
+                  ],
+                },
+              });
+            } else if (m.type === 'join_room') {
+              const r = rooms.get(m.roomCode)!;
+              sess.name = m.playerName;
+              sess.classId = m.classId;
+              sess.roomCode = r.roomCode;
+              r.players.push(cid);
+              sess.outbox.push({
+                type: 'room_joined',
+                yourFighterId: sess.fighterId,
+                room: {
+                  roomCode: r.roomCode,
+                  hostClientId: r.hostClientId,
+                  isPublic: r.isPublic,
+                  fillBots: r.fillBots,
+                  phase: 'lobby',
+                  players: r.players.map((p) => {
+                    const pc = clients.get(p)!;
+                    return {
+                      clientId: p,
+                      fighterId: pc.fighterId,
+                      name: pc.name,
+                      classId: pc.classId,
+                      ready: true,
+                      isHost: p === r.hostClientId,
+                      pingMs: 12,
+                    };
+                  }),
+                },
+              });
+            } else if (m.type === 'start_match') {
+              const r = rooms.get(sess.roomCode!)!;
+              r.phase = 'in_match';
+              r.matchGeneration += 1;
+              sess.outbox.push({
+                type: 'host_bootstrap_sim',
+                matchGeneration: r.matchGeneration,
+                roomCode: r.roomCode,
+                yourFighterId: sess.fighterId,
+                fillBots: r.fillBots,
+                roster: r.players.map((p) => {
+                  const pc = clients.get(p)!;
+                  return {
+                    fighterId: pc.fighterId,
+                    name: pc.name,
+                    classId: pc.classId,
+                  };
+                }),
+              });
+            } else if (m.type === 'host_match_init') {
+              const r = rooms.get(sess.roomCode!)!;
+              for (const p of r.players) {
+                if (p === cid) continue;
+                const pc = clients.get(p)!;
+                pc.outbox.push({
+                  type: 'match_started',
+                  matchGeneration: m.matchGeneration,
+                  roomCode: r.roomCode,
+                  yourFighterId: pc.fighterId,
+                  snapshot: m.snapshot,
+                });
+              }
+            } else if (m.type === 'host_snapshot') {
+              const r = rooms.get(sess.roomCode!)!;
+              for (const p of r.players) {
+                if (p === cid) continue;
+                clients.get(p)!.outbox.push({
+                  type: 'snapshot',
+                  snapshot: m.snapshot,
+                  events: m.events,
+                  footsteps: m.footsteps,
+                  jumps: m.jumps,
+                  dodges: m.dodges,
+                  landings: m.landings,
+                  enteredFinalPhase: m.enteredFinalPhase,
+                });
+              }
+            } else if (m.type === 'input') {
+              const r = rooms.get(sess.roomCode!)!;
+              clients.get(r.hostClientId)!.outbox.push({
+                type: 'relay_guest_input',
+                fighterId: sess.fighterId,
+                input: m,
+              });
+            }
+          }
+          res.end(JSON.stringify({ messages: sess.outbox.splice(0) }));
+          return;
+        }
+
+        res.end(JSON.stringify({ ok: true }));
+      });
+    });
+
+    await new Promise<void>((resolve) =>
+      phpLikeServer.listen(0, '127.0.0.1', resolve)
+    );
+    const addr = phpLikeServer.address();
+    if (!addr || typeof addr === 'string') {
+      throw new Error('Failed to bind phpLikeServer');
+    }
+    const baseUrl = `http://127.0.0.1:${addr.port}`;
+
+    let hostStarted = false;
+    let guestStarted = false;
+    let guestSnapshots = 0;
+
+    const hostClient = new MultiplayerClient(
+      {
+        onMatchStarted: () => {
+          hostStarted = true;
+        },
+      },
+      baseUrl
+    );
+    const guestClient = new MultiplayerClient(
+      {
+        onMatchStarted: () => {
+          guestStarted = true;
+        },
+        onSnapshot: () => {
+          guestSnapshots += 1;
+        },
+      },
+      baseUrl
+    );
+
+    try {
+      await hostClient.createRoom({
+        playerName: 'Хост Бегет',
+        classId: 'sword',
+        fillBots: true,
+        isPublic: true,
+      });
+      await guestClient.joinRoom('BEGT', 'Гость Бегет', 'spear');
+      hostClient.startMatch();
+
+      // Wait ~360ms for Host 60Hz sim + HTTP relay to bootstrap Guest and deliver snapshots
+      await new Promise((r) => setTimeout(r, 360));
+      expect(hostStarted).toBe(true);
+      expect(guestStarted).toBe(true);
+      expect(guestSnapshots).toBeGreaterThan(0);
+
+      // Verify Guest input relays back into Host simulation cleanly
+      const intent = createEmptyIntent(0.4);
+      intent.jumpPressed = true;
+      guestClient.streamInputIntent(1 / 60, intent);
+      await new Promise((r) => setTimeout(r, 140));
+      expect(guestSnapshots).toBeGreaterThan(1);
+    } finally {
+      hostClient.disconnect();
+      guestClient.disconnect();
+      await new Promise<void>((resolve) => phpLikeServer.close(() => resolve()));
     }
   });
 });

@@ -59,6 +59,9 @@ class DungeonAssetCache {
     if (this.loadingPromise) return this.loadingPromise;
 
     const loader = new GLTFLoader();
+    const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
+    const rawBase = meta.env?.BASE_URL ?? './';
+    const base = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
     const keys = Object.keys(DUNGEON_MODEL_FILES) as DungeonAssetKey[];
     let cursor = 0;
     const workerCount = Math.min(3, keys.length);
@@ -68,7 +71,7 @@ class DungeonAssetCache {
         const key = keys[cursor++];
         const filename = DUNGEON_MODEL_FILES[key];
         try {
-          const gltf = await loader.loadAsync(`/models/dungeon/${filename}`);
+          const gltf = await loader.loadAsync(`${base}models/dungeon/${filename}`);
           const root = gltf.scene;
           this.prepareTemplate(root);
           this.templates.set(key, root);

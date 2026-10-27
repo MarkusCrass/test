@@ -32,6 +32,7 @@ function knightsMultiplayerPlugin(): Plugin {
 }
 
 export default defineConfig({
+  base: './',
   plugins: [knightsMultiplayerPlugin()],
   build: {
     modulePreload: false,

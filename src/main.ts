@@ -261,7 +261,13 @@ class KnightsGameApp {
     this.ui.update(this.match, [], false);
 
     (window as unknown as { __knightsBooted?: boolean }).__knightsBooted = true;
-    fetch('/api/client-ready', { method: 'POST' }).catch(() => {});
+    if (
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1' ||
+      location.hostname.endsWith('.e2b.app')
+    ) {
+      fetch('/api/client-ready', { method: 'POST' }).catch(() => {});
+    }
 
     // Asynchronously load & initialize 3D WorldRenderer behind the already-interactive UI
     this.initWorldRendererAsync(canvasRoot);

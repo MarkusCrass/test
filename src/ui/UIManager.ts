@@ -1169,6 +1169,19 @@ export class UIManager {
       const code = this.mpRoom.roomCode;
       if (navigator.clipboard?.writeText) {
         navigator.clipboard.writeText(code).catch(() => {});
+      } else {
+        try {
+          const tmp = document.createElement('textarea');
+          tmp.value = code;
+          tmp.style.position = 'fixed';
+          tmp.style.opacity = '0';
+          document.body.appendChild(tmp);
+          tmp.select();
+          document.execCommand('copy');
+          tmp.remove();
+        } catch {
+          // Ignore
+        }
       }
       this.showMultiplayerNotice(
         `Код комнаты «${code}» скопирован в буфер обмена!`,

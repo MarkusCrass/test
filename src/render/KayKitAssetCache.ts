@@ -30,10 +30,13 @@ class KayKitAssetRegistry {
     if (this.loadingPromise) return this.loadingPromise;
 
     const loader = new GLTFLoader();
+    const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
+    const rawBase = meta.env?.BASE_URL ?? './';
+    const base = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
     this.loadingPromise = (async () => {
-      const knightGltf = await loader.loadAsync('/models/kaykit/Knight.glb');
+      const knightGltf = await loader.loadAsync(`${base}models/kaykit/Knight.glb`);
       const rogueGltf = await loader.loadAsync(
-        '/models/kaykit/Rogue_Hooded.glb'
+        `${base}models/kaykit/Rogue_Hooded.glb`
       );
       const pack = this.extractPack(knightGltf, rogueGltf);
       this.pack = pack;

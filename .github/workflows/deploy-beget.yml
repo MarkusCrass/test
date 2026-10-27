@@ -1,0 +1,71 @@
+name: Build & Deploy to Beget (ezekie6n.beget.tech)
+
+on:
+  push:
+    branches:
+      - main
+      - 'arena/**'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Validate PHP multiplayer relay syntax
+        run: php -l public/api/mp.php
+
+      - name: Install dependencies, test & build production bundle
+        run: |
+          npm ci
+          npm test
+          npm run build
+          test -f dist/index.html
+          test -f dist/.htaccess
+          test -f dist/api/mp.php
+
+      - name: Upload ready-to-host Beget archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: knights-beget-public_html
+          path: dist/
+          include-hidden-files: true
+
+      - name: Deploy dist/ to ezekie6n.beget.tech via Beget FTP
+        env:
+          BEGET_HOST: ${{ secrets.BEGET_HOST || 'ezekie6n.beget.tech' }}
+          BEGET_USER: ${{ secrets.BEGET_USER || 'ezekie6n' }}
+          BEGET_PASSWORD: ${{ secrets.BEGET_PASSWORD }}
+          BEGET_DIR_OVERRIDE: ${{ secrets.BEGET_SERVER_DIR }}
+        run: |
+          if [ -z "$BEGET_PASSWORD" ]; then
+            echo "### ℹ️ Автодеплой ожидает секрет BEGET_PASSWORD" >> "$GITHUB_STEP_SUMMARY"
+            echo "Добавьте секрет \`BEGET_PASSWORD\` (пароль от аккаунта/FTP Beget \`ezekie6n\`) в Settings → Secrets and variables → Actions, чтобы каждый push автоматически заливал сайт на http://ezekie6n.beget.tech/." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+          lftp -u "$BEGET_USER","$BEGET_PASSWORD" "$BEGET_HOST" <<EOF
+          set ssl:verify-certificate no
+          set net:max-retries 3
+          set net:timeout 20
+          set ftp:passive-mode true
+
+          # Auto-detect Beget directory layout:
+          # 1) Custom override if provided
+          # 2) Main Beget account: /ezekie6n.beget.tech/public_html
+          # 3) Site-rooted FTP account: /public_html or /
+          cd "${BEGET_DIR_OVERRIDE:-/ezekie6n.beget.tech/public_html}" || cd "/public_html" || cd "/"
+
+          mirror --reverse --delete --verbose --parallel=6 dist/ ./
+          bye
+          EOF

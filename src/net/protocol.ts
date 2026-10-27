@@ -1,7 +1,6 @@
-import { AttackPhase } from '../core/Fighter';
+import { AttackPhase, FighterState } from '../core/Fighter';
 import { AbilityKind, KnightClassId } from '../config/classes';
 import { CombatEvent } from '../core/CombatSystem';
-import { FighterState } from '../core/Fighter';
 import { KillFeedEntry } from '../core/MatchManager';
 
 export const MAX_PLAYERS_PER_ROOM = 5;
@@ -150,16 +149,57 @@ export type ClientMsg =
   | { type: 'rematch' }
   | { type: 'return_to_lobby' }
   | ({ type: 'input' } & ClientInputPacket)
+  | {
+      type: 'host_match_init';
+      matchGeneration: number;
+      snapshot: WorldSnapshot;
+    }
+  | {
+      type: 'host_snapshot';
+      snapshot: WorldSnapshot;
+      events: CombatEvent[];
+      footsteps: string[];
+      jumps: string[];
+      dodges: string[];
+      landings: Array<{ id: string; x: number; y: number; z: number }>;
+      enteredFinalPhase: boolean;
+    }
   | { type: 'ping'; clientTime: number; lastPingMs?: number };
 
 export type ServerMsg =
-  | { type: 'welcome'; clientId: string; rooms: RoomSummary[] }
+  | {
+      type: 'welcome';
+      clientId: string;
+      rooms: RoomSummary[];
+      relayMode?: 'server_sim' | 'host_sim';
+    }
   | { type: 'rooms_list'; rooms: RoomSummary[] }
   | { type: 'room_joined'; room: RoomLobbyState; yourFighterId: string }
   | { type: 'room_updated'; room: RoomLobbyState }
   | { type: 'returned_to_lobby'; room: RoomLobbyState }
   | { type: 'room_left' }
   | { type: 'error'; message: string }
+  | {
+      type: 'host_bootstrap_sim';
+      matchGeneration: number;
+      roomCode: string;
+      yourFighterId: string;
+      fillBots: boolean;
+      roster: Array<{
+        fighterId: string;
+        name: string;
+        classId: KnightClassId;
+      }>;
+    }
+  | {
+      type: 'relay_guest_input';
+      fighterId: string;
+      input: ClientInputPacket;
+    }
+  | {
+      type: 'relay_guest_left';
+      fighterId: string;
+    }
   | {
       type: 'match_started';
       matchGeneration: number;

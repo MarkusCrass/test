@@ -1,0 +1,28 @@
+DirectoryIndex index.html index.php
+
+<IfModule mod_mime.c>
+  AddType application/javascript .js .mjs
+  AddType text/css .css
+  AddType image/svg+xml .svg
+  AddType model/gltf-binary .glb
+  AddType audio/mpeg .mp3
+  AddType font/woff2 .woff2
+  AddType font/woff .woff
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Client diagnostic endpoints -> 204 No Content
+  RewriteRule ^api/client-(ready|error)$ api/mp.php?action=noop [QSA,L]
+
+  # Multiplayer room browser & sync endpoints -> PHP relay
+  RewriteRule ^api/rooms$ api/mp.php?action=rooms [QSA,L]
+  RewriteRule ^api/mp/(connect|sync|disconnect)$ api/mp.php?action=$1 [QSA,L]
+
+  # SPA fallback for non-file routes
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} !^/api/
+  RewriteRule . index.html [L]
+</IfModule>
