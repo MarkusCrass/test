@@ -12,7 +12,7 @@ import {
   RoomLobbyState,
   RoomSummary,
 } from '../net/protocol';
-import { ProjectedFighterLabel } from '../render/WorldRenderer';
+import type { ProjectedFighterLabel } from '../render/WorldRenderer';
 import {
   buildClassSkillBar,
   getSkillIconUrl,

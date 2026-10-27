@@ -4,6 +4,38 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KNIGHTS: LAST STANDING — Medieval 3D Arena Fighter</title>
+    <script>
+      window.__reportBootIssue = function (msg) {
+        var el = document.getElementById('boot-status');
+        if (el) {
+          el.style.color = '#fca5a5';
+          el.textContent = 'Ошибка загрузки: ' + msg;
+        }
+        try {
+          fetch('/api/client-error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: String(msg), href: location.href })
+          }).catch(function () {});
+        } catch (_) {}
+      };
+      window.addEventListener('error', function (e) {
+        if (!document.getElementById('boot-splash')) return;
+        var t = e.target;
+        if (t && t !== window && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+          window.__reportBootIssue('Не удалось загрузить ресурс ' + (t.src || t.href || t.tagName));
+          return;
+        }
+        if (e.message) {
+          window.__reportBootIssue(e.message);
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function (e) {
+        if (!document.getElementById('boot-splash')) return;
+        var reason = e.reason && (e.reason.message || String(e.reason));
+        window.__reportBootIssue(reason || 'Unhandled rejection');
+      });
+    </script>
     <style>
       html, body {
         margin: 0;
@@ -26,7 +58,7 @@
         background: radial-gradient(circle at 50% 42%, #1b2030 0%, #0b0d14 72%);
         text-align: center;
         padding: 24px;
-        transition: opacity 0.25s ease;
+        transition: opacity 0.22s ease;
       }
       #boot-splash.fade-out {
         opacity: 0;
@@ -66,6 +98,7 @@
         margin-top: 12px;
         font-size: 13px;
         color: #b7c2d8;
+        max-width: 520px;
       }
       @keyframes bootPulse {
         from { transform: translateX(-25%); width: 45%; }
@@ -82,33 +115,6 @@
     </div>
     <div id="game-canvas-root"></div>
     <div id="ui-root"></div>
-    <script>
-      window.__reportBootIssue = function (msg) {
-        var el = document.getElementById('boot-status');
-        if (el) {
-          el.style.color = '#fca5a5';
-          el.textContent = 'Ошибка запуска: ' + msg;
-        }
-        try {
-          fetch('/api/client-error', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: String(msg), ua: navigator.userAgent })
-          }).catch(function () {});
-        } catch (_) {}
-      };
-      window.addEventListener('error', function (e) {
-        if (document.getElementById('boot-splash')) {
-          window.__reportBootIssue(e.message || 'Script error');
-        }
-      });
-      window.addEventListener('unhandledrejection', function (e) {
-        if (document.getElementById('boot-splash')) {
-          var reason = e.reason && (e.reason.message || String(e.reason));
-          window.__reportBootIssue(reason || 'Unhandled promise rejection');
-        }
-      });
-    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

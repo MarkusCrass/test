@@ -5,6 +5,13 @@ import { attachMultiplayerHub } from './server/wsHub';
 function knightsMultiplayerPlugin(): Plugin {
   return {
     name: 'knights-multiplayer-ws',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        // Strip anonymous `crossorigin` attributes so authenticated preview proxies receive same-origin cookies
+        return html.replace(/\s+crossorigin(?:="[^"]*")?/gi, '');
+      },
+    },
     configureServer(server) {
       if (!server.httpServer) return;
       const hub = attachMultiplayerHub(server.httpServer as HttpServer);
@@ -26,6 +33,9 @@ function knightsMultiplayerPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [knightsMultiplayerPlugin()],
+  build: {
+    modulePreload: false,
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

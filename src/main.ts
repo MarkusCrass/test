@@ -10,20 +10,21 @@ import { KnightClassId } from './config/classes';
 import { loadSettings, saveSettings } from './config/settings';
 import { createEmptyIntent, FighterInputIntent } from './core/Fighter';
 import { MatchManager, MatchMode, MatchState } from './core/MatchManager';
+import { forwardFromYaw } from './core/math';
 import { SoundManager } from './audio/SoundManager';
 import {
   MultiplayerClient,
   ServerSnapshotMsg,
 } from './net/MultiplayerClient';
 import { ClientNetWorldSync } from './net/MultiplayerRoomSim';
-import { WorldRenderer } from './render/WorldRenderer';
+import type { WorldRenderer } from './render/WorldRenderer';
 import { UIManager } from './ui/UIManager';
 
 class KnightsGameApp {
   private settings = loadSettings();
   private readonly match = new MatchManager();
   private readonly sound = new SoundManager();
-  private readonly world: WorldRenderer;
+  private world: WorldRenderer | null = null;
   private readonly ui: UIManager;
   private readonly net: MultiplayerClient;
   private readonly netSync = new ClientNetWorldSync();
@@ -35,6 +36,7 @@ class KnightsGameApp {
   private jumpQueued = false;
   private ability1Queued = false;
   private ability2Queued = false;
+  private fallbackYaw = 0;
 
   private pointerLocked = false;
   private intentionalUnlock = false;
@@ -50,11 +52,6 @@ class KnightsGameApp {
     const uiRoot = document.getElementById('ui-root')!;
 
     this.sound.setVolume(this.settings.masterVolume);
-    this.world = new WorldRenderer(canvasRoot);
-    this.world.applyGraphicsConfig(
-      this.settings.pixelScale,
-      this.settings.graphicsQuality
-    );
 
     this.net = new MultiplayerClient({
       onStatusChange: (status, errText) => {
@@ -91,7 +88,7 @@ class KnightsGameApp {
         );
         this.lastCountdownWhole = Math.ceil(this.match.countdownTimer);
         this.sound.playCountdownTick(false);
-        this.world.resetCameraBehindPlayer(this.match);
+        this.world?.resetCameraBehindPlayer(this.match);
         this.requestPointerLockSafe();
       },
       onSnapshot: (msg) => {
@@ -106,6 +103,7 @@ class KnightsGameApp {
       },
     });
 
+    // Mount UI immediately so Main Menu opens in <100ms without waiting on Three.js/WebGL!
     this.ui = new UIManager(uiRoot, this.settings, {
       onOpenSelection: () => {
         this.sound.playUiClick();
@@ -157,7 +155,7 @@ class KnightsGameApp {
       onCycleSpectator: (delta) => {
         this.sound.playUiClick();
         const next = this.match.cycleSpectatorTarget(delta);
-        if (next) {
+        if (next && this.world) {
           this.world.cameraRig.snapBehindTarget(
             next.body.x,
             next.body.z,
@@ -170,7 +168,7 @@ class KnightsGameApp {
         this.settings = { ...next };
         saveSettings(this.settings);
         this.sound.setVolume(this.settings.masterVolume);
-        this.world.applyGraphicsConfig(
+        this.world?.applyGraphicsConfig(
           this.settings.pixelScale,
           this.settings.graphicsQuality
         );
@@ -180,7 +178,7 @@ class KnightsGameApp {
           this.sound.playClassSelect(classId);
         }
         this.match.selectedPlayerClass = classId;
-        this.world.syncShowcaseClass(classId);
+        this.world?.syncShowcaseClass(classId);
       },
       onTriggerSkillSlot: (slotKey) => {
         if (
@@ -259,15 +257,46 @@ class KnightsGameApp {
       },
     });
 
-    this.setupInputListeners();
+    this.setupGlobalInputListeners();
+    this.ui.update(this.match, [], false);
 
+    // Dismiss boot splash immediately now that Royal Citadel Main Menu is rendered!
     const splash = document.getElementById('boot-splash');
     if (splash) {
       splash.classList.add('fade-out');
-      window.setTimeout(() => splash.remove(), 260);
+      window.setTimeout(() => splash.remove(), 220);
     }
 
+    fetch('/api/client-ready', { method: 'POST' }).catch(() => {});
+
+    // Asynchronously load & initialize 3D WorldRenderer behind the already-interactive UI
+    this.initWorldRendererAsync(canvasRoot);
+
     requestAnimationFrame(this.loop);
+  }
+
+  private async initWorldRendererAsync(canvasRoot: HTMLElement): Promise<void> {
+    try {
+      const mod = await import('./render/WorldRenderer');
+      const world = new mod.WorldRenderer(canvasRoot);
+      world.applyGraphicsConfig(
+        this.settings.pixelScale,
+        this.settings.graphicsQuality
+      );
+      world.syncShowcaseClass(this.match.selectedPlayerClass);
+      this.world = world;
+      this.attachCanvasListeners(world.renderer.domElement);
+
+      if (
+        this.match.state === 'Countdown' ||
+        this.match.state === 'InProgress' ||
+        this.match.state === 'PlayerEliminated'
+      ) {
+        world.resetCameraBehindPlayer(this.match);
+      }
+    } catch (err) {
+      console.error('3D WorldRenderer initialization failed:', err);
+    }
   }
 
   private beginMatch(classId: KnightClassId, mode: MatchMode): void {
@@ -275,7 +304,7 @@ class KnightsGameApp {
     this.match.startMatch(classId, mode);
     this.lastCountdownWhole = Math.ceil(this.match.countdownTimer);
     this.sound.playCountdownTick(false);
-    this.world.resetCameraBehindPlayer(this.match);
+    this.world?.resetCameraBehindPlayer(this.match);
     this.requestPointerLockSafe();
   }
 
@@ -299,8 +328,8 @@ class KnightsGameApp {
   }
 
   private requestPointerLockSafe(): void {
-    const canvas = this.world.renderer.domElement;
-    if (document.pointerLockElement === canvas) return;
+    const canvas = this.world?.renderer.domElement;
+    if (!canvas || document.pointerLockElement === canvas) return;
     try {
       const req = canvas.requestPointerLock?.() as unknown as
         | Promise<void>
@@ -342,20 +371,7 @@ class KnightsGameApp {
     }
   }
 
-  private setupInputListeners(): void {
-    const canvas = this.world.renderer.domElement;
-
-    window.addEventListener('resize', () => {
-      this.world.applyGraphicsConfig(
-        this.settings.pixelScale,
-        this.settings.graphicsQuality
-      );
-    });
-
-    window.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-    });
-
+  private attachCanvasListeners(canvas: HTMLCanvasElement): void {
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
       const wasLocked = this.pointerLocked;
@@ -374,6 +390,34 @@ class KnightsGameApp {
         this.clearActionInputs();
       }
       this.intentionalUnlock = false;
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      this.sound.unlock();
+      if (!this.isCombatInteractive()) return;
+
+      if (!this.pointerLocked && this.match.state !== 'PlayerEliminated') {
+        this.requestPointerLockSafe();
+      }
+
+      if (e.button === 0) {
+        this.lmbHeld = true;
+      } else if (e.button === 2) {
+        this.rmbHeld = true;
+      }
+    });
+  }
+
+  private setupGlobalInputListeners(): void {
+    window.addEventListener('resize', () => {
+      this.world?.applyGraphicsConfig(
+        this.settings.pixelScale,
+        this.settings.graphicsQuality
+      );
+    });
+
+    window.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
     });
 
     window.addEventListener('keydown', (e) => {
@@ -455,21 +499,6 @@ class KnightsGameApp {
       this.clearActionInputs();
     });
 
-    canvas.addEventListener('mousedown', (e) => {
-      this.sound.unlock();
-      if (!this.isCombatInteractive()) return;
-
-      if (!this.pointerLocked && this.match.state !== 'PlayerEliminated') {
-        this.requestPointerLockSafe();
-      }
-
-      if (e.button === 0) {
-        this.lmbHeld = true;
-      } else if (e.button === 2) {
-        this.rmbHeld = true;
-      }
-    });
-
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) {
         this.lmbHeld = false;
@@ -507,17 +536,21 @@ class KnightsGameApp {
       }
 
       if (Math.abs(dx) < 280 && Math.abs(dy) < 280) {
-        this.world.cameraRig.applyMouseDelta(
-          dx,
-          dy,
-          this.settings.mouseSensitivity
-        );
+        if (this.world) {
+          this.world.cameraRig.applyMouseDelta(
+            dx,
+            dy,
+            this.settings.mouseSensitivity
+          );
+        } else {
+          this.fallbackYaw -= dx * 0.0028 * this.settings.mouseSensitivity;
+        }
       }
     });
   }
 
   private buildHumanIntent(): FighterInputIntent {
-    const camYaw = this.world.cameraRig.yaw;
+    const camYaw = this.world ? this.world.cameraRig.yaw : this.fallbackYaw;
     const intent = createEmptyIntent(camYaw);
 
     let forwardInput = 0;
@@ -535,7 +568,12 @@ class KnightsGameApp {
       rightInput -= 1;
     }
 
-    const basis = this.world.cameraRig.getHorizontalBasis();
+    const basis = this.world
+      ? this.world.cameraRig.getHorizontalBasis()
+      : (() => {
+          const fwd = forwardFromYaw(camYaw);
+          return { fwdX: fwd.x, fwdZ: fwd.z, rightX: -fwd.z, rightZ: fwd.x };
+        })();
     let wx = basis.fwdX * forwardInput + basis.rightX * rightInput;
     let wz = basis.fwdZ * forwardInput + basis.rightZ * rightInput;
     const len = Math.hypot(wx, wz);
@@ -645,12 +683,12 @@ class KnightsGameApp {
         landed.z,
         f?.classId ?? 'sword'
       );
-      this.world.effects.spawnLandingDust(landed.x, landed.y, landed.z);
+      this.world?.effects.spawnLandingDust(landed.x, landed.y, landed.z);
     }
 
     if (events.length > 0) {
       this.sound.handleCombatEvents(events, this.match.fighters, obsId);
-      this.world.processCombatEvents(events, obsId);
+      this.world?.processCombatEvents(events, obsId);
 
       for (const ev of events) {
         if (
@@ -686,20 +724,19 @@ class KnightsGameApp {
 
     if (this.hitStopTimer > 0) {
       this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
-      const projected = this.world.renderFrame(
-        dt * 0.15,
-        this.match,
-        this.settings
-      );
+      const projected = this.world
+        ? this.world.renderFrame(dt * 0.15, this.match, this.settings)
+        : [];
       this.ui.update(this.match, projected, this.pointerLocked);
       requestAnimationFrame(this.loop);
       return;
     }
 
+    const camYaw = this.world ? this.world.cameraRig.yaw : this.fallbackYaw;
     if (this.match.isOnlineMatch) {
       const intent =
         this.match.paused || this.match.state === 'PlayerEliminated'
-          ? createEmptyIntent(this.world.cameraRig.yaw)
+          ? createEmptyIntent(camYaw)
           : this.buildHumanIntent();
       this.net.streamInputIntent(dt, intent);
       this.netSync.interpolateFrame(this.match, dt);
@@ -718,7 +755,7 @@ class KnightsGameApp {
     }
 
     const obs = this.match.getObservedFighter();
-    if (obs) {
+    if (obs && this.world) {
       const camBasis = this.world.cameraRig.getHorizontalBasis();
       this.sound.updateListener(
         obs.body.x,
@@ -729,11 +766,9 @@ class KnightsGameApp {
       );
     }
 
-    const projectedLabels = this.world.renderFrame(
-      dt,
-      this.match,
-      this.settings
-    );
+    const projectedLabels = this.world
+      ? this.world.renderFrame(dt, this.match, this.settings)
+      : [];
     this.ui.update(this.match, projectedLabels, this.pointerLocked);
 
     requestAnimationFrame(this.loop);
