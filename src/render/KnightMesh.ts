@@ -319,17 +319,31 @@ export class KnightVisualRig {
     }
 
     this.rootBone = clonedRig.getObjectByName('root') ?? null;
-    const handSlotR = clonedRig.getObjectByName('handslot.r');
-    const handSlotL = clonedRig.getObjectByName('handslot.l');
-    const helmetNode = clonedRig.getObjectByName('Knight_Helmet');
+
+    // Note: Three.js GLTFLoader sanitizes dots in bone names ('handslot.r' -> 'handslotr')!
+    const handSlotR =
+      clonedRig.getObjectByName('handslotr') ??
+      clonedRig.getObjectByName('handslot.r') ??
+      clonedRig.getObjectByName('1H_Sword')?.parent ??
+      clonedRig.getObjectByName('Knife')?.parent ??
+      null;
+
+    const handSlotL =
+      clonedRig.getObjectByName('handslotl') ??
+      clonedRig.getObjectByName('handslot.l') ??
+      clonedRig.getObjectByName('1H_Sword_Offhand')?.parent ??
+      clonedRig.getObjectByName('Knife_Offhand')?.parent ??
+      null;
+
+    const helmetNode = clonedRig.getObjectByName('Knight_Helmet') ?? null;
 
     // Equip class-specific 3D weapons, shields & crests!
     this.configureClassLoadout(
       pack,
       clonedRig,
-      handSlotR ?? null,
-      handSlotL ?? null,
-      helmetNode ?? null
+      handSlotR,
+      handSlotL,
+      helmetNode
     );
 
     this.modelHolder.add(clonedRig);
@@ -633,29 +647,30 @@ export class KnightVisualRig {
     g.add(collar);
 
     // Chunky Beveled KayKit-proportioned Warhammer Head + Back Raven Spike!
+    // Aligned along X-axis (-X leading strike face, +X rear spike), matching KayKit's 1H_Axe/1H_Sword plane!
     const core = new THREE.Mesh(
-      new THREE.BoxGeometry(0.34, 0.34, 0.54),
+      new THREE.BoxGeometry(0.56, 0.34, 0.32),
       darkIronMat
     );
-    core.position.set(0, 1.24, 0.04);
+    core.position.set(-0.02, 1.24, 0);
     core.castShadow = true;
     g.add(core);
 
     const face = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.21, 0.18, 0.16, 8),
+      new THREE.CylinderGeometry(0.22, 0.19, 0.17, 8),
       steelMat
     );
-    face.rotation.x = Math.PI / 2;
-    face.position.set(0, 1.24, 0.36);
+    face.rotation.z = Math.PI / 2;
+    face.position.set(-0.37, 1.24, 0);
     face.castShadow = true;
     g.add(face);
 
     const backSpike = new THREE.Mesh(
-      new THREE.ConeGeometry(0.12, 0.38, 6),
+      new THREE.ConeGeometry(0.125, 0.4, 6),
       steelMat
     );
-    backSpike.rotation.x = -Math.PI / 2;
-    backSpike.position.set(0, 1.24, -0.38);
+    backSpike.rotation.z = -Math.PI / 2;
+    backSpike.position.set(0.39, 1.24, 0);
     backSpike.castShadow = true;
     g.add(backSpike);
 
@@ -663,7 +678,7 @@ export class KnightVisualRig {
       new THREE.ConeGeometry(0.085, 0.28, 8),
       goldMat
     );
-    topFinial.position.set(0, 1.54, 0.04);
+    topFinial.position.set(0, 1.54, 0);
     g.add(topFinial);
 
     return g;
