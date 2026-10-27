@@ -44,7 +44,7 @@ class KnightsGameApp {
 
     this.ui = new UIManager(uiRoot, this.settings, {
       onOpenSelection: () => {
-        this.sound.unlock();
+        this.sound.playUiClick();
         this.releasePointerLock();
         this.match.goToCharacterSelection();
       },
@@ -57,14 +57,17 @@ class KnightsGameApp {
         this.beginMatch(this.match.selectedPlayerClass, this.match.mode);
       },
       onReturnMainMenu: () => {
+        this.sound.playUiClick();
         this.releasePointerLock();
         this.match.goToMainMenu();
       },
       onResumeGame: () => {
+        this.sound.playUiClick();
         this.match.paused = false;
         this.requestPointerLockSafe();
       },
       onCycleSpectator: (delta) => {
+        this.sound.playUiClick();
         const next = this.match.cycleSpectatorTarget(delta);
         if (next) {
           this.world.cameraRig.snapBehindTarget(
@@ -85,6 +88,7 @@ class KnightsGameApp {
         );
       },
       onSelectPreviewClass: (classId) => {
+        this.sound.playClassSelect(classId);
         this.match.selectedPlayerClass = classId;
         this.world.syncShowcaseClass(classId);
       },
@@ -403,21 +407,77 @@ class KnightsGameApp {
       this.releasePointerLock();
     }
 
-    // Footstep, jump/land & combat audio + 3D effects
+    if (stepOut.enteredFinalPhase) {
+      this.sound.playSuddenDeathBell();
+    }
+
+    const obs = this.match.getObservedFighter();
+    const obsId = obs ? obs.id : null;
+    if (obs) {
+      const camBasis = this.world.cameraRig.getHorizontalBasis();
+      this.sound.updateListener(
+        obs.body.x,
+        obs.body.y,
+        obs.body.z,
+        camBasis.rightX,
+        camBasis.rightZ
+      );
+    }
+
+    // Surface-aware 3D footsteps, jumps, dodges, landings & combat audio + VFX
     for (const fid of stepOut.footstepFighterIds) {
-      this.sound.playFootstep(fid === 'player');
+      const f = this.match.fighters.find((item) => item.id === fid);
+      if (f) {
+        this.sound.playFootstep(
+          fid === obsId,
+          f.body.x,
+          f.body.y,
+          f.body.z,
+          f.classId
+        );
+      }
     }
     for (const fid of stepOut.jumpedFighterIds) {
-      this.sound.playJump(fid === 'player');
+      const f = this.match.fighters.find((item) => item.id === fid);
+      if (f) {
+        this.sound.playJump(
+          fid === obsId,
+          f.body.x,
+          f.body.y,
+          f.body.z,
+          f.classId
+        );
+      }
+    }
+    for (const fid of stepOut.dodgedFighterIds) {
+      const f = this.match.fighters.find((item) => item.id === fid);
+      if (f) {
+        this.sound.playDodge(
+          fid === obsId,
+          f.body.x,
+          f.body.y,
+          f.body.z,
+          f.classId
+        );
+      }
     }
     for (const landed of stepOut.landedFighters) {
-      this.sound.playLanding(landed.id === 'player');
+      const f = this.match.fighters.find((item) => item.id === landed.id);
+      this.sound.playLanding(
+        landed.id === obsId,
+        landed.x,
+        landed.y,
+        landed.z,
+        f?.classId ?? 'sword'
+      );
       this.world.effects.spawnLandingDust(landed.x, landed.y, landed.z);
     }
     if (stepOut.events.length > 0) {
-      this.sound.handleCombatEvents(stepOut.events);
-      const obs = this.match.getObservedFighter();
-      const obsId = obs ? obs.id : null;
+      this.sound.handleCombatEvents(
+        stepOut.events,
+        this.match.fighters,
+        obsId
+      );
       this.world.processCombatEvents(stepOut.events, obsId);
 
       // Brief, tactile 32ms hit-stop when observed knight lands/receives a heavy strike or parry

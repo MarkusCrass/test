@@ -44,7 +44,9 @@ export interface MatchStepOutput {
   events: CombatEvent[];
   footstepFighterIds: string[];
   jumpedFighterIds: string[];
+  dodgedFighterIds: string[];
   landedFighters: Array<{ id: string; x: number; y: number; z: number }>;
+  enteredFinalPhase: boolean;
   stateChangedTo: MatchState | null;
 }
 
@@ -257,7 +259,9 @@ export class MatchManager {
       events: [],
       footstepFighterIds: [],
       jumpedFighterIds: [],
+      dodgedFighterIds: [],
       landedFighters: [],
+      enteredFinalPhase: false,
       stateChangedTo: null,
     };
 
@@ -289,7 +293,11 @@ export class MatchManager {
     // 2. Active Combat (InProgress or PlayerEliminated spectator continuation)
     this.matchElapsed += dt;
     this.matchTimeRemaining = Math.max(0, this.matchTimeRemaining - dt);
+    const prevFinalPhase = this.isFinalPhase;
     this.isFinalPhase = this.matchTimeRemaining <= FINAL_PHASE_THRESHOLD;
+    if (!prevFinalPhase && this.isFinalPhase) {
+      output.enteredFinalPhase = true;
+    }
 
     // Count how many bots currently target each fighter (anti-dogpile input)
     const botTargetCounts = new Map<string, number>();
@@ -329,7 +337,11 @@ export class MatchManager {
           : createEmptyIntent(fighter.yaw);
       }
 
+      const prevState = fighter.state;
       const stepRes = fighter.update(dt, intent, this.arena, true);
+      if (prevState !== 'Dodging' && fighter.state === 'Dodging') {
+        output.dodgedFighterIds.push(fighter.id);
+      }
       if (stepRes.stepped) {
         output.footstepFighterIds.push(fighter.id);
       }
