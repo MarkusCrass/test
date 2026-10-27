@@ -471,9 +471,9 @@ body {
 .hud-vitals {
   position: absolute;
   left: 18px;
-  bottom: 18px;
-  width: min(372px, 84vw);
-  padding: 12px 14px;
+  bottom: 16px;
+  width: min(296px, 36vw);
+  padding: 11px 13px;
 }
 
 .vitals-header {
@@ -638,12 +638,12 @@ body {
 /* Spectator Death Banner */
 .spectator-bar {
   position: absolute;
-  bottom: 20px;
+  bottom: 112px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 14px 20px;
+  padding: 12px 18px;
   text-align: center;
-  min-width: min(460px, 92vw);
+  min-width: min(450px, 92vw);
 }
 
 .spectator-title {
@@ -738,19 +738,36 @@ body {
   cursor: pointer;
 }
 
-/* Class Selection Ability Cards & In-Game [1]/[2] Skill Hotbar */
+/* Class Selection Ability Cards & Bottom Square Skill Hotbar + Hover Tooltips */
 .sel-abilities-grid {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .sel-ability-card {
-  background: rgba(18, 22, 30, 0.85);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(18, 22, 30, 0.88);
   border: 1px solid #485266;
   border-left: 3px solid var(--border-gold);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.sel-ability-icon-img {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
   border-radius: 5px;
-  padding: 7px 9px;
+  border: 1px solid #c9963b;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+}
+
+.sel-ability-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .sel-ability-head {
@@ -788,7 +805,7 @@ body {
 }
 
 .hud-buff-pill {
-  margin: 4px 0 6px;
+  margin-top: 6px;
   padding: 3px 8px;
   border-radius: 4px;
   background: rgba(235, 180, 52, 0.2);
@@ -800,102 +817,371 @@ body {
   text-align: center;
 }
 
-.hud-skill-bar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* Selection Showcase Bottom Dock */
+.selection-showcase-dock {
+  position: absolute;
+  right: 30px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px 8px;
+  background: linear-gradient(180deg, rgba(24, 28, 38, 0.93), rgba(11, 13, 19, 0.96));
+  border: 2px solid #59637a;
+  border-top-color: var(--border-gold);
+  border-radius: 9px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+  z-index: 25;
+}
+
+.skill-dock-caption {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffe39b;
+  letter-spacing: 0.02em;
+}
+
+/* In-Game Bottom-Center Square Skill Action Bar */
+.hud-actionbar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 14px 7px;
+  background: linear-gradient(180deg, rgba(24, 28, 38, 0.94), rgba(10, 12, 18, 0.97));
+  border: 2px solid #566078;
+  border-top-color: #deb04d;
+  border-radius: 10px;
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.72),
+    inset 0 1px 0 rgba(255, 232, 168, 0.2);
+  z-index: 30;
+}
+
+.hud-actionbar-hint {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #b7c2d6;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.skill-squares-row {
+  display: flex;
+  align-items: flex-end;
   gap: 8px;
-  margin: 6px 0 6px;
 }
 
-.hud-skill-slot {
+.skill-bar-sep {
+  width: 2px;
+  height: 44px;
+  margin: 0 2px 4px;
+  background: linear-gradient(
+    180deg,
+    rgba(224, 177, 69, 0.08),
+    rgba(224, 177, 69, 0.65),
+    rgba(224, 177, 69, 0.08)
+  );
+  border-radius: 2px;
+}
+
+/* Individual Square Skill Tile */
+.skill-sq {
   position: relative;
+  width: 52px;
+  height: 52px;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.skill-sq.signature {
+  width: 60px;
+  height: 60px;
+}
+
+.skill-sq-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 7px;
   overflow: hidden;
-  background: rgba(18, 22, 30, 0.92);
-  border: 1px solid #525d73;
-  border-radius: 5px;
-  padding: 6px 8px;
-  transition: border-color 0.12s ease, transform 0.1s ease;
+  background: #10131b;
+  border: 2px solid #6b768f;
+  box-shadow:
+    inset 0 0 10px rgba(0, 0, 0, 0.65),
+    0 4px 10px rgba(0, 0, 0, 0.55);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
-.hud-skill-slot.ready {
-  border-color: #d9a74a;
-  box-shadow: inset 0 0 10px rgba(224, 177, 69, 0.16);
+.skill-sq.signature .skill-sq-frame {
+  border-color: #dfa842;
+  box-shadow:
+    inset 0 0 12px rgba(224, 177, 69, 0.22),
+    0 5px 14px rgba(0, 0, 0, 0.65);
 }
 
-.hud-skill-slot.casting {
-  border-color: #fff0a6;
-  box-shadow: 0 0 12px rgba(255, 214, 102, 0.55);
-  transform: translateY(-1px);
+.skill-sq:hover {
+  transform: translateY(-3px) scale(1.04);
+  z-index: 45;
 }
 
-.hud-skill-slot.on-cd,
-.hud-skill-slot.no-stam {
-  opacity: 0.68;
-  border-color: #3d4454;
+.skill-sq:hover .skill-sq-frame {
+  border-color: #fff0a8;
+  box-shadow:
+    0 0 16px rgba(255, 214, 102, 0.55),
+    inset 0 0 8px rgba(255, 240, 170, 0.28);
 }
 
-.hud-skill-cd-fill {
+.skill-sq.active-now {
+  transform: translateY(-3px);
+}
+
+.skill-sq.active-now .skill-sq-frame {
+  border-color: #fff3b0;
+  box-shadow:
+    0 0 18px rgba(255, 214, 92, 0.78),
+    inset 0 0 12px rgba(255, 240, 170, 0.42);
+}
+
+.skill-sq.on-cd .skill-sq-img {
+  filter: grayscale(0.75) brightness(0.55);
+}
+
+.skill-sq.no-stam .skill-sq-frame {
+  border-color: #4a6f9e;
+}
+
+.skill-sq.no-stam .skill-sq-img {
+  filter: saturate(0.45) brightness(0.68);
+}
+
+.skill-sq-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: filter 0.12s ease;
+}
+
+.skill-sq-cd-veil {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(10, 12, 18, 0.76);
+  background: linear-gradient(180deg, rgba(255, 198, 92, 0.28) 0%, rgba(8, 10, 16, 0.82) 12%);
   pointer-events: none;
-  z-index: 1;
-}
-
-.hud-skill-top,
-.hud-skill-title {
-  position: relative;
   z-index: 2;
 }
 
-.hud-skill-top {
+.skill-sq-cd-num {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 3px;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #fff4cc;
+  text-shadow:
+    0 2px 4px #000,
+    0 0 8px #000;
+  z-index: 3;
+  pointer-events: none;
 }
 
-.hud-skill-key {
+.skill-sq-key {
+  position: absolute;
+  top: -5px;
+  left: -4px;
+  padding: 1px 5px;
+  min-width: 19px;
+  height: 17px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 3px;
-  background: #2d3546;
-  border: 1px solid #6b7894;
-  color: #ffe28a;
-  font-size: 11px;
+  background: #1d222e;
+  border: 1px solid #8a96b0;
+  border-radius: 4px;
+  color: #ffe699;
+  font-size: 9.5px;
   font-weight: 900;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.75);
+  z-index: 4;
+  pointer-events: none;
 }
 
-.hud-skill-icon {
+.skill-sq.signature .skill-sq-key {
+  background: #362812;
+  border-color: #f0bc56;
+  color: #fff2bd;
+  font-size: 11px;
+  min-width: 21px;
+  height: 19px;
+}
+
+.skill-sq-stam {
+  position: absolute;
+  right: -3px;
+  bottom: -4px;
+  padding: 0 4px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #141923;
+  border: 1px solid #596987;
+  border-radius: 3px;
+  color: #9fd0ff;
+  font-size: 9px;
+  font-weight: 800;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* Floating Upward Skill Description Tooltip on Hover */
+.skill-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 14px);
+  transform: translateX(-50%) translateY(7px);
+  width: 288px;
+  padding: 12px 13px;
+  background: linear-gradient(180deg, rgba(24, 28, 39, 0.98), rgba(12, 14, 21, 0.99));
+  border: 2px solid #dfab46;
+  border-radius: 8px;
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(0, 0, 0, 0.8);
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s;
+  z-index: 80;
+}
+
+.skill-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-top-color: #dfab46;
+}
+
+.skill-sq:hover .skill-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Keep rightmost showcase dock tooltips inside right viewport edge */
+.selection-showcase-dock .skill-sq:last-child .skill-tooltip {
+  left: auto;
+  right: -8px;
+  transform: translateY(7px);
+}
+
+.selection-showcase-dock .skill-sq:last-child:hover .skill-tooltip {
+  transform: translateY(0);
+}
+
+.selection-showcase-dock .skill-sq:last-child .skill-tooltip::after {
+  left: auto;
+  right: 20px;
+  transform: none;
+}
+
+.skill-tip-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.skill-tip-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1.5px solid #e3b14f;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.6);
+}
+
+.skill-tip-titles {
+  min-width: 0;
+}
+
+.skill-tip-name {
   font-size: 14px;
+  font-weight: 900;
+  color: #ffe8a3;
+  line-height: 1.2;
 }
 
-.hud-skill-status {
+.skill-tip-cat {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9aa7bf;
+  margin-top: 2px;
+}
+
+.skill-tip-costs {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+  background: rgba(10, 12, 18, 0.72);
+  border: 1px solid #363f52;
+  border-radius: 5px;
+  font-size: 11px;
+  color: #cdd6e8;
+}
+
+.skill-tip-costs strong {
+  color: #fff2c2;
+}
+
+.skill-tip-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.skill-tip-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(224, 177, 69, 0.15);
+  border: 1px solid rgba(224, 177, 69, 0.45);
+  color: #ffe399;
   font-size: 10.5px;
   font-weight: 800;
-  color: #ffd97d;
 }
 
-.hud-skill-slot.on-cd .hud-skill-status {
-  color: #ff9c7d;
+.skill-tip-desc {
+  font-size: 12px;
+  line-height: 1.42;
+  color: #dce3f0;
 }
 
-.hud-skill-slot.no-stam .hud-skill-status {
-  color: #7db8ff;
-}
-
-.hud-skill-title {
-  font-size: 11px;
-  font-weight: 800;
-  color: #eef2fa;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+@media (max-width: 1020px) {
+  .hud-vitals {
+    bottom: 104px;
+    width: min(275px, 60vw);
+  }
+  .selection-showcase-dock {
+    display: none;
+  }
 }
 

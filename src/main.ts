@@ -92,6 +92,24 @@ class KnightsGameApp {
         this.match.selectedPlayerClass = classId;
         this.world.syncShowcaseClass(classId);
       },
+      onTriggerSkillSlot: (slotKey) => {
+        if (!this.isCombatInteractive() || this.match.state === 'PlayerEliminated') {
+          return;
+        }
+        this.sound.unlock();
+        if (slotKey === 'ability1') {
+          this.ability1Queued = true;
+        } else if (slotKey === 'ability2') {
+          this.ability2Queued = true;
+        } else if (slotKey === 'dodge') {
+          this.dodgeQueued = true;
+        } else if (slotKey === 'light') {
+          this.lmbHeld = true;
+          window.setTimeout(() => {
+            this.lmbHeld = false;
+          }, 60);
+        }
+      },
     });
 
     this.setupInputListeners();
@@ -223,6 +241,15 @@ class KnightsGameApp {
 
       if (!this.isCombatInteractive()) return;
 
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        if (!e.repeat) {
+          this.keysDown.add('Tab');
+          this.releasePointerLock();
+        }
+        return;
+      }
+
       if (this.match.state === 'PlayerEliminated') {
         if (e.code === 'KeyQ') {
           this.match.cycleSpectatorTarget(-1);
@@ -254,6 +281,16 @@ class KnightsGameApp {
     });
 
     window.addEventListener('keyup', (e) => {
+      if (e.code === 'Tab' && this.keysDown.has('Tab')) {
+        this.keysDown.delete('Tab');
+        if (
+          this.isCombatInteractive() &&
+          this.match.state !== 'PlayerEliminated'
+        ) {
+          this.requestPointerLockSafe();
+        }
+        return;
+      }
       this.keysDown.delete(e.code);
     });
 
@@ -286,7 +323,14 @@ class KnightsGameApp {
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (!this.isCombatInteractive()) {
+      const overSkillBar = Boolean(
+        (e.target as Element | null)?.closest?.('.hud-actionbar')
+      );
+      if (
+        !this.isCombatInteractive() ||
+        this.keysDown.has('Tab') ||
+        (!this.pointerLocked && overSkillBar)
+      ) {
         this.lastClientX = e.clientX;
         this.lastClientY = e.clientY;
         return;

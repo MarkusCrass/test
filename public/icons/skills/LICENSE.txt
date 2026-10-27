@@ -1,0 +1,33 @@
+KNIGHTS: LAST STANDING — Skill Icon Artwork Attribution
+=======================================================
+
+Foreground vector silhouettes in public/icons/skills/*.svg are sourced from
+Game-Icons.net (https://github.com/game-icons/icons) under Creative Commons
+Attribution 3.0 Unported (CC BY 3.0: https://creativecommons.org/licenses/by/3.0/),
+composited with custom heraldic gradients, runic frames, and shading for KNIGHTS: LAST STANDING.
+
+Icon-by-icon credits:
+- sword_light.svg <- lorc/saber-slash.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/saber-slash.html)
+- sword_heavy.svg <- lorc/blade-fall.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/blade-fall.html)
+- sword_block.svg <- delapouite/cross-shield.svg by Delapouite (https://delapouite.com) (https://game-icons.net/1x1/delapouite/cross-shield.html)
+- sword_rush.svg <- lorc/winged-sword.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/winged-sword.html)
+- sword_warcry.svg <- delapouite/sword-brandish.svg by Delapouite (https://delapouite.com) (https://game-icons.net/1x1/delapouite/sword-brandish.html)
+- sword_dodge.svg <- lorc/rolling-energy.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/rolling-energy.html)
+- dual_light.svg <- lorc/crossed-slashes.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/crossed-slashes.html)
+- dual_heavy.svg <- lorc/spinning-sword.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/spinning-sword.html)
+- dual_parry.svg <- lorc/sword-clash.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/sword-clash.html)
+- dual_cyclone.svg <- lorc/whirlwind.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/whirlwind.html)
+- dual_dagger.svg <- lorc/flying-dagger.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/flying-dagger.html)
+- dual_dodge.svg <- lorc/fire-dash.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/fire-dash.html)
+- spear_light.svg <- lorc/barbed-spear.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/barbed-spear.html)
+- spear_heavy.svg <- lorc/spiral-thrust.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/spiral-thrust.html)
+- spear_deflect.svg <- delapouite/pikeman.svg by Delapouite (https://delapouite.com) (https://game-icons.net/1x1/delapouite/pikeman.html)
+- spear_dragon.svg <- delapouite/spiked-dragon-head.svg by Delapouite (https://delapouite.com) (https://game-icons.net/1x1/delapouite/spiked-dragon-head.html)
+- spear_sweep.svg <- lorc/halberd-shuriken.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/halberd-shuriken.html)
+- spear_dodge.svg <- lorc/dodging.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/dodging.html)
+- hammer_light.svg <- delapouite/warhammer.svg by Delapouite (https://delapouite.com) (https://game-icons.net/1x1/delapouite/warhammer.html)
+- hammer_heavy.svg <- lorc/hammer-drop.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/hammer-drop.html)
+- hammer_block.svg <- delapouite/roman-shield.svg by Delapouite (https://delapouite.com) (https://game-icons.net/1x1/delapouite/roman-shield.html)
+- hammer_ram.svg <- delapouite/shield-bash.svg by Delapouite (https://delapouite.com) (https://game-icons.net/1x1/delapouite/shield-bash.html)
+- hammer_quake.svg <- lorc/quake-stomp.svg by Lorc (http://lorcblog.blogspot.com) (https://game-icons.net/1x1/lorc/quake-stomp.html)
+- hammer_dodge.svg <- delapouite/spiked-shield.svg by Delapouite (https://delapouite.com) (https://game-icons.net/1x1/delapouite/spiked-shield.html)

@@ -4,9 +4,15 @@ import {
   KnightClassId,
 } from '../config/classes';
 import { GameSettings, GraphicsQuality } from '../config/settings';
-import { FighterState } from '../core/Fighter';
+import { Fighter, FighterState } from '../core/Fighter';
 import { MatchManager, MatchMode, MatchState } from '../core/MatchManager';
 import { ProjectedFighterLabel } from '../render/WorldRenderer';
+import {
+  buildClassSkillBar,
+  getSkillIconUrl,
+  SkillSlotDescriptor,
+  SkillSlotKey,
+} from './skillIcons';
 
 export interface UICallbacks {
   onOpenSelection: () => void;
@@ -17,6 +23,7 @@ export interface UICallbacks {
   onCycleSpectator: (delta: 1 | -1) => void;
   onSettingsChanged: (next: GameSettings) => void;
   onSelectPreviewClass: (classId: KnightClassId) => void;
+  onTriggerSkillSlot?: (slotKey: SkillSlotKey) => void;
 }
 
 const STATE_LABELS_RU: Record<FighterState, string> = {
@@ -31,10 +38,17 @@ const STATE_LABELS_RU: Record<FighterState, string> = {
   Dead: 'Пал в бою',
 };
 
+interface ActionBarSlotRefs {
+  descriptor: SkillSlotDescriptor;
+  rootEl: HTMLElement;
+  cdVeilEl: HTMLElement;
+  cdNumEl: HTMLElement;
+}
+
 /**
- * Manages all UI screens, class selection showcase stats, compact combat HUD,
- * spectator controls, pause menu, settings modal, and match results table.
- * Rendered cleanly above the 3D canvas so text stays razor-sharp at any pixel scale.
+ * Manages all UI screens, class selection showcase stats, bottom square skill hotbar
+ * with hover tooltips, compact combat HUD, spectator controls, pause/settings modals,
+ * and match results table.
  */
 export class UIManager {
   private readonly root: HTMLElement;
@@ -44,6 +58,7 @@ export class UIManager {
   // Screen containers
   private readonly mainMenuEl: HTMLElement;
   private readonly selectionEl: HTMLElement;
+  private readonly selectionSkillBarEl: HTMLElement;
   private readonly hudEl: HTMLElement;
   private readonly pauseModalEl: HTMLElement;
   private readonly settingsModalEl: HTMLElement;
@@ -61,8 +76,10 @@ export class UIManager {
   private readonly hpTextEl: HTMLElement;
   private readonly stamFillEl: HTMLElement;
   private readonly stamTextEl: HTMLElement;
-  private readonly skillBarEl: HTMLElement;
   private readonly activeBuffEl: HTMLElement;
+  private readonly actionBarWrapEl: HTMLElement;
+  private readonly actionBarSlotsEl: HTMLElement;
+  private readonly actionBarHintEl: HTMLElement;
   private readonly chargeMeterEl: HTMLElement;
   private readonly chargeFillEl: HTMLElement;
   private readonly pointerPromptEl: HTMLElement;
@@ -72,6 +89,8 @@ export class UIManager {
   private readonly spectatorSubEl: HTMLElement;
 
   private readonly labelPool = new Map<string, HTMLElement>();
+  private renderedActionBarClass: KnightClassId | null = null;
+  private actionBarRefs: ActionBarSlotRefs[] = [];
   private lastRenderedState: MatchState | null = null;
   private lastPaused = false;
   private selectedMode: MatchMode = 'ffa5';
@@ -109,7 +128,7 @@ export class UIManager {
             <div><span class="key-chip">ПКМ</span> Блок / Парирование</div>
             <div><span class="key-chip">1 / 2</span> Способности класса</div>
             <div><span class="key-chip">Space</span> Прыжок · <span class="key-chip">Alt / C</span> Рывок</div>
-            <div><span class="key-chip">Shift</span> Бег · <span class="key-chip">F3</span> Хитбоксы · <span class="key-chip">Esc</span> Пауза</div>
+            <div><span class="key-chip">Tab</span> Курсор к скиллам · <span class="key-chip">Esc</span> Пауза</div>
           </div>
         </div>
       </div>
@@ -137,8 +156,13 @@ export class UIManager {
             </div>
           </div>
         </div>
-        <div class="stone-panel showcase-caption">
-          3D-модель выбранного рыцаря на постаменте арены
+
+        <!-- Bottom Showcase Skill Squares with Hover Tooltips -->
+        <div class="selection-showcase-dock pointer-auto">
+          <div id="selection-skill-bar" class="skill-squares-row"></div>
+          <div class="skill-dock-caption">
+            Наведите курсор на квадратик скилла для подробного описания
+          </div>
         </div>
       </div>
 
@@ -152,7 +176,7 @@ export class UIManager {
         </div>
 
         <div id="hud-pointer-prompt" class="pointer-prompt hidden">
-          Кликните мышью по экрану для управления камерой и атак
+          Кликните по арене для боя · Наведите мышь на скиллы снизу для описания
         </div>
 
         <div id="hud-countdown" class="countdown-banner hidden">3</div>
@@ -171,6 +195,7 @@ export class UIManager {
           </div>
         </div>
 
+        <!-- Bottom-Left Vitals (HP, Stamina & Active Buff) -->
         <div id="hud-vitals-box" class="stone-panel hud-vitals">
           <div class="vitals-header">
             <span id="hud-player-class">Рыцарь</span>
@@ -180,14 +205,18 @@ export class UIManager {
             <div id="hud-hp-fill" class="hp-fill" style="width: 100%"></div>
             <div id="hud-hp-text" class="bar-text">ЗДОРОВЬЕ: 100 / 100</div>
           </div>
-          <div class="bar-container" style="height: 15px; margin-bottom: 6px;">
+          <div class="bar-container" style="height: 15px; margin-bottom: 4px;">
             <div id="hud-stam-fill" class="stamina-fill" style="width: 100%"></div>
             <div id="hud-stam-text" class="bar-text">ВЫНОСЛИВОСТЬ: 100</div>
           </div>
           <div id="hud-active-buff" class="hud-buff-pill hidden"></div>
-          <div id="hud-skill-bar" class="hud-skill-bar"></div>
-          <div class="hud-hint-line">
-            ЛКМ: Удар · ПКМ: Защита · 1/2: Способности · Space: Прыжок · Alt/C: Рывок
+        </div>
+
+        <!-- Bottom-Center Square Skill Bar with Hover Descriptions -->
+        <div id="hud-actionbar" class="hud-actionbar pointer-auto">
+          <div id="hud-actionbar-slots" class="skill-squares-row"></div>
+          <div id="hud-actionbar-hint" class="hud-actionbar-hint">
+            Наведите курсор на иконку для описания · [Tab] показать курсор в бою
           </div>
         </div>
 
@@ -303,6 +332,7 @@ export class UIManager {
 
     this.mainMenuEl = this.q('#screen-main-menu');
     this.selectionEl = this.q('#screen-selection');
+    this.selectionSkillBarEl = this.q('#selection-skill-bar');
     this.hudEl = this.q('#screen-hud');
     this.pauseModalEl = this.q('#modal-pause');
     this.settingsModalEl = this.q('#modal-settings');
@@ -319,8 +349,10 @@ export class UIManager {
     this.hpTextEl = this.q('#hud-hp-text');
     this.stamFillEl = this.q('#hud-stam-fill');
     this.stamTextEl = this.q('#hud-stam-text');
-    this.skillBarEl = this.q('#hud-skill-bar');
     this.activeBuffEl = this.q('#hud-active-buff');
+    this.actionBarWrapEl = this.q('#hud-actionbar');
+    this.actionBarSlotsEl = this.q('#hud-actionbar-slots');
+    this.actionBarHintEl = this.q('#hud-actionbar-hint');
     this.chargeMeterEl = this.q('#hud-charge-meter');
     this.chargeFillEl = this.q('#hud-charge-fill');
     this.pointerPromptEl = this.q('#hud-pointer-prompt');
@@ -344,70 +376,67 @@ export class UIManager {
     labels: ProjectedFighterLabel[],
     pointerLocked: boolean
   ): void {
-    const state = match.state;
+    const st = match.state;
 
-    if (this.lastRenderedState !== state || this.lastPaused !== match.paused) {
-      this.mainMenuEl.classList.toggle('hidden', state !== 'MainMenu');
-      this.selectionEl.classList.toggle(
-        'hidden',
-        state !== 'CharacterSelection'
-      );
-      const showHud =
-        state === 'Countdown' ||
-        state === 'InProgress' ||
-        state === 'PlayerEliminated';
-      this.hudEl.classList.toggle('hidden', !showHud);
+    if (st !== this.lastRenderedState || match.paused !== this.lastPaused) {
+      this.lastRenderedState = st;
+      this.lastPaused = match.paused;
 
-      this.pauseModalEl.classList.toggle(
-        'hidden',
-        !match.paused || !showHud
-      );
-      this.resultsModalEl.classList.toggle('hidden', state !== 'MatchFinished');
+      this.mainMenuEl.classList.toggle('hidden', st !== 'MainMenu');
+      this.selectionEl.classList.toggle('hidden', st !== 'CharacterSelection');
 
-      if (state === 'CharacterSelection') {
-        this.renderSelectionClass(match.selectedPlayerClass);
+      const inHud =
+        st === 'Countdown' ||
+        st === 'InProgress' ||
+        st === 'PlayerEliminated';
+      this.hudEl.classList.toggle('hidden', !inHud);
+
+      this.pauseModalEl.classList.toggle('hidden', !match.paused);
+      if (!match.paused && st !== 'MainMenu') {
+        this.settingsModalEl.classList.add('hidden');
       }
 
-      if (state === 'MatchFinished' && this.resultsRenderedGen !== match.matchGeneration) {
-        this.resultsRenderedGen = match.matchGeneration;
+      this.resultsModalEl.classList.toggle('hidden', st !== 'MatchFinished');
+    }
+
+    if (st === 'MatchFinished') {
+      if (this.resultsRenderedGen !== match.fighters.length + Math.round(match.matchElapsed * 10)) {
+        this.resultsRenderedGen =
+          match.fighters.length + Math.round(match.matchElapsed * 10);
         this.renderResults(match);
       }
-
-      this.lastRenderedState = state;
-      this.lastPaused = match.paused;
+      return;
     }
 
     if (
-      state === 'Countdown' ||
-      state === 'InProgress' ||
-      state === 'PlayerEliminated'
+      st === 'Countdown' ||
+      st === 'InProgress' ||
+      st === 'PlayerEliminated'
     ) {
       this.updateActiveHud(match, labels, pointerLocked);
     }
   }
 
   private bindEvents(): void {
+    // Main Menu
     this.q('#btn-menu-select').addEventListener('click', () => {
-      this.selectedMode = 'ffa5';
-      this.syncModeButtons();
       this.callbacks.onOpenSelection();
     });
-
     this.q('#btn-menu-quick').addEventListener('click', () => {
-      this.callbacks.onStartMatch('sword', 'ffa5');
+      this.selectedMode = 'ffa5';
+      this.syncModeButtons();
+      this.callbacks.onStartMatch(this.currentSelectedClass, 'ffa5');
     });
-
     this.q('#btn-menu-duel').addEventListener('click', () => {
       this.selectedMode = 'duel_debug';
       this.syncModeButtons();
-      this.callbacks.onStartMatch('sword', 'duel_debug');
+      this.callbacks.onStartMatch(this.currentSelectedClass, 'duel_debug');
     });
-
     this.q('#btn-menu-settings').addEventListener('click', () => {
       this.settingsModalEl.classList.remove('hidden');
     });
 
-    // Mode buttons in selection
+    // Character Selection
     this.q('#mode-ffa5').addEventListener('click', () => {
       this.selectedMode = 'ffa5';
       this.syncModeButtons();
@@ -416,16 +445,14 @@ export class UIManager {
       this.selectedMode = 'duel_debug';
       this.syncModeButtons();
     });
-
     this.q('#btn-sel-back').addEventListener('click', () => {
       this.callbacks.onReturnMainMenu();
     });
-
     this.q('#btn-sel-start').addEventListener('click', () => {
       this.callbacks.onStartMatch(this.currentSelectedClass, this.selectedMode);
     });
 
-    // Pause buttons
+    // Pause Modal
     this.q('#btn-pause-resume').addEventListener('click', () => {
       this.callbacks.onResumeGame();
     });
@@ -439,7 +466,7 @@ export class UIManager {
       this.callbacks.onReturnMainMenu();
     });
 
-    // Spectator buttons
+    // Spectator Controls
     this.q('#btn-spec-prev').addEventListener('click', () => {
       this.callbacks.onCycleSpectator(-1);
     });
@@ -499,6 +526,94 @@ export class UIManager {
   }
 
   private currentSelectedClass: KnightClassId = 'sword';
+
+  /**
+   * Builds a row of 6 beveled square skill icons with hover description tooltips.
+   * Returns live DOM element references so HUD updates never recreate nodes or break :hover.
+   */
+  private populateSkillSquares(
+    container: HTMLElement,
+    classId: KnightClassId,
+    interactiveClicks: boolean
+  ): ActionBarSlotRefs[] {
+    const descriptors = buildClassSkillBar(classId);
+    container.innerHTML = '';
+    const refs: ActionBarSlotRefs[] = [];
+
+    descriptors.forEach((slot, index) => {
+      // Insert subtle heraldic divider flanking the two central [1] & [2] signature abilities
+      if (index === 3 || index === 5) {
+        const sep = document.createElement('div');
+        sep.className = 'skill-bar-sep';
+        container.appendChild(sep);
+      }
+
+      const rootEl = document.createElement('div');
+      rootEl.className = `skill-sq ${slot.isSignature ? 'signature' : 'core'} ready`;
+      rootEl.dataset.slot = slot.slotKey;
+
+      const cdMeta =
+        slot.cooldownSec !== null
+          ? `<span>⏱ Откат: <strong>${slot.cooldownSec} сек</strong></span>`
+          : `<span>⏱ <strong>Без перезарядки</strong></span>`;
+      const stamMeta =
+        slot.staminaCost > 0
+          ? `<span>⚡ СТ: <strong>${slot.staminaCost}</strong></span>`
+          : `<span>⚡ СТ: <strong>0</strong></span>`;
+      const badgesHtml = slot.badges
+        .map((b) => `<span class="skill-tip-badge">${b}</span>`)
+        .join('');
+
+      rootEl.innerHTML = `
+        <div class="skill-sq-frame">
+          <img class="skill-sq-img" src="${slot.iconUrl}" alt="${slot.title}" draggable="false" />
+          <div class="skill-sq-cd-veil" style="height: 0%"></div>
+          <div class="skill-sq-cd-num hidden"></div>
+        </div>
+        <span class="skill-sq-key">${slot.hotkey}</span>
+        ${
+          slot.staminaCost > 0
+            ? `<span class="skill-sq-stam">${slot.staminaCost}</span>`
+            : ''
+        }
+        <div class="skill-tooltip" role="tooltip">
+          <div class="skill-tip-head">
+            <img class="skill-tip-icon" src="${slot.iconUrl}" alt="" draggable="false" />
+            <div class="skill-tip-titles">
+              <div class="skill-tip-name">${slot.title}</div>
+              <div class="skill-tip-cat">${slot.category}</div>
+            </div>
+          </div>
+          <div class="skill-tip-costs">
+            ${cdMeta}
+            ${stamMeta}
+          </div>
+          <div class="skill-tip-badges">${badgesHtml}</div>
+          <div class="skill-tip-desc">${slot.description}</div>
+        </div>
+      `;
+
+      if (interactiveClicks && this.callbacks.onTriggerSkillSlot) {
+        rootEl.addEventListener('mousedown', (ev) => {
+          ev.stopPropagation();
+          if (ev.button === 0) {
+            this.callbacks.onTriggerSkillSlot?.(slot.slotKey);
+          }
+        });
+      }
+
+      container.appendChild(rootEl);
+
+      refs.push({
+        descriptor: slot,
+        rootEl,
+        cdVeilEl: rootEl.querySelector('.skill-sq-cd-veil') as HTMLElement,
+        cdNumEl: rootEl.querySelector('.skill-sq-cd-num') as HTMLElement,
+      });
+    });
+
+    return refs;
+  }
 
   private renderSelectionClass(classId: KnightClassId): void {
     this.currentSelectedClass = classId;
@@ -565,24 +680,26 @@ export class UIManager {
           .map(
             (ab) => `
           <div class="sel-ability-card">
-            <div class="sel-ability-head">
-              <span class="sel-ability-key">[${ab.slot}] ${ab.icon}</span>
-              <span class="sel-ability-name">${ab.name}</span>
-              <span class="sel-ability-meta">${ab.cooldown}с · ${ab.staminaCost} СТ</span>
+            <img class="sel-ability-icon-img" src="${getSkillIconUrl(
+              `${ab.id}.svg`
+            )}" alt="${ab.name}" draggable="false" />
+            <div class="sel-ability-body">
+              <div class="sel-ability-head">
+                <span class="sel-ability-key">[${ab.slot}]</span>
+                <span class="sel-ability-name">${ab.name}</span>
+                <span class="sel-ability-meta">${ab.cooldown}с · ${ab.staminaCost} СТ</span>
+              </div>
+              <div class="sel-ability-desc">${ab.description}</div>
             </div>
-            <div class="sel-ability-desc">${ab.description}</div>
           </div>
         `
           )
           .join('')}
       </div>
-      <div style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-top: 8px;">
-        Базовые приёмы
-      </div>
-      <ul class="ability-list">
-        ${cfg.abilitiesList.slice(0, 3).map((a) => `<li>${a}</li>`).join('')}
-      </ul>
     `;
+
+    // Populate the 6 square skill icons dock at the bottom of the showcase screen
+    this.populateSkillSquares(this.selectionSkillBarEl, classId, false);
   }
 
   private syncModeButtons(): void {
@@ -634,6 +751,100 @@ export class UIManager {
 
     (this.q('#inp-debug') as HTMLInputElement).checked =
       this.settings.debugHitboxes;
+  }
+
+  private updateActionBarForFighter(
+    fighter: Fighter | null,
+    pointerLocked: boolean
+  ): void {
+    if (!fighter) {
+      this.actionBarWrapEl.classList.add('hidden');
+      return;
+    }
+    this.actionBarWrapEl.classList.remove('hidden');
+
+    if (this.renderedActionBarClass !== fighter.classId) {
+      this.renderedActionBarClass = fighter.classId;
+      this.actionBarRefs = this.populateSkillSquares(
+        this.actionBarSlotsEl,
+        fighter.classId,
+        true
+      );
+    }
+
+    this.actionBarHintEl.textContent = pointerLocked
+      ? 'Удерживайте [Tab] — показать курсор для описания скиллов'
+      : 'Наведите курсор на квадратик скилла — появится описание';
+
+    for (const ref of this.actionBarRefs) {
+      const { descriptor, rootEl, cdVeilEl, cdNumEl } = ref;
+      let cdRem = 0;
+      let cdPct = 0;
+      let isActiveNow = false;
+
+      switch (descriptor.slotKey) {
+        case 'light':
+          isActiveNow =
+            fighter.state === 'Attacking' && fighter.activeAbility === null;
+          break;
+        case 'heavy':
+          isActiveNow =
+            fighter.isChargingHeavy ||
+            (fighter.state === 'HeavyAttacking' &&
+              fighter.activeAbility === null);
+          break;
+        case 'defense':
+          isActiveNow = fighter.state === 'Blocking';
+          if (fighter.defenseLockoutTimer > 0) {
+            cdRem = fighter.defenseLockoutTimer;
+            cdPct = Math.min(100, (cdRem / 0.55) * 100);
+          }
+          break;
+        case 'ability1':
+          cdRem = fighter.abilityCooldowns[0];
+          cdPct =
+            descriptor.cooldownSec && descriptor.cooldownSec > 0
+              ? Math.min(100, (cdRem / descriptor.cooldownSec) * 100)
+              : 0;
+          isActiveNow =
+            fighter.activeAbility?.slot === 1;
+          break;
+        case 'ability2':
+          cdRem = fighter.abilityCooldowns[1];
+          cdPct =
+            descriptor.cooldownSec && descriptor.cooldownSec > 0
+              ? Math.min(100, (cdRem / descriptor.cooldownSec) * 100)
+              : 0;
+          isActiveNow =
+            fighter.activeAbility?.slot === 2;
+          break;
+        case 'dodge':
+          isActiveNow = fighter.state === 'Dodging';
+          break;
+      }
+
+      const noStam =
+        cdRem <= 0.02 &&
+        descriptor.staminaCost > 0 &&
+        fighter.stamina < descriptor.staminaCost;
+
+      rootEl.classList.toggle('active-now', isActiveNow);
+      rootEl.classList.toggle('on-cd', cdRem > 0.04 && !isActiveNow);
+      rootEl.classList.toggle('no-stam', noStam && !isActiveNow);
+      rootEl.classList.toggle(
+        'ready',
+        !isActiveNow && cdRem <= 0.04 && !noStam
+      );
+
+      if (cdRem > 0.04 && !isActiveNow) {
+        cdVeilEl.style.height = `${Math.round(cdPct)}%`;
+        cdNumEl.classList.remove('hidden');
+        cdNumEl.textContent = cdRem >= 9.95 ? `${Math.ceil(cdRem)}` : cdRem.toFixed(1);
+      } else {
+        cdVeilEl.style.height = '0%';
+        cdNumEl.classList.add('hidden');
+      }
+    }
   }
 
   private updateActiveHud(
@@ -698,16 +909,18 @@ export class UIManager {
       )
       .join('');
 
-    // 6. Player Vitals vs Spectator Mode
+    // 6. Player Vitals + Bottom Square Skill Bar
     const player = match.getPlayer();
+    const observed = match.getObservedFighter();
+
     if (match.state === 'PlayerEliminated') {
       this.vitalsBoxEl.classList.add('hidden');
       this.spectatorBarEl.classList.remove('hidden');
-      const obs = match.getObservedFighter();
-      this.spectatorSubEl.textContent = obs
-        ? `Камера следует за: ${obs.displayName} (${KNIGHT_CLASSES[obs.classId].name}) — Осталось бойцов: ${aliveCount}`
+      this.spectatorSubEl.textContent = observed
+        ? `Камера следует за: ${observed.displayName} (${KNIGHT_CLASSES[observed.classId].name}) — Осталось бойцов: ${aliveCount}`
         : 'Определение победителя...';
       this.chargeMeterEl.classList.add('hidden');
+      this.updateActionBarForFighter(observed, false);
     } else if (player) {
       this.vitalsBoxEl.classList.remove('hidden');
       this.spectatorBarEl.classList.add('hidden');
@@ -723,7 +936,6 @@ export class UIManager {
       this.stamFillEl.style.width = `${stPct}%`;
       this.stamTextEl.textContent = `ВЫНОСЛИВОСТЬ: ${Math.floor(player.stamina)} / ${player.maxStamina}`;
 
-      // Active Buff indicator
       if (player.damageAuraTimer > 0) {
         this.activeBuffEl.classList.remove('hidden');
         this.activeBuffEl.textContent = `✨ ОБЕТ СТАЛИ: +25% УРОН (${player.damageAuraTimer.toFixed(1)}с)`;
@@ -737,40 +949,7 @@ export class UIManager {
         this.activeBuffEl.classList.add('hidden');
       }
 
-      // Live [1] & [2] Class Skill Hotbar
-      const clsCfg = KNIGHT_CLASSES[player.classId];
-      this.skillBarEl.innerHTML = clsCfg.abilities
-        .map((ab, idx) => {
-          const cd = player.abilityCooldowns[idx];
-          const cdPct = Math.min(100, Math.max(0, (cd / ab.cooldown) * 100));
-          const noStam = player.stamina < ab.staminaCost;
-          const isCasting = player.activeAbility?.id === ab.id;
-          const stateClass = isCasting
-            ? 'casting'
-            : cd > 0
-            ? 'on-cd'
-            : noStam
-            ? 'no-stam'
-            : 'ready';
-          const statusLabel =
-            cd > 0
-              ? `${cd.toFixed(1)}с`
-              : noStam
-              ? `${ab.staminaCost} СТ`
-              : 'ГОТОВО';
-          return `
-            <div class="hud-skill-slot ${stateClass}">
-              <div class="hud-skill-cd-fill" style="height:${cdPct}%"></div>
-              <div class="hud-skill-top">
-                <span class="hud-skill-key">${ab.slot}</span>
-                <span class="hud-skill-icon">${ab.icon}</span>
-                <span class="hud-skill-status">${statusLabel}</span>
-              </div>
-              <div class="hud-skill-title">${ab.name}</div>
-            </div>
-          `;
-        })
-        .join('');
+      this.updateActionBarForFighter(player, pointerLocked);
 
       if (player.isChargingHeavy) {
         this.chargeMeterEl.classList.remove('hidden');

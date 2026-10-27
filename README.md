@@ -38,6 +38,7 @@
 | `1` и `2` | Две уникальные классовые способности рыцаря |
 | `Space` | Прыжок (позволяет перепрыгивать низкие барьеры и спрыгивать с моста) |
 | `Alt` / `C` / `Ctrl` | Уклонение / Рывок / Отступающий шаг / Толчок щитом |
+| `Tab` (удержание) | Освободить курсор в бою для наведения на иконки скиллов снизу |
 | `Shift` | Спринт (при наличии выносливости) |
 | `F3` | Включить / выключить отладку хитбоксов и ИИ |
 | `Escape` | Меню паузы и настроек |
@@ -54,6 +55,7 @@ npm run build    # Проверка типов TypeScript и сборка про
 ## Ассеты и лицензии
 
 - Риггированные 3D-модели персонажей и скелетные анимации (`public/models/kaykit/Knight.glb`, `Rogue_Hooded.glb`): **KayKit Character Pack: Adventures 1.0** от **Kay Lousberg** ([GitHub](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0)) — лицензия **CC0 1.0 Universal (Public Domain)**, см. `public/models/kaykit/LICENSE.txt`.
-- Модульные 3D-модели сцены, пола, стен, широких лестниц, моста, колонн, барьеров, знамён, факелов и реквизита (`public/models/dungeon/*.glb`): **KayKit Dungeon Remastered Pack 1.0** от **Kay Lousberg** ([GitHub](https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0)) — лицензия **CC0 1.0 Universal (Public Domain)**, см. `public/models/dungeon/LICENSE.txt`.
+- Модульные 3D-модели сцены, пола, стен, широких лестниц, моста, колонн, барьеров, знамён, факелов и реквизита (`public/models/dungeon/*.glb`): **KayKit Dungeon Remastered Pack 1.0** от **Kay Lousberg** ([GitHub](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0)) — лицензия **CC0 1.0 Universal (Public Domain)**, см. `public/models/dungeon/LICENSE.txt`.
 - Средневековые звуковые эффекты оружия, лат, шагов, способностей и окружения (`public/audio/sfx/*.mp3`): записи **Still North Media, Kenney, Versilian Studios (VCSL), Jan Schupke, OpenGameArt и Freesound** (подготовленные через `hoffspot/conquest`) — лицензия **CC0 1.0 Universal (Public Domain)**, см. `public/audio/LICENSE.txt`.
+- Векторные силуэты иконок способностей (`public/icons/skills/*.svg`): **Game-Icons.net** (**Lorc** и **Delapouite**, [GitHub](https://github.com/game-icons/icons)), раскрашенные и оформленные в геральдические эмблемы классов — лицензия **CC BY 3.0**, см. `public/icons/skills/LICENSE.txt`.
 
