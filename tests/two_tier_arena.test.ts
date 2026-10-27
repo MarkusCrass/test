@@ -206,4 +206,45 @@ describe('Two-Tier Skybridge Arena & Modular 3D Assets', () => {
       expect(filename.endsWith('.glb')).toBe(true);
     }
   });
+
+  it('performs parabolic jump on Space (jumpPressed), vaults over low barriers, and triggers landing state', () => {
+    // Place knight right in front of court_barrier_north (x=0, z=-10.0, height=1.15m)
+    const vaulter = new Fighter({
+      id: 'vaulter',
+      displayName: 'Vaulter',
+      isHuman: true,
+      classId: 'sword',
+      x: 0.0,
+      y: 0.0,
+      z: -8.3,
+      yaw: Math.PI,
+    });
+
+    const dt = 1 / 60;
+    let peakY = 0;
+    let sawLanded = false;
+
+    for (let i = 0; i < 60; i++) {
+      const intent = createEmptyIntent(Math.PI);
+      intent.moveZ = -1;
+      intent.sprint = true;
+      if (i === 0) {
+        intent.jumpPressed = true;
+      }
+      const res = vaulter.update(dt, intent, ARENA_CONFIG, true);
+      if (vaulter.body.y > peakY) {
+        peakY = vaulter.body.y;
+      }
+      if (res.landed) {
+        sawLanded = true;
+      }
+    }
+
+    // Reached >1.35m height (clearing 1.15m wooden barrier), crossed past z=-10.0, and landed back at y=0!
+    expect(peakY).toBeGreaterThan(1.35);
+    expect(vaulter.body.z).toBeLessThan(-10.8);
+    expect(sawLanded).toBe(true);
+    expect(vaulter.body.isGrounded).toBe(true);
+    expect(vaulter.body.y).toBeCloseTo(0.0, 2);
+  });
 });

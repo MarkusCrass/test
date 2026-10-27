@@ -7,10 +7,10 @@ import {
 } from './math';
 
 /**
- * Kinematic 3D CharacterBody3D equivalent supporting Multi-Tier Arenas:
+ * Kinematic 3D CharacterBody3D equivalent supporting Multi-Tier Arenas & Jumping:
  * - Tier 1 Lower Courtyard (y = 0m) AND Tier 2 Skybridge / Bastions (y = 4.0m)
- * - Full Over-and-Under Bridge separation (walk over the bridge OR fight underneath it!)
- * - Smooth Staircase climbing & descending + Gravity drop-offs off open bridge ledges
+ * - Full Parabolic Jump (Space) capable of clearing low barriers & leaping off bridge edges
+ * - Smooth Staircase climbing & descending without premature snap when airborne
  * - Elevation-filtered obstacle collisions & pairwise fighter separation
  */
 export class CharacterBody {
@@ -22,12 +22,15 @@ export class CharacterBody {
   public vz = 0;
   public knockbackVx = 0;
   public knockbackVz = 0;
+  public supportFloorY = 0;
   public isGrounded = true;
+  public justLanded = false;
   public readonly radius: number;
 
   constructor(x: number, z: number, radius: number, initialY = 0) {
     this.x = x;
     this.y = initialY;
+    this.supportFloorY = initialY;
     this.z = z;
     this.radius = radius;
   }
@@ -37,7 +40,16 @@ export class CharacterBody {
     this.knockbackVz += iz;
   }
 
+  public jump(upwardVelocity: number): boolean {
+    if (!this.isGrounded) return false;
+    this.vy = upwardVelocity;
+    this.isGrounded = false;
+    this.justLanded = false;
+    return true;
+  }
+
   public moveAndSlide(dt: number, arena: ArenaConfig): void {
+    this.justLanded = false;
     const totalVx = this.vx + this.knockbackVx;
     const totalVz = this.vz + this.knockbackVz;
 
@@ -47,27 +59,29 @@ export class CharacterBody {
     const stepDt = dt / steps;
 
     for (let s = 0; s < steps; s++) {
+      const wasGrounded = this.isGrounded;
       this.x += totalVx * stepDt;
       this.z += totalVz * stepDt;
       this.constrainToArena(arena);
 
-      // Update vertical elevation across Staircases, Skybridge & Gravity drop-offs!
       const supportY = this.computeSupportFloorY(arena);
-      if (this.y <= supportY + 0.55 && this.vy <= 0) {
-        // Stick smoothly to stairs & deck transitions
+      this.supportFloorY = supportY;
+
+      if (wasGrounded && this.vy <= 0 && this.y <= supportY + 0.55) {
+        // Walking along flat floor or up/down staircase steps -> stick cleanly to surface!
         this.y = supportY;
         this.vy = 0;
         this.isGrounded = true;
       } else {
-        // Falling off an elevated bridge ledge!
+        // Airborne (jumping upward, falling from jump apex, or dropping off the Skybridge!)
+        this.isGrounded = false;
         this.vy -= 28.0 * stepDt;
         this.y += this.vy * stepDt;
-        if (this.y <= supportY) {
+        if (this.y <= supportY && this.vy <= 0) {
           this.y = supportY;
           this.vy = 0;
           this.isGrounded = true;
-        } else {
-          this.isGrounded = false;
+          this.justLanded = true;
         }
       }
     }
@@ -84,7 +98,7 @@ export class CharacterBody {
 
   /**
    * Computes the walkable floor Y beneath (x, z) given current elevation `this.y`,
-   * allowing fighters to walk BOTH over the y=4.0m Skybridge AND underneath it at y=0.0m!
+   * allowing fighters to walk/jump BOTH over the y=4.0m Skybridge AND underneath it at y=0.0m!
    */
   public computeSupportFloorY(arena: ArenaConfig): number {
     let bestY = 0;
@@ -102,7 +116,6 @@ export class CharacterBody {
           const t =
             Math.abs(span) > 1e-4 ? clamp((this.z - s.zLow) / span, 0, 1) : 0;
           const rampY = s.bottomY + t * (s.topY - s.bottomY);
-          // Only step onto stair surface if within step-up reach (prevents side-wall teleport)
           if (this.y >= rampY - 1.35) {
             bestY = Math.max(bestY, rampY);
           }
@@ -119,7 +132,6 @@ export class CharacterBody {
           this.z >= p.minZ - this.radius * 0.25 &&
           this.z <= p.maxZ + this.radius * 0.25
         ) {
-          // Fighter is on top of the deck if already near deck elevation; otherwise underneath at y=0!
           if (this.y >= p.topY - 1.15) {
             bestY = Math.max(bestY, p.topY);
           }
@@ -142,7 +154,7 @@ export class CharacterBody {
       }
     }
 
-    // 2. Barriers, crates & upper bridge parapet railings (elevation-filtered!)
+    // 2. Barriers, crates & upper bridge parapet railings (jumping above bMaxY vaults cleanly over!)
     for (const box of arena.boxes) {
       const bMinY = box.minY ?? 0;
       const bMaxY = bMinY + box.height;
@@ -174,7 +186,6 @@ export class CharacterBody {
 
   /**
    * Resolves overlap between living CharacterBodies on the SAME vertical tier!
-   * Fighters on the y=4m Skybridge never push fighters walking underneath at y=0m.
    */
   public static resolveFighterCollisions(
     bodies: CharacterBody[],
@@ -185,7 +196,6 @@ export class CharacterBody {
         const a = bodies[i];
         for (let j = i + 1; j < bodies.length; j++) {
           const b = bodies[j];
-          // Do not collide horizontally if one fighter is on the bridge and one is below!
           if (Math.abs(a.y - b.y) > 1.75) continue;
 
           const dx = b.x - a.x;

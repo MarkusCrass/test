@@ -43,6 +43,8 @@ export interface MatchStanding {
 export interface MatchStepOutput {
   events: CombatEvent[];
   footstepFighterIds: string[];
+  jumpedFighterIds: string[];
+  landedFighters: Array<{ id: string; x: number; y: number; z: number }>;
   stateChangedTo: MatchState | null;
 }
 
@@ -254,6 +256,8 @@ export class MatchManager {
     const output: MatchStepOutput = {
       events: [],
       footstepFighterIds: [],
+      jumpedFighterIds: [],
+      landedFighters: [],
       stateChangedTo: null,
     };
 
@@ -321,6 +325,17 @@ export class MatchManager {
       const stepRes = fighter.update(dt, intent, this.arena, true);
       if (stepRes.stepped) {
         output.footstepFighterIds.push(fighter.id);
+      }
+      if (stepRes.jumped) {
+        output.jumpedFighterIds.push(fighter.id);
+      }
+      if (stepRes.landed) {
+        output.landedFighters.push({
+          id: fighter.id,
+          x: fighter.body.x,
+          y: fighter.body.y,
+          z: fighter.body.z,
+        });
       }
       if (stepRes.swungAttack) {
         output.events.push({

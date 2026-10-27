@@ -6,41 +6,49 @@ import {
   KnightClassId,
 } from '../config/classes';
 import { Fighter } from '../core/Fighter';
-import { clamp } from '../core/math';
+import { angleDiff, clamp, lerp } from '../core/math';
 import { kayKitAssets, LoadedKayKitPack } from './KayKitAssetCache';
 import { MaterialLibrary } from './PixelTextures';
 
 /**
- * Dynamic 3D World-Space Ribbon Trail following the real animated weapon bone!
+ * Single Catmull-Rom spline-interpolated 3D blade slash ribbon.
+ * Produces a silky-smooth, razor-sharp crescent arc even on fast 120ms slashes!
  */
-class WeaponRibbonTrail {
+class SingleBladeRibbon {
   public readonly mesh: THREE.Mesh;
-  private readonly maxSamples = 12;
+  private readonly maxRawSamples = 9;
+  private readonly splineSteps = 26;
   private readonly history: Array<{
     base: THREE.Vector3;
     tip: THREE.Vector3;
   }> = [];
   private readonly positions: Float32Array;
   private readonly mat: THREE.MeshBasicMaterial;
+  private readonly baseCurve = new THREE.CatmullRomCurve3([]);
+  private readonly tipCurve = new THREE.CatmullRomCurve3([]);
+  private readonly tmpBase = new THREE.Vector3();
+  private readonly tmpTip = new THREE.Vector3();
 
   constructor() {
-    const vertCount = this.maxSamples * 2;
+    const vertCount = this.splineSteps * 2;
     this.positions = new Float32Array(vertCount * 3);
     const colors = new Float32Array(vertCount * 3);
     const indices: number[] = [];
 
-    for (let i = 0; i < this.maxSamples; i++) {
-      const fade = 1 - i / (this.maxSamples - 1);
-      const intensity = fade * fade;
-      colors[i * 6 + 0] = 0.72 * intensity;
-      colors[i * 6 + 1] = 0.56 * intensity;
-      colors[i * 6 + 2] = 0.26 * intensity;
+    for (let i = 0; i < this.splineSteps; i++) {
+      const u = i / (this.splineSteps - 1);
+      const fade = Math.pow(1 - u, 1.85);
+      // Inner blade base: warm steel glow
+      colors[i * 6 + 0] = 0.65 * fade;
+      colors[i * 6 + 1] = 0.54 * fade;
+      colors[i * 6 + 2] = 0.34 * fade;
 
-      colors[i * 6 + 3] = 1.42 * intensity;
-      colors[i * 6 + 4] = 1.18 * intensity;
-      colors[i * 6 + 5] = 0.68 * intensity;
+      // Outer cutting edge: bright HDR white-gold flare
+      colors[i * 6 + 3] = 1.65 * fade;
+      colors[i * 6 + 4] = 1.38 * fade;
+      colors[i * 6 + 5] = 0.88 * fade;
 
-      if (i < this.maxSamples - 1) {
+      if (i < this.splineSteps - 1) {
         const a = i * 2;
         const b = i * 2 + 1;
         const c = (i + 1) * 2;
@@ -57,7 +65,7 @@ class WeaponRibbonTrail {
     this.mat = new THREE.MeshBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.78,
+      opacity: 0.82,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
@@ -82,17 +90,22 @@ class WeaponRibbonTrail {
   ): void {
     if (!active) {
       if (this.history.length > 0) this.history.pop();
+      if (this.history.length > 0) this.history.pop();
       if (this.history.length < 2) {
         this.mesh.visible = false;
         return;
       }
     } else {
-      this.history.unshift({
-        base: worldBase.clone(),
-        tip: worldTip.clone(),
-      });
-      if (this.history.length > this.maxSamples) {
-        this.history.length = this.maxSamples;
+      // Avoid duplicate zero-distance sample if paused
+      const head = this.history[0];
+      if (!head || head.tip.distanceToSquared(worldTip) > 0.0004) {
+        this.history.unshift({
+          base: worldBase.clone(),
+          tip: worldTip.clone(),
+        });
+        if (this.history.length > this.maxRawSamples) {
+          this.history.length = this.maxRawSamples;
+        }
       }
     }
 
@@ -101,23 +114,54 @@ class WeaponRibbonTrail {
       return;
     }
 
-    this.mat.color.setHex(isHeavy ? 0xff9f38 : 0xfff4cf);
-    this.mat.opacity = isHeavy ? 0.9 : 0.72;
+    this.mat.color.setHex(isHeavy ? 0xff9e38 : 0xfff6dc);
+    this.mat.opacity = isHeavy ? 0.94 : 0.78;
 
-    for (let i = 0; i < this.maxSamples; i++) {
-      const sample = this.history[Math.min(i, this.history.length - 1)];
+    this.baseCurve.points = this.history.map((h) => h.base);
+    this.tipCurve.points = this.history.map((h) => h.tip);
+
+    for (let i = 0; i < this.splineSteps; i++) {
+      const t = i / (this.splineSteps - 1);
+      this.baseCurve.getPoint(t, this.tmpBase);
+      this.tipCurve.getPoint(t, this.tmpTip);
+
+      // Subtle width taper toward the tail of the slash arc
+      const taper = 1 - t * 0.42;
+      const bx = lerp(this.tmpTip.x, this.tmpBase.x, taper);
+      const by = lerp(this.tmpTip.y, this.tmpBase.y, taper);
+      const bz = lerp(this.tmpTip.z, this.tmpBase.z, taper);
+
       const idx = i * 6;
-      this.positions[idx] = sample.base.x;
-      this.positions[idx + 1] = sample.base.y;
-      this.positions[idx + 2] = sample.base.z;
+      this.positions[idx] = bx;
+      this.positions[idx + 1] = by;
+      this.positions[idx + 2] = bz;
 
-      this.positions[idx + 3] = sample.tip.x;
-      this.positions[idx + 4] = sample.tip.y;
-      this.positions[idx + 5] = sample.tip.z;
+      this.positions[idx + 3] = this.tmpTip.x;
+      this.positions[idx + 4] = this.tmpTip.y;
+      this.positions[idx + 5] = this.tmpTip.z;
     }
 
     this.mesh.geometry.attributes.position.needsUpdate = true;
     this.mesh.visible = true;
+  }
+}
+
+/**
+ * Container exposing `mesh` (a THREE.Group) holding primary + optional Dual-Sword offhand ribbons.
+ */
+class WeaponRibbonTrail {
+  public readonly mesh = new THREE.Group();
+  public readonly primary = new SingleBladeRibbon();
+  public readonly offhand = new SingleBladeRibbon();
+
+  constructor() {
+    this.mesh.add(this.primary.mesh);
+    this.mesh.add(this.offhand.mesh);
+  }
+
+  public clear(): void {
+    this.primary.clear();
+    this.offhand.clear();
   }
 }
 
@@ -140,9 +184,88 @@ const BUILTIN_ROGUE_EQUIPMENT = [
 ];
 
 /**
- * Real Skeletal 3D Knight Visual Rig powered by CC0 KayKit Adventurers (.glb) models
- * (`Knight.glb` & `Rogue_Hooded.glb`) + Three.js `AnimationMixer` with 76 skeletal animations,
- * palette-customized gradient atlases per class/faction, and phase-locked combat choreography.
+ * Exact measured normalized [0..1] keyframe windows for every KayKit melee clip,
+ * ensuring Windup coils right up to the backswing peak and Active whips through the true strike arc!
+ */
+const CLIP_PHASE_WINDOWS: Record<
+  string,
+  { start: number; strikeStart: number; strikeEnd: number; end: number }
+> = {
+  '1H_Melee_Attack_Slice_Diagonal': {
+    start: 0.04,
+    strikeStart: 0.29,
+    strikeEnd: 0.56,
+    end: 0.96,
+  },
+  '1H_Melee_Attack_Slice_Horizontal': {
+    start: 0.04,
+    strikeStart: 0.21,
+    strikeEnd: 0.47,
+    end: 0.95,
+  },
+  '1H_Melee_Attack_Chop': {
+    start: 0.06,
+    strikeStart: 0.46,
+    strikeEnd: 0.65,
+    end: 0.96,
+  },
+  '1H_Melee_Attack_Stab': {
+    start: 0.04,
+    strikeStart: 0.2,
+    strikeEnd: 0.46,
+    end: 0.95,
+  },
+  '2H_Melee_Attack_Chop': {
+    start: 0.05,
+    strikeStart: 0.39,
+    strikeEnd: 0.63,
+    end: 0.96,
+  },
+  '2H_Melee_Attack_Slice': {
+    start: 0.05,
+    strikeStart: 0.29,
+    strikeEnd: 0.56,
+    end: 0.96,
+  },
+  '2H_Melee_Attack_Stab': {
+    start: 0.04,
+    strikeStart: 0.21,
+    strikeEnd: 0.48,
+    end: 0.95,
+  },
+  '2H_Melee_Attack_Spin': {
+    start: 0.04,
+    strikeStart: 0.22,
+    strikeEnd: 0.68,
+    end: 0.96,
+  },
+  Dualwield_Melee_Attack_Slice: {
+    start: 0.06,
+    strikeStart: 0.41,
+    strikeEnd: 0.73,
+    end: 0.97,
+  },
+  Dualwield_Melee_Attack_Chop: {
+    start: 0.05,
+    strikeStart: 0.3,
+    strikeEnd: 0.6,
+    end: 0.96,
+  },
+  Dualwield_Melee_Attack_Stab: {
+    start: 0.04,
+    strikeStart: 0.21,
+    strikeEnd: 0.49,
+    end: 0.95,
+  },
+};
+
+/**
+ * Real Skeletal 3D Knight Visual Rig powered by CC0 KayKit Adventurers (.glb) models:
+ * - Smooth crossfaded 3-phase martial-arts combat choreography with per-clip keyframe landmarks
+ * - 8-way directional velocity-matched locomotion + 4-way directional dodges + reactive block shudder
+ * - Full Jump / Mid-Air / Landing animation lifecycle + floor-pinned contact shadow
+ * - Procedural secondary torso lunge/twist, acceleration lean, turn banking & flowing cape physics
+ * - Catmull-Rom spline weapon slash ribbons (including twin dual-wield ribbons!)
  */
 export class KnightVisualRig {
   public readonly root = new THREE.Group();
@@ -156,8 +279,14 @@ export class KnightVisualRig {
 
   private readonly weaponBaseAnchor = new THREE.Object3D();
   private readonly weaponTipAnchor = new THREE.Object3D();
+  private readonly offhandBaseAnchor = new THREE.Object3D();
+  private readonly offhandTipAnchor = new THREE.Object3D();
+  private hasOffhandBlade = false;
+
   private readonly tmpBaseWorld = new THREE.Vector3();
   private readonly tmpTipWorld = new THREE.Vector3();
+  private readonly tmpOffBaseWorld = new THREE.Vector3();
+  private readonly tmpOffTipWorld = new THREE.Vector3();
 
   private readonly classId: KnightClassId;
   private readonly clothHex: number;
@@ -169,7 +298,19 @@ export class KnightVisualRig {
   private actions = new Map<string, THREE.AnimationAction>();
   private activeAction: THREE.AnimationAction | null = null;
   private activeClipName = '';
+  private isCurrentClipScrubbed = false;
+
   private rootBone: THREE.Object3D | null = null;
+  private chestBone: THREE.Object3D | null = null;
+  private capeNode: THREE.Object3D | null = null;
+
+  // Smoothed procedural secondary motion state
+  private smoothPitch = 0;
+  private smoothRoll = 0;
+  private smoothChestTwist = 0;
+  private smoothCapeLift = 0.08;
+  private prevYaw = 0;
+  private lastSwingId = -1;
 
   private lastAnimTime = -1;
   private lastPreviewElapsed = -1;
@@ -188,7 +329,7 @@ export class KnightVisualRig {
     const vis = this.config.visual;
     this.clothHex = options?.clothOverride ?? vis.clothColor;
 
-    // Ground Contact Shadow + Tactical Foot Ring
+    // Ground Contact Shadow + Tactical Foot Ring (pinned dynamically to ground beneath jumps!)
     this.contactShadow = new THREE.Mesh(
       new THREE.PlaneGeometry(vis.capsuleRadius * 3.2, vis.capsuleRadius * 3.2),
       new THREE.MeshBasicMaterial({
@@ -239,7 +380,6 @@ export class KnightVisualRig {
     }
     this.root.add(this.stunRing);
 
-    // Mount real KayKit GLB model immediately if cached, or hot-mount the instant preload completes!
     kayKitAssets.onReady((pack) => {
       this.mountKayKitCharacter(pack);
     });
@@ -258,6 +398,8 @@ export class KnightVisualRig {
     this.actions.clear();
     this.activeAction = null;
     this.activeClipName = '';
+    this.isCurrentClipScrubbed = false;
+    this.hasOffhandBlade = false;
 
     const isDualRogue = this.classId === 'dual';
     const clonedRig = isDualRogue
@@ -267,7 +409,6 @@ export class KnightVisualRig {
 
     this.clips = isDualRogue ? pack.rogueClips : pack.knightClips;
 
-    // Class-distinct scale so heavy Bastion Knight looks broader & taller than agile Duelist
     if (this.classId === 'hammer') {
       clonedRig.scale.set(0.95, 0.89, 0.95);
     } else if (this.classId === 'spear') {
@@ -278,7 +419,6 @@ export class KnightVisualRig {
       clonedRig.scale.set(0.87, 0.86, 0.87);
     }
 
-    // Build per-fighter customized KayKit gradient atlas material (preserves hit-flash isolation too!)
     const armorTint =
       this.classId === 'hammer'
         ? 0x454a57
@@ -310,7 +450,6 @@ export class KnightVisualRig {
       }
     });
 
-    // Hide all built-in slot items first
     for (const eqName of isDualRogue
       ? BUILTIN_ROGUE_EQUIPMENT
       : BUILTIN_KNIGHT_EQUIPMENT) {
@@ -319,6 +458,11 @@ export class KnightVisualRig {
     }
 
     this.rootBone = clonedRig.getObjectByName('root') ?? null;
+    this.chestBone = clonedRig.getObjectByName('chest') ?? null;
+    this.capeNode =
+      clonedRig.getObjectByName('Knight_Cape') ??
+      clonedRig.getObjectByName('Rogue_Cape') ??
+      null;
 
     // Note: Three.js GLTFLoader sanitizes dots in bone names ('handslot.r' -> 'handslotr')!
     const handSlotR =
@@ -337,7 +481,6 @@ export class KnightVisualRig {
 
     const helmetNode = clonedRig.getObjectByName('Knight_Helmet') ?? null;
 
-    // Equip class-specific 3D weapons, shields & crests!
     this.configureClassLoadout(
       pack,
       clonedRig,
@@ -402,7 +545,6 @@ export class KnightVisualRig {
     );
 
     if (this.classId === 'sword') {
-      // Class A: Armored Paladin Knight with KayKit's winged 2H_Sword + Royal Plume!
       const sword2H = clonedRig.getObjectByName('2H_Sword');
       if (sword2H) {
         sword2H.visible = true;
@@ -413,7 +555,6 @@ export class KnightVisualRig {
       }
 
       if (helmetNode) {
-        // Cascading heraldic plume on top of Knight_Helmet
         const plume = new THREE.Mesh(
           new THREE.ConeGeometry(0.11, 0.44, 8),
           accentClothMat
@@ -424,7 +565,6 @@ export class KnightVisualRig {
         helmetNode.add(plume);
       }
     } else if (this.classId === 'dual') {
-      // Class B: Hooded Medieval Bladedancer wielding Twin KayKit Knight Swords!
       const knightSwordTex = kayKitAssets.getCustomizedAtlasTexture(
         'knight',
         this.clothHex
@@ -449,8 +589,8 @@ export class KnightVisualRig {
         });
         handSlotR.add(rightSword);
 
-        this.weaponBaseAnchor.position.set(0, 0.2, 0);
-        this.weaponTipAnchor.position.set(0, 1.4, 0);
+        this.weaponBaseAnchor.position.set(0, 0.22, 0);
+        this.weaponTipAnchor.position.set(0, 1.42, 0);
         rightSword.add(this.weaponBaseAnchor);
         rightSword.add(this.weaponTipAnchor);
       }
@@ -466,9 +606,14 @@ export class KnightVisualRig {
           }
         });
         handSlotL.add(leftSword);
+
+        this.offhandBaseAnchor.position.set(0, 0.22, 0);
+        this.offhandTipAnchor.position.set(0, 1.42, 0);
+        leftSword.add(this.offhandBaseAnchor);
+        leftSword.add(this.offhandTipAnchor);
+        this.hasOffhandBlade = true;
       }
     } else if (this.classId === 'spear') {
-      // Class C: Vanguard Spear Knight with KayKit Badge_Shield + Winged Partisan Spear!
       const badgeShield = clonedRig.getObjectByName('Badge_Shield');
       if (badgeShield) {
         badgeShield.visible = true;
@@ -481,7 +626,6 @@ export class KnightVisualRig {
           woodShaftMat,
           accentClothMat
         );
-        // Match exact local grip transform of KayKit's 2H_Sword on handslot.r!
         spear.position.set(0, 0.033, 0);
         spear.rotation.y = Math.PI;
         handSlotR.add(spear);
@@ -492,7 +636,6 @@ export class KnightVisualRig {
         spear.add(this.weaponTipAnchor);
       }
     } else {
-      // Class D: Heavy Bastion Knight with KayKit Spike_Shield + Siege Warhammer + Helmet Horns!
       const spikeShield = clonedRig.getObjectByName('Spike_Shield');
       if (spikeShield) {
         spikeShield.visible = true;
@@ -516,7 +659,6 @@ export class KnightVisualRig {
       }
 
       if (helmetNode) {
-        // Curved Siege Horns on Juggernaut Knight_Helmet
         for (const side of [-1, 1]) {
           const curve = new THREE.CatmullRomCurve3([
             new THREE.Vector3(side * 0.42, 0.72, 0.04),
@@ -554,63 +696,48 @@ export class KnightVisualRig {
     const g = new THREE.Group();
 
     const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.048, 0.056, 2.38, 10),
+      new THREE.CylinderGeometry(0.046, 0.054, 2.38, 10),
       woodMat
     );
-    shaft.position.y = 0.78;
+    shaft.position.y = 0.88;
     shaft.castShadow = true;
     g.add(shaft);
 
-    for (const ry of [0.18, 0.75, 1.88]) {
-      const collar = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.068, 0.068, 0.09, 10),
-        goldMat
-      );
-      collar.position.y = ry;
-      g.add(collar);
-    }
+    const buttSpike = new THREE.Mesh(
+      new THREE.ConeGeometry(0.068, 0.24, 8),
+      goldMat
+    );
+    buttSpike.rotation.x = Math.PI;
+    buttSpike.position.y = -0.36;
+    g.add(buttSpike);
 
-    const buttCap = new THREE.Mesh(
-      new THREE.ConeGeometry(0.07, 0.24, 8),
+    const collar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.088, 0.068, 0.22, 10),
+      goldMat
+    );
+    collar.position.y = 2.02;
+    g.add(collar);
+
+    const lugGuard = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.08, 0.44),
+      goldMat
+    );
+    lugGuard.position.y = 2.08;
+    g.add(lugGuard);
+
+    const spearhead = new THREE.Mesh(
+      new THREE.ConeGeometry(0.135, 0.68, 4),
       steelMat
     );
-    buttCap.rotation.x = Math.PI;
-    buttCap.position.y = -0.48;
-    g.add(buttCap);
+    spearhead.scale.set(0.45, 1.0, 1.25);
+    spearhead.position.y = 2.44;
+    spearhead.castShadow = true;
+    g.add(spearhead);
 
-    // Chunky KayKit-proportioned Winged Partisan Spearhead!
-    const pShape = new THREE.Shape();
-    pShape.moveTo(0, 0.76);
-    pShape.lineTo(0.13, 0.36);
-    pShape.lineTo(0.28, 0.18);
-    pShape.lineTo(0.11, 0.12);
-    pShape.lineTo(0.07, 0);
-    pShape.lineTo(-0.07, 0);
-    pShape.lineTo(-0.11, 0.12);
-    pShape.lineTo(-0.28, 0.18);
-    pShape.lineTo(-0.13, 0.36);
-    pShape.closePath();
-
-    const blade = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(pShape, {
-        depth: 0.042,
-        bevelEnabled: true,
-        bevelSize: 0.018,
-        bevelThickness: 0.018,
-        bevelSegments: 2,
-      }),
-      steelMat
-    );
-    blade.position.set(0, 1.92, -0.021);
-    blade.castShadow = true;
-    g.add(blade);
-
-    const pennant = new THREE.Mesh(
-      new THREE.ConeGeometry(0.13, 0.54, 4),
-      clothMat
-    );
-    pennant.position.set(0.22, 1.82, 0);
-    pennant.rotation.z = -Math.PI * 0.42;
+    const pennant = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.48), clothMat);
+    pennant.position.set(0, 1.82, -0.18);
+    pennant.rotation.y = Math.PI * 0.5;
+    pennant.rotation.z = 0.16;
     g.add(pennant);
 
     return g;
@@ -646,8 +773,6 @@ export class KnightVisualRig {
     collar.position.y = 1.08;
     g.add(collar);
 
-    // Chunky Beveled KayKit-proportioned Warhammer Head + Back Raven Spike!
-    // Aligned along X-axis (-X leading strike face, +X rear spike), matching KayKit's 1H_Axe/1H_Sword plane!
     const core = new THREE.Mesh(
       new THREE.BoxGeometry(0.56, 0.34, 0.32),
       darkIronMat
@@ -707,6 +832,11 @@ export class KnightVisualRig {
     if (!next) return null;
 
     if (this.activeClipName !== clipName) {
+      // If blending out of a manually scrubbed attack clip, give it gentle follow-through motion!
+      if (this.activeAction && this.isCurrentClipScrubbed) {
+        this.activeAction.setEffectiveTimeScale(0.32);
+      }
+
       next.reset();
       next.setLoop(
         loop ? THREE.LoopRepeat : THREE.LoopOnce,
@@ -724,6 +854,7 @@ export class KnightVisualRig {
 
       this.activeAction = next;
       this.activeClipName = clipName;
+      this.isCurrentClipScrubbed = false;
     } else {
       next.setEffectiveTimeScale(timeScale);
     }
@@ -732,15 +863,17 @@ export class KnightVisualRig {
   }
 
   /**
-   * Immediately activates a scrubbed pose clip at full weight=1 with timeScale=0,
-   * avoiding stuck crossfade weights when manually driving `action.time` by combat phase!
+   * Smoothly crossfades into a phase-scrubbed attack/charge clip with ZERO hard-cut snapping!
    */
-  private activateScrubClip(clipName: string): THREE.AnimationAction | null {
+  private blendToScrubClip(
+    clipName: string,
+    fadeDuration = 0.075,
+    forceRestart = false
+  ): THREE.AnimationAction | null {
     const next = this.getAction(clipName);
     if (!next || !this.mixer) return null;
 
     if (this.activeClipName !== clipName) {
-      this.mixer.stopAllAction();
       next.reset();
       next.setLoop(THREE.LoopOnce, 1);
       next.clampWhenFinished = true;
@@ -749,26 +882,42 @@ export class KnightVisualRig {
       next.setEffectiveTimeScale(0);
       next.play();
 
+      if (this.activeAction && this.activeAction !== next) {
+        this.activeAction.crossFadeTo(next, fadeDuration, false);
+      }
+
       this.activeAction = next;
       this.activeClipName = clipName;
-    } else {
+      this.isCurrentClipScrubbed = true;
+    } else if (forceRestart) {
       next.setEffectiveWeight(1);
       next.setEffectiveTimeScale(0);
+    } else {
+      next.setEffectiveTimeScale(0);
+      this.isCurrentClipScrubbed = true;
     }
 
     return next;
   }
 
+  /**
+   * Selects distinct, choreographed KayKit attack clips for EVERY combo step across all 4 classes!
+   */
   private resolveAttackClipName(
     style: AttackAnimStyle,
-    isHeavy: boolean
+    isHeavy: boolean,
+    comboStep: number
   ): string {
     if (style === 'dual_left') return 'Dualwield_Melee_Attack_Slice';
     if (style === 'dual_cross') return 'Dualwield_Melee_Attack_Chop';
     if (style === 'dual_finisher') {
       return isHeavy ? '2H_Melee_Attack_Spin' : 'Dualwield_Melee_Attack_Stab';
     }
-    if (style === 'spear_poke') return '1H_Melee_Attack_Stab';
+    if (style === 'spear_poke') {
+      return comboStep % 2 === 0
+        ? '1H_Melee_Attack_Stab'
+        : '2H_Melee_Attack_Stab';
+    }
     if (style === 'spear_impale') return '2H_Melee_Attack_Stab';
     if (style === 'overhead_cleave' || style === 'hammer_slam') {
       return '2H_Melee_Attack_Chop';
@@ -778,16 +927,29 @@ export class KnightVisualRig {
         ? '1H_Melee_Attack_Chop'
         : '1H_Melee_Attack_Slice_Diagonal';
     }
-    return this.classId === 'hammer'
-      ? '1H_Melee_Attack_Chop'
-      : '1H_Melee_Attack_Slice_Horizontal';
+    // slash_right (2nd combo swing)
+    return '1H_Melee_Attack_Slice_Horizontal';
   }
 
   public syncFromFighter(fighter: Fighter): void {
     this.root.position.set(fighter.body.x, fighter.body.y, fighter.body.z);
     this.root.rotation.y = fighter.yaw;
 
-    // Hit-flash tint across all character & weapon materials
+    // Pin contact shadow & foot ring directly onto the floor beneath jumping knights!
+    const airHeight = Math.max(
+      0,
+      fighter.body.y - fighter.body.supportFloorY
+    );
+    this.contactShadow.position.y = 0.018 - airHeight;
+    this.footRing.position.y = 0.026 - airHeight;
+    const shadowScale = fighter.isAlive
+      ? Math.max(0.42, 1.0 - airHeight * 0.22)
+      : 1.35;
+    this.contactShadow.scale.setScalar(shadowScale);
+    (this.contactShadow.material as THREE.MeshBasicMaterial).opacity =
+      fighter.isAlive ? Math.max(0.24, 0.76 - airHeight * 0.22) : 0.76;
+
+    // Hit-flash tint
     const flash = fighter.hitFlashTimer > 0;
     for (let i = 0; i < this.tintMaterials.length; i++) {
       const m = this.tintMaterials[i];
@@ -805,7 +967,6 @@ export class KnightVisualRig {
       this.stunRing.rotation.y = fighter.animTime * 4.8;
     }
     this.footRing.visible = fighter.isAlive;
-    this.contactShadow.scale.setScalar(fighter.isAlive ? 1.0 : 1.35);
 
     if (!this.mixer) {
       this.trail.clear();
@@ -815,8 +976,20 @@ export class KnightVisualRig {
     const dt =
       this.lastAnimTime < 0
         ? 0.016
-        : clamp(fighter.animTime - this.lastAnimTime, 0, 0.1);
+        : clamp(fighter.animTime - this.lastAnimTime, 0.001, 0.1);
     this.lastAnimTime = fighter.animTime;
+
+    const yawRate = angleDiff(this.prevYaw, fighter.yaw) / Math.max(0.008, dt);
+    this.prevYaw = fighter.yaw;
+
+    // Local-space velocity decomposition for 8-way directional animations & banking
+    const sinY = Math.sin(fighter.yaw);
+    const cosY = Math.cos(fighter.yaw);
+    const vx = fighter.body.vx;
+    const vz = fighter.body.vz;
+    const localFwdVel = vx * sinY + vz * cosY;
+    const localRightVel = -vx * cosY + vz * sinY;
+    const horizSpeed = Math.hypot(vx, vz);
 
     const inSwing =
       (fighter.state === 'Attacking' || fighter.state === 'HeavyAttacking') &&
@@ -824,32 +997,71 @@ export class KnightVisualRig {
 
     if (!fighter.isAlive || fighter.state === 'Dead') {
       const deathClip = this.classId === 'hammer' ? 'Death_B' : 'Death_A';
-      this.fadeToClip(deathClip, 0.12, false, 1.0);
+      this.fadeToClip(deathClip, 0.14, false, 1.0);
       this.mixer.update(dt);
       this.lockInPlaceRoot();
+      this.modelHolder.rotation.set(0, 0, 0);
+      this.modelHolder.position.y = 0;
       this.trail.clear();
       return;
     }
 
+    let targetPitch = 0;
+    let targetRoll = 0;
+    let targetChestTwist = 0;
+
     if (inSwing && fighter.activeAttack) {
       const atk = fighter.activeAttack;
-      const clipName = this.resolveAttackClipName(atk.animStyle, atk.isHeavy);
-      const act = this.activateScrubClip(clipName);
+      const clipName = this.resolveAttackClipName(
+        atk.animStyle,
+        atk.isHeavy,
+        fighter.activeComboStep
+      );
+      const isNewSwing = fighter.swingInstanceId !== this.lastSwingId;
+      if (isNewSwing) {
+        this.lastSwingId = fighter.swingInstanceId;
+        this.trail.clear();
+      }
+
+      const act = this.blendToScrubClip(clipName, 0.07, isNewSwing);
       if (act) {
         act.paused = false;
         const clipDur = act.getClip().duration;
-        // Phase-locked animation scrubbing: Active hitbox window ALWAYS matches peak strike frames!
-        let norm = 0;
+        const win = CLIP_PHASE_WINDOWS[clipName] ?? {
+          start: 0.04,
+          strikeStart: 0.3,
+          strikeEnd: 0.62,
+          end: 0.96,
+        };
+
+        let norm = win.start;
+        const swingSign = fighter.activeComboStep % 2 === 0 ? 1 : -1;
+
         if (fighter.attackPhase === 'Windup') {
-          const p = 1 - clamp(fighter.attackPhaseTimer / atk.windupDuration, 0, 1);
-          norm = p * 0.34;
+          const p =
+            1 - clamp(fighter.attackPhaseTimer / atk.windupDuration, 0, 1);
+          // Fast initial draw into taut martial-arts anticipation hold!
+          const eased = 1 - Math.pow(1 - p, 1.85);
+          norm = lerp(win.start, win.strikeStart, eased);
+          targetPitch = -0.07 * eased;
+          targetChestTwist = -0.16 * swingSign * eased;
         } else if (fighter.attackPhase === 'Active') {
-          const p = 1 - clamp(fighter.attackPhaseTimer / atk.activeDuration, 0, 1);
-          norm = 0.34 + p * 0.34;
+          const p =
+            1 - clamp(fighter.attackPhaseTimer / atk.activeDuration, 0, 1);
+          // Explosive fast-out power snap across the active strike window!
+          const eased = 1 - Math.pow(1 - p, 2.35);
+          norm = lerp(win.strikeStart, win.strikeEnd, eased);
+          targetPitch = (atk.isHeavy ? 0.19 : 0.12) * Math.sin(p * Math.PI * 0.85 + 0.15);
+          targetChestTwist = 0.22 * swingSign * eased;
         } else {
-          const p = 1 - clamp(fighter.attackPhaseTimer / atk.recoveryDuration, 0, 1);
-          norm = 0.68 + p * 0.32;
+          const p =
+            1 - clamp(fighter.attackPhaseTimer / atk.recoveryDuration, 0, 1);
+          const eased = 1 - Math.pow(1 - p, 1.65);
+          norm = lerp(win.strikeEnd, win.end, eased);
+          targetPitch = (atk.isHeavy ? 0.12 : 0.06) * (1 - eased);
+          targetChestTwist = 0.14 * swingSign * (1 - eased);
         }
+
         act.time = clamp(norm, 0, 0.995) * clipDur;
       }
       this.mixer.update(dt);
@@ -860,41 +1072,110 @@ export class KnightVisualRig {
           : this.classId === 'dual'
           ? '2H_Melee_Attack_Spin'
           : '2H_Melee_Attack_Chop';
-      const act = this.activateScrubClip(heavyClip);
+      const win = CLIP_PHASE_WINDOWS[heavyClip];
+      const act = this.blendToScrubClip(heavyClip, 0.09);
       if (act) {
         act.paused = false;
-        act.time =
-          clamp(fighter.chargeRatio, 0, 1) * 0.32 * act.getClip().duration;
+        const c = clamp(fighter.chargeRatio, 0, 1);
+        const eased = 1 - Math.pow(1 - c, 1.7);
+        const u = lerp(win.start, win.strikeStart, eased);
+        act.time = u * act.getClip().duration;
+        targetPitch = -0.09 * eased;
+        targetChestTwist = -0.18 * eased;
       }
       this.mixer.update(dt);
+    } else if (!fighter.body.isGrounded) {
+      // AIRBORNE: Takeoff -> Mid-Air Soar!
+      if (fighter.body.vy > 1.8) {
+        this.fadeToClip('Jump_Start', 0.06, false, 1.35);
+        targetPitch = -0.06;
+      } else {
+        this.fadeToClip('Jump_Idle', 0.12, true, 1.05);
+        targetPitch = clamp(-fighter.body.vy * 0.012, -0.08, 0.12);
+      }
+      targetRoll = clamp(-localRightVel * 0.018, -0.09, 0.09);
+      this.mixer.update(dt);
     } else if (fighter.state === 'Blocking') {
-      const blockClip =
-        fighter.classId === 'spear' ? 'Block_Attack' : 'Blocking';
-      this.fadeToClip(blockClip, 0.08, true, 1.0);
+      if (fighter.blockImpactTimer > 0) {
+        // Visibly shudder shield/sword on blocked strike!
+        this.fadeToClip('Block_Hit', 0.04, false, 1.55);
+        targetPitch = -0.08;
+      } else {
+        const blockClip =
+          fighter.classId === 'spear' && fighter.blockElapsed < 0.22
+            ? 'Block_Attack'
+            : 'Blocking';
+        this.fadeToClip(blockClip, 0.09, true, 1.0);
+      }
       this.mixer.update(dt);
     } else if (fighter.state === 'Dodging') {
       const mode = fighter.config.dodge.mode;
-      const dodgeClip =
-        mode === 'shield_shove'
-          ? 'Block_Attack'
-          : mode === 'backstep'
-          ? 'Dodge_Backward'
-          : 'Dodge_Forward';
+      let dodgeClip = 'Dodge_Forward';
+      if (mode === 'shield_shove') {
+        dodgeClip = 'Block_Attack';
+        targetPitch = 0.15;
+      } else {
+        const dFwd = fighter.dodgeDirX * sinY + fighter.dodgeDirZ * cosY;
+        const dRight = -fighter.dodgeDirX * cosY + fighter.dodgeDirZ * sinY;
+        if (Math.abs(dRight) > Math.abs(dFwd)) {
+          dodgeClip = dRight > 0 ? 'Dodge_Right' : 'Dodge_Left';
+          targetRoll = dRight > 0 ? -0.14 : 0.14;
+        } else {
+          dodgeClip = dFwd < -0.2 ? 'Dodge_Backward' : 'Dodge_Forward';
+          targetPitch = dFwd < -0.2 ? -0.1 : 0.12;
+        }
+      }
       const dur = Math.max(0.15, fighter.config.dodge.duration);
       const clipObj = this.clips.get(dodgeClip);
-      const speed = clipObj ? clipObj.duration / dur : 1.2;
+      const speed = clipObj ? clipObj.duration / dur : 1.25;
       this.fadeToClip(dodgeClip, 0.05, false, speed);
       this.mixer.update(dt);
     } else if (fighter.state === 'HitReaction') {
-      this.fadeToClip('Hit_A', 0.05, false, 1.35);
+      this.fadeToClip('Hit_A', 0.04, false, 1.4);
+      targetPitch = -0.14;
       this.mixer.update(dt);
     } else if (fighter.state === 'Stunned') {
       this.fadeToClip('Hit_B', 0.1, true, 0.65);
+      targetPitch = 0.06;
       this.mixer.update(dt);
     } else if (fighter.state === 'Moving') {
-      const moveClip = fighter.isSprinting ? 'Running_A' : 'Walking_A';
-      const speed = fighter.isSprinting ? 1.22 : 1.32;
-      this.fadeToClip(moveClip, 0.12, true, speed);
+      // 8-Way Directional Velocity-Matched Locomotion!
+      let moveClip = 'Walking_A';
+      let refSpeed = 3.9;
+
+      if (fighter.isSprinting && localFwdVel >= -0.5) {
+        moveClip = this.classId === 'dual' ? 'Running_B' : 'Running_A';
+        refSpeed = 5.9;
+        targetPitch = 0.095;
+      } else if (Math.abs(localRightVel) > Math.abs(localFwdVel) * 1.15) {
+        moveClip =
+          localRightVel > 0 ? 'Running_Strafe_Right' : 'Running_Strafe_Left';
+        refSpeed = 4.6;
+      } else if (localFwdVel < -0.55) {
+        moveClip = 'Walking_Backwards';
+        refSpeed = 3.6;
+        targetPitch = -0.04;
+      } else if (horizSpeed > 4.6) {
+        moveClip = 'Running_A';
+        refSpeed = 5.6;
+        targetPitch = 0.065;
+      } else {
+        moveClip = 'Walking_A';
+        refSpeed = 3.85;
+        targetPitch = 0.03;
+      }
+
+      const playbackSpeed = clamp(horizSpeed / refSpeed, 0.72, 1.48);
+      this.fadeToClip(moveClip, 0.12, true, playbackSpeed);
+      targetRoll = clamp(
+        -yawRate * 0.016 - localRightVel * 0.015,
+        -0.11,
+        0.11
+      );
+      this.mixer.update(dt);
+    } else if (fighter.landingTimer > 0) {
+      // Crisp athletic landing absorption right after touching down!
+      this.fadeToClip('Jump_Land', 0.06, false, 1.55);
       this.mixer.update(dt);
     } else {
       const idleClip =
@@ -906,8 +1187,9 @@ export class KnightVisualRig {
     }
 
     this.lockInPlaceRoot();
+    this.applySecondaryProceduralMotion(dt, fighter, horizSpeed, targetPitch, targetRoll, targetChestTwist);
 
-    // Update 3D Weapon Slash Ribbon in World Space!
+    // Update 3D Spline Weapon Slash Ribbons in World Space!
     this.root.updateMatrixWorld(true);
     this.weaponBaseAnchor.getWorldPosition(this.tmpBaseWorld);
     this.weaponTipAnchor.getWorldPosition(this.tmpTipWorld);
@@ -916,14 +1198,87 @@ export class KnightVisualRig {
       inSwing &&
       (fighter.attackPhase === 'Active' ||
         (fighter.attackPhase === 'Windup' &&
-          fighter.attackPhaseTimer < 0.05));
+          fighter.attackPhaseTimer < 0.045) ||
+        (fighter.attackPhase === 'Recovery' &&
+          fighter.activeAttack !== null &&
+          fighter.attackPhaseTimer >
+            fighter.activeAttack.recoveryDuration - 0.04));
 
-    this.trail.recordAndBuild(
+    const isHeavySwing = Boolean(fighter.activeAttack?.isHeavy);
+    this.trail.primary.recordAndBuild(
       this.tmpBaseWorld,
       this.tmpTipWorld,
-      Boolean(fighter.activeAttack?.isHeavy),
+      isHeavySwing,
       emitRibbon
     );
+
+    if (this.hasOffhandBlade) {
+      this.offhandBaseAnchor.getWorldPosition(this.tmpOffBaseWorld);
+      this.offhandTipAnchor.getWorldPosition(this.tmpOffTipWorld);
+      this.trail.offhand.recordAndBuild(
+        this.tmpOffBaseWorld,
+        this.tmpOffTipWorld,
+        isHeavySwing,
+        emitRibbon
+      );
+    }
+  }
+
+  /**
+   * Applies smooth secondary upper-body torque, velocity lean/banking, landing knee-cushion,
+   * and flowing cape physics on top of skeletal keyframes!
+   */
+  private applySecondaryProceduralMotion(
+    dt: number,
+    fighter: Fighter,
+    horizSpeed: number,
+    targetPitch: number,
+    targetRoll: number,
+    targetChestTwist: number
+  ): void {
+    const smoothAlpha = 1 - Math.exp(-16 * dt);
+    this.smoothPitch = lerp(this.smoothPitch, targetPitch, smoothAlpha);
+    this.smoothRoll = lerp(this.smoothRoll, targetRoll, smoothAlpha);
+    this.smoothChestTwist = lerp(
+      this.smoothChestTwist,
+      targetChestTwist,
+      smoothAlpha
+    );
+
+    // Subtle knee-compression spring on jump landing
+    let landDipY = 0;
+    if (fighter.landingTimer > 0) {
+      const p = fighter.landingTimer / 0.24;
+      landDipY = -Math.sin(p * Math.PI) * 0.085;
+    }
+
+    this.modelHolder.position.y = landDipY;
+    this.modelHolder.rotation.x = this.smoothPitch;
+    this.modelHolder.rotation.z = this.smoothRoll;
+
+    if (this.chestBone) {
+      this.chestBone.rotation.y += this.smoothChestTwist;
+    }
+
+    // Dynamic cape billow when sprinting, leaping, or falling through air!
+    if (this.capeNode) {
+      let desiredLift = 0.06 + clamp(horizSpeed / 8.0, 0, 0.52);
+      if (!fighter.body.isGrounded) {
+        desiredLift += clamp(-fighter.body.vy * 0.055 + 0.28, 0.12, 0.65);
+      }
+      if (fighter.state === 'Dodging') {
+        desiredLift += 0.35;
+      }
+      const flutter =
+        Math.sin(fighter.animTime * (6.5 + horizSpeed * 1.4)) *
+        (0.03 + horizSpeed * 0.008);
+      this.smoothCapeLift = lerp(
+        this.smoothCapeLift,
+        clamp(desiredLift, 0.04, 1.05),
+        1 - Math.exp(-11 * dt)
+      );
+      this.capeNode.rotation.x = this.smoothCapeLift + flutter;
+    }
   }
 
   public updatePreviewIdle(elapsed: number): void {
@@ -931,7 +1286,7 @@ export class KnightVisualRig {
     const dt =
       this.lastPreviewElapsed < 0
         ? 0.016
-        : clamp(elapsed - this.lastPreviewElapsed, 0, 0.1);
+        : clamp(elapsed - this.lastPreviewElapsed, 0.001, 0.1);
     this.lastPreviewElapsed = elapsed;
 
     const idleClip =
@@ -941,6 +1296,9 @@ export class KnightVisualRig {
     this.fadeToClip(idleClip, 0.15, true, 1.0);
     this.mixer.update(dt);
     this.lockInPlaceRoot();
+    if (this.capeNode) {
+      this.capeNode.rotation.x = 0.08 + Math.sin(elapsed * 2.4) * 0.04;
+    }
   }
 
   private lockInPlaceRoot(): void {

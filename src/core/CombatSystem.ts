@@ -146,8 +146,8 @@ export class CombatSystem {
     attack: AttackConfig,
     arena: ArenaConfig
   ): { dirX: number; dirZ: number; impactX: number; impactZ: number } | null {
-    // Vertical separation check: cannot hit a fighter on a different tier (e.g. under/over bridge)
-    if (Math.abs(victim.body.y - attacker.body.y) > 1.65) {
+    // Vertical separation check: allows jump-slashes (<= 1.88m) while blocking under/over 4m bridge hits!
+    if (Math.abs(victim.body.y - attacker.body.y) > 1.88) {
       return null;
     }
 
@@ -239,6 +239,7 @@ export class CombatSystem {
         // Class B: Timed Parry!
         if (def.mode === 'timed_parry') {
           victim.stats.blocksSucceeded += 1;
+          victim.blockImpactTimer = 0.28;
           // Push & stun attacker!
           attacker.body.applyImpulse(
             -dirX * def.deflectPushback,
@@ -267,6 +268,7 @@ export class CombatSystem {
           if (victim.stamina >= staminaHitCost) {
             victim.drainStaminaClamped(staminaHitCost);
             victim.stats.blocksSucceeded += 1;
+            victim.blockImpactTimer = 0.28;
 
             const rawChip =
               attack.damage *

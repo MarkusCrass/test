@@ -32,6 +32,7 @@ export interface FighterInputIntent {
   heavyAttackRequest: boolean; // Explicit heavy attack request (used by bots/tests)
   blockHeld: boolean;
   dodgePressed: boolean;
+  jumpPressed?: boolean;
 }
 
 export function createEmptyIntent(yaw = 0): FighterInputIntent {
@@ -46,6 +47,7 @@ export function createEmptyIntent(yaw = 0): FighterInputIntent {
     heavyAttackRequest: false,
     blockHeld: false,
     dodgePressed: false,
+    jumpPressed: false,
   };
 }
 
@@ -93,18 +95,22 @@ export class Fighter {
   public swingInstanceId = 0;
   public readonly hitTargetsThisSwing = new Set<string>();
   public comboIndex = 0;
+  public activeComboStep = 0;
   public comboResetTimer = 0;
 
   // Defense / parry / deflect data
   public blockElapsed = 0;
+  public blockImpactTimer = 0;
   public defenseLockoutTimer = 0;
   public deflectPulsePending = false;
 
-  // Dodge / shield shove data
+  // Dodge / shield shove & Jump data
   public dodgeDirX = 0;
   public dodgeDirZ = 1;
   public dodgeElapsed = 0;
   public shoveHitIds = new Set<string>();
+  public jumpCooldownTimer = 0;
+  public landingTimer = 0;
 
   // Visual / feedback helpers
   public hitFlashTimer = 0;
@@ -201,13 +207,28 @@ export class Fighter {
     intent: FighterInputIntent,
     arena: ArenaConfig,
     combatEnabled: boolean
-  ): { stepped: boolean; swungAttack: AttackConfig | null } {
+  ): {
+    stepped: boolean;
+    jumped: boolean;
+    landed: boolean;
+    swungAttack: AttackConfig | null;
+  } {
     let stepped = false;
+    let jumped = false;
     let swungAttack: AttackConfig | null = null;
 
     this.animTime += dt;
     if (this.hitFlashTimer > 0) {
       this.hitFlashTimer = Math.max(0, this.hitFlashTimer - dt);
+    }
+    if (this.blockImpactTimer > 0) {
+      this.blockImpactTimer = Math.max(0, this.blockImpactTimer - dt);
+    }
+    if (this.jumpCooldownTimer > 0) {
+      this.jumpCooldownTimer = Math.max(0, this.jumpCooldownTimer - dt);
+    }
+    if (this.landingTimer > 0) {
+      this.landingTimer = Math.max(0, this.landingTimer - dt);
     }
     if (this.defenseLockoutTimer > 0) {
       this.defenseLockoutTimer = Math.max(0, this.defenseLockoutTimer - dt);
@@ -223,7 +244,7 @@ export class Fighter {
       this.body.vx = 0;
       this.body.vz = 0;
       this.body.moveAndSlide(dt, arena);
-      return { stepped: false, swungAttack: null };
+      return { stepped: false, jumped: false, landed: false, swungAttack: null };
     }
 
     if (combatEnabled) {
@@ -312,12 +333,40 @@ export class Fighter {
       }
     }
 
-    // Integrate CharacterBody movement
+    // Optional athletic Jump (Space) from Idle, Moving, or Blocking!
+    if (
+      effectiveIntent.jumpPressed &&
+      this.body.isGrounded &&
+      this.jumpCooldownTimer <= 0 &&
+      (this.state === 'Idle' ||
+        this.state === 'Moving' ||
+        this.state === 'Blocking') &&
+      this.spendStamina(9)
+    ) {
+      const jumpVel =
+        this.classId === 'dual'
+          ? 9.8
+          : this.classId === 'hammer'
+          ? 8.9
+          : 9.4;
+      if (this.body.jump(jumpVel)) {
+        this.jumpCooldownTimer = 0.18;
+        this.landingTimer = 0;
+        jumped = true;
+      }
+    }
+
+    // Integrate CharacterBody movement & vertical physics
     const prevX = this.body.x;
     const prevZ = this.body.z;
     this.body.moveAndSlide(dt, arena);
 
-    if (this.state === 'Moving') {
+    const landed = this.body.justLanded;
+    if (landed) {
+      this.landingTimer = 0.24;
+    }
+
+    if (this.state === 'Moving' && this.body.isGrounded) {
       const moved = Math.hypot(this.body.x - prevX, this.body.z - prevZ);
       this.footstepAccum += moved;
       const stepStride = this.isSprinting ? 2.1 : 1.75;
@@ -332,7 +381,7 @@ export class Fighter {
     this.prevAttackHeld = effectiveIntent.attackHeld;
     this.prevBlockHeld = effectiveIntent.blockHeld;
 
-    return { stepped, swungAttack };
+    return { stepped, jumped, landed, swungAttack };
   }
 
   private handleNeutralInput(
@@ -500,9 +549,11 @@ export class Fighter {
     aimYaw: number,
     hasAimOverride: boolean
   ): AttackConfig | null {
-    const attack = this.peekNextLightAttack();
+    const stepIdx = this.comboIndex % this.config.lightCombo.length;
+    const attack = this.config.lightCombo[stepIdx];
     const res = this.startAttack(attack, aimYaw, hasAimOverride);
     if (res) {
+      this.activeComboStep = stepIdx;
       this.comboIndex = (this.comboIndex + 1) % this.config.lightCombo.length;
     }
     return res;
@@ -579,9 +630,16 @@ export class Fighter {
         this.attackPhaseTimer = Math.max(0.01, attack.recoveryDuration - overflow);
       }
     } else if (this.attackPhase === 'Recovery') {
-      // Decelerate to a stop during Recovery; rotation stays locked
-      this.body.vx = 0;
-      this.body.vz = 0;
+      // Smooth physical momentum deceleration during follow-through; rotation stays locked
+      const remRatio = clamp(
+        this.attackPhaseTimer / Math.max(0.05, attack.recoveryDuration),
+        0,
+        1
+      );
+      const glideSpeed = attack.lungeSpeed * 0.28 * remRatio * remRatio;
+      const fwd = forwardFromYaw(this.yaw);
+      this.body.vx = fwd.x * glideSpeed;
+      this.body.vz = fwd.z * glideSpeed;
 
       if (this.attackPhaseTimer <= 0) {
         this.activeAttack = null;

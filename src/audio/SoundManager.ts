@@ -74,6 +74,18 @@ export class SoundManager {
     this.playNoiseBurst(0.045, 380, 120, gainScale);
   }
 
+  public playJump(isHuman: boolean): void {
+    if (!this.ctx || this.volume <= 0.01) return;
+    const scale = isHuman ? 0.16 : 0.06;
+    this.playNoiseBurst(0.09, 620, 260, scale);
+  }
+
+  public playLanding(isHuman: boolean): void {
+    if (!this.ctx || this.volume <= 0.01) return;
+    const scale = isHuman ? 0.22 : 0.08;
+    this.playNoiseBurst(0.08, 220, 95, scale);
+  }
+
   public playCountdownTick(isFinalGo: boolean): void {
     this.unlock();
     if (!this.ctx || this.volume <= 0.01) return;

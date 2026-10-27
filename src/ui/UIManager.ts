@@ -105,9 +105,9 @@ export class UIManager {
             <div><span class="key-chip">ЛКМ</span> Лёгкий удар</div>
             <div><span class="key-chip">Удерж. ЛКМ</span> Тяжёлый удар</div>
             <div><span class="key-chip">ПКМ</span> Блок / Парирование</div>
-            <div><span class="key-chip">Space</span> Уклонение / Толчок</div>
-            <div><span class="key-chip">Shift</span> Бег</div>
-            <div><span class="key-chip">F3</span> Хитбоксы · <span class="key-chip">Esc</span> Пауза</div>
+            <div><span class="key-chip">Space</span> Прыжок</div>
+            <div><span class="key-chip">Alt / C</span> Уклонение / Толчок</div>
+            <div><span class="key-chip">Shift</span> Бег · <span class="key-chip">F3</span> Хитбоксы · <span class="key-chip">Esc</span> Пауза</div>
           </div>
         </div>
       </div>
@@ -183,7 +183,7 @@ export class UIManager {
             <div id="hud-stam-text" class="bar-text">ВЫНОСЛИВОСТЬ: 100</div>
           </div>
           <div class="hud-hint-line">
-            ЛКМ: Удар / Заряд · ПКМ: Защита · Space: Манёвр · Esc: Пауза
+            ЛКМ: Удар / Заряд · ПКМ: Защита · Space: Прыжок · Alt/C: Рывок · Esc: Пауза
           </div>
         </div>
 

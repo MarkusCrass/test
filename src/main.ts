@@ -18,6 +18,7 @@ class KnightsGameApp {
   private lmbHeld = false;
   private rmbHeld = false;
   private dodgeQueued = false;
+  private jumpQueued = false;
 
   private pointerLocked = false;
   private intentionalUnlock = false;
@@ -67,7 +68,8 @@ class KnightsGameApp {
           this.world.cameraRig.snapBehindTarget(
             next.body.x,
             next.body.z,
-            next.yaw
+            next.yaw,
+            next.body.y
           );
         }
       },
@@ -104,6 +106,7 @@ class KnightsGameApp {
     this.lmbHeld = false;
     this.rmbHeld = false;
     this.dodgeQueued = false;
+    this.jumpQueued = false;
   }
 
   private isCombatInteractive(): boolean {
@@ -223,6 +226,15 @@ class KnightsGameApp {
       this.keysDown.add(e.code);
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault();
+        this.jumpQueued = true;
+      } else if (
+        (e.code === 'AltLeft' ||
+          e.code === 'AltRight' ||
+          e.code === 'KeyC' ||
+          e.code === 'ControlLeft') &&
+        !e.repeat
+      ) {
+        e.preventDefault();
         this.dodgeQueued = true;
       }
     });
@@ -329,7 +341,9 @@ class KnightsGameApp {
     intent.attackHeld = this.lmbHeld;
     intent.blockHeld = this.rmbHeld;
     intent.dodgePressed = this.dodgeQueued;
+    intent.jumpPressed = this.jumpQueued;
     this.dodgeQueued = false;
+    this.jumpQueued = false;
 
     return intent;
   }
@@ -375,9 +389,16 @@ class KnightsGameApp {
       this.releasePointerLock();
     }
 
-    // Footstep & combat audio + 3D effects
+    // Footstep, jump/land & combat audio + 3D effects
     for (const fid of stepOut.footstepFighterIds) {
       this.sound.playFootstep(fid === 'player');
+    }
+    for (const fid of stepOut.jumpedFighterIds) {
+      this.sound.playJump(fid === 'player');
+    }
+    for (const landed of stepOut.landedFighters) {
+      this.sound.playLanding(landed.id === 'player');
+      this.world.effects.spawnLandingDust(landed.x, landed.y, landed.z);
     }
     if (stepOut.events.length > 0) {
       this.sound.handleCombatEvents(stepOut.events);

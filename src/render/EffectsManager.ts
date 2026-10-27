@@ -143,6 +143,11 @@ export class EffectsManager {
     this.debugNodes.clear();
   }
 
+  public spawnLandingDust(x: number, y: number, z: number): void {
+    const deckY = y >= 3.2 ? 4.0 : 0.0;
+    this.spawnDustRing(x, deckY + 0.09, z, 7, 2.7, deckY);
+  }
+
   public spawnFromEvent(ev: CombatEvent): void {
     // Infer underlying deck floor height (Tier 2 Skybridge y=4.0 vs Tier 1 Courtyard y=0.0)
     const deckY = ev.y >= 3.4 ? 4.0 : 0.0;
