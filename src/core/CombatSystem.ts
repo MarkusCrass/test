@@ -93,7 +93,7 @@ export class CombatSystem {
             type: 'ground_slam',
             attackerId: f.id,
             x: f.body.x + fwd.x * 1.7,
-            y: 0.1,
+            y: f.body.y + 0.1,
             z: f.body.z + fwd.z * 1.7,
             isHeavy: true,
           });
@@ -146,6 +146,11 @@ export class CombatSystem {
     attack: AttackConfig,
     arena: ArenaConfig
   ): { dirX: number; dirZ: number; impactX: number; impactZ: number } | null {
+    // Vertical separation check: cannot hit a fighter on a different tier (e.g. under/over bridge)
+    if (Math.abs(victim.body.y - attacker.body.y) > 1.65) {
+      return null;
+    }
+
     const dx = victim.body.x - attacker.body.x;
     const dz = victim.body.z - attacker.body.z;
     const centerDist = Math.hypot(dx, dz);
@@ -174,14 +179,16 @@ export class CombatSystem {
       return null;
     }
 
-    // Obstacle check: cannot strike through stone columns
+    // Obstacle check: cannot strike through stone columns at current tier elevation
     if (
       isLineBlockedByPillars(
         attacker.body.x,
         attacker.body.z,
         victim.body.x,
         victim.body.z,
-        arena
+        arena,
+        0.05,
+        Math.min(attacker.body.y, victim.body.y)
       )
     ) {
       return null;
@@ -200,6 +207,7 @@ export class CombatSystem {
   ): void {
     const { attacker, victim, attack, dirX, dirZ, impactX, impactZ } = strike;
     if (!victim.isAlive) return;
+    const baseY = victim.body.y;
 
     // 1. Dodge invulnerability frames
     if (victim.hasDodgeIframes) {
@@ -208,7 +216,7 @@ export class CombatSystem {
         attackerId: attacker.id,
         victimId: victim.id,
         x: victim.body.x,
-        y: 1.0,
+        y: baseY + 1.0,
         z: victim.body.z,
       });
       return;
@@ -244,7 +252,7 @@ export class CombatSystem {
             attackerId: attacker.id,
             victimId: victim.id,
             x: impactX,
-            y: 1.15,
+            y: baseY + 1.15,
             z: impactZ,
             damage: 0,
           });
@@ -283,7 +291,7 @@ export class CombatSystem {
                   attackerId: attacker.id,
                   victimId: victim.id,
                   x: victim.body.x,
-                  y: 0.9,
+                  y: baseY + 0.9,
                   z: victim.body.z,
                 });
                 return;
@@ -295,7 +303,7 @@ export class CombatSystem {
               attackerId: attacker.id,
               victimId: victim.id,
               x: impactX,
-              y: 1.1,
+              y: baseY + 1.1,
               z: impactZ,
               damage: chipDamage,
             });
@@ -323,7 +331,7 @@ export class CombatSystem {
                 attackerId: attacker.id,
                 victimId: victim.id,
                 x: victim.body.x,
-                y: 0.9,
+                y: baseY + 0.9,
                 z: victim.body.z,
               });
             } else {
@@ -333,7 +341,7 @@ export class CombatSystem {
                 attackerId: attacker.id,
                 victimId: victim.id,
                 x: impactX,
-                y: 1.15,
+                y: baseY + 1.15,
                 z: impactZ,
                 damage: breakDmg,
               });
@@ -358,7 +366,7 @@ export class CombatSystem {
       attackerId: attacker.id,
       victimId: victim.id,
       x: impactX,
-      y: 1.1,
+      y: baseY + 1.1,
       z: impactZ,
       damage: finalDamage,
       isHeavy: attack.isHeavy,
@@ -371,7 +379,7 @@ export class CombatSystem {
         attackerId: attacker.id,
         victimId: victim.id,
         x: victim.body.x,
-        y: 0.9,
+        y: baseY + 0.9,
         z: victim.body.z,
       });
     } else {
@@ -390,6 +398,7 @@ export class CombatSystem {
 
     for (const other of fighters) {
       if (other.id === defender.id || !other.isAlive) continue;
+      if (Math.abs(other.body.y - defender.body.y) > 1.65) continue;
       const dist = distXZ(
         defender.body.x,
         defender.body.z,
@@ -408,7 +417,9 @@ export class CombatSystem {
           defender.body.z,
           other.body.x,
           other.body.z,
-          arena
+          arena,
+          0.05,
+          Math.min(defender.body.y, other.body.y)
         )
       ) {
         continue;
@@ -428,7 +439,7 @@ export class CombatSystem {
         attackerId: defender.id,
         victimId: other.id,
         x: (defender.body.x + other.body.x) * 0.5,
-        y: 1.05,
+        y: other.body.y + 1.05,
         z: (defender.body.z + other.body.z) * 0.5,
       });
     }
@@ -445,6 +456,7 @@ export class CombatSystem {
 
     for (const other of fighters) {
       if (other.id === basher.id || !other.isAlive) continue;
+      if (Math.abs(other.body.y - basher.body.y) > 1.65) continue;
       if (basher.shoveHitIds.has(other.id)) continue;
 
       const dist = distXZ(
@@ -465,7 +477,9 @@ export class CombatSystem {
           basher.body.z,
           other.body.x,
           other.body.z,
-          arena
+          arena,
+          0.05,
+          Math.min(basher.body.y, other.body.y)
         )
       ) {
         continue;
@@ -490,7 +504,7 @@ export class CombatSystem {
         attackerId: basher.id,
         victimId: other.id,
         x: (basher.body.x + other.body.x) * 0.5,
-        y: 1.0,
+        y: other.body.y + 1.0,
         z: (basher.body.z + other.body.z) * 0.5,
         damage: dmg,
       });
@@ -502,7 +516,7 @@ export class CombatSystem {
           attackerId: basher.id,
           victimId: other.id,
           x: other.body.x,
-          y: 0.9,
+          y: other.body.y + 0.9,
           z: other.body.z,
         });
       } else {

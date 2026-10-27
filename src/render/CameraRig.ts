@@ -5,8 +5,8 @@ import { clamp, lerp, segmentCircleHitT, wrapAngle } from '../core/math';
 /**
  * Godot-style SpringArm3D + Camera3D controller:
  * - Free 360 horizontal yaw & clamped vertical pitch
- * - Smooth damped follow on character pivot
- * - Analytical spring-arm collision against outer perimeter walls, stone columns & floor
+ * - Smooth damped 3D follow on character pivot (across Tier 1 Courtyard, Staircases & Tier 2 Skybridge!)
+ * - Analytical spring-arm collision against fortress perimeter walls, stone columns & bridge deck
  * - Controlled impact camera shake
  */
 export class CameraRig {
@@ -20,14 +20,14 @@ export class CameraRig {
   private readonly pivot = new THREE.Vector3(0, 1.65, 0);
   private pivotInitialized = false;
 
-  private readonly idealDistance = 5.5;
-  private currentDistance = 5.5;
+  private readonly idealDistance = 5.65;
+  private currentDistance = 5.65;
 
   private shakeTrauma = 0;
   private shakeTime = 0;
 
   constructor(aspect: number) {
-    this.camera = new THREE.PerspectiveCamera(58, aspect, 0.15, 95);
+    this.camera = new THREE.PerspectiveCamera(58, aspect, 0.15, 165);
   }
 
   public setAspect(aspect: number): void {
@@ -35,11 +35,15 @@ export class CameraRig {
     this.camera.updateProjectionMatrix();
   }
 
-  public snapBehindTarget(x: number, z: number, facingYaw: number): void {
-    // Camera looks along `yaw`: forward = (sin(yaw), cos(yaw)), so camera sits at -forward
+  public snapBehindTarget(
+    x: number,
+    z: number,
+    facingYaw: number,
+    targetY = 0
+  ): void {
     this.yaw = wrapAngle(facingYaw);
     this.pitch = 0.35;
-    this.pivot.set(x, 1.65, z);
+    this.pivot.set(x, targetY + 1.65, z);
     this.pivotInitialized = true;
     this.currentDistance = this.idealDistance;
   }
@@ -73,7 +77,6 @@ export class CameraRig {
   } {
     const fwdX = Math.sin(this.yaw);
     const fwdZ = Math.cos(this.yaw);
-    // Right vector in Three.js right-handed world when looking toward (+sin(yaw), 0, +cos(yaw))
     const rightX = -fwdZ;
     const rightZ = fwdX;
     return { fwdX, fwdZ, rightX, rightZ };
@@ -83,20 +86,21 @@ export class CameraRig {
     dt: number,
     targetX: number,
     targetZ: number,
-    arena: ArenaConfig
+    arena: ArenaConfig,
+    targetY = 0
   ): void {
-    const targetPivotY = 1.68;
+    const targetPivotY = targetY + 1.68;
     if (!this.pivotInitialized) {
       this.pivot.set(targetX, targetPivotY, targetZ);
       this.pivotInitialized = true;
     } else {
       const followAlpha = 1 - Math.exp(-15.0 * dt);
+      const yAlpha = 1 - Math.exp(-12.5 * dt);
       this.pivot.x = lerp(this.pivot.x, targetX, followAlpha);
-      this.pivot.y = lerp(this.pivot.y, targetPivotY, followAlpha);
+      this.pivot.y = lerp(this.pivot.y, targetPivotY, yAlpha);
       this.pivot.z = lerp(this.pivot.z, targetZ, followAlpha);
     }
 
-    // Desired camera offset along (-sin(yaw)*cos(pitch), +sin(pitch), -cos(yaw)*cos(pitch))
     const cosPitch = Math.cos(this.pitch);
     const sinPitch = Math.sin(this.pitch);
     const backX = -Math.sin(this.yaw) * cosPitch;
@@ -106,10 +110,27 @@ export class CameraRig {
     const desiredX = this.pivot.x + backX * this.idealDistance;
     const desiredZ = this.pivot.z + backZ * this.idealDistance;
 
-    // Spring-arm collision fraction minT in [0.18, 1.0]
     let minT = 1.0;
 
-    // 1. Check outer stone perimeter wall (interior of cylinder r = arena.radius - 0.55)
+    // 1. Check rectangular fortress perimeter walls (if present)
+    if (arena.boundsHalfX && arena.boundsHalfZ) {
+      const limX = arena.boundsHalfX - 0.55;
+      const limZ = arena.boundsHalfZ - 0.55;
+      const dx = desiredX - this.pivot.x;
+      const dz = desiredZ - this.pivot.z;
+      if (Math.abs(desiredX) > limX && Math.abs(dx) > 1e-5) {
+        const edgeX = Math.sign(desiredX) * limX;
+        const tx = (edgeX - this.pivot.x) / dx;
+        minT = Math.min(minT, clamp(tx, 0.2, 1.0));
+      }
+      if (Math.abs(desiredZ) > limZ && Math.abs(dz) > 1e-5) {
+        const edgeZ = Math.sign(desiredZ) * limZ;
+        const tz = (edgeZ - this.pivot.z) / dz;
+        minT = Math.min(minT, clamp(tz, 0.2, 1.0));
+      }
+    }
+
+    // 2. Check outer bounding circle
     const wallR = arena.radius - 0.55;
     const wallT = this.rayInsideCircleExitT(
       this.pivot.x,
@@ -122,9 +143,13 @@ export class CameraRig {
       minT = wallT;
     }
 
-    // 2. Check camera-blocking stone pillars
+    // 3. Check camera-blocking stone pillars at current tier elevation
     for (const c of arena.circles) {
       if (!c.blocksCamera) continue;
+      const cMinY = c.minY ?? 0;
+      const cMaxY = cMinY + c.height;
+      if (targetY >= cMaxY - 0.15) continue;
+
       const hitT = segmentCircleHitT(
         this.pivot.x,
         this.pivot.z,
@@ -141,14 +166,12 @@ export class CameraRig {
 
     const safeDist = Math.max(1.25, this.idealDistance * minT);
     if (safeDist < this.currentDistance) {
-      // Pull inward briskly to never clip walls
       this.currentDistance = lerp(
         this.currentDistance,
         safeDist,
         1 - Math.exp(-26 * dt)
       );
     } else {
-      // Ease outward smoothly when obstacle clears
       this.currentDistance = lerp(
         this.currentDistance,
         safeDist,
@@ -157,10 +180,12 @@ export class CameraRig {
     }
 
     let camX = this.pivot.x + backX * this.currentDistance;
-    let camY = Math.max(0.65, this.pivot.y + backY * this.currentDistance);
+    let camY = Math.max(
+      targetY + 0.65,
+      this.pivot.y + backY * this.currentDistance
+    );
     let camZ = this.pivot.z + backZ * this.currentDistance;
 
-    // Subtle, controlled camera shake on heavy impacts
     if (this.shakeTrauma > 0) {
       this.shakeTime += dt * 38;
       const mag = this.shakeTrauma * this.shakeTrauma * 0.22;
@@ -171,22 +196,18 @@ export class CameraRig {
     }
 
     this.camera.position.set(camX, camY, camZ);
-    this.camera.lookAt(
-      this.pivot.x,
-      this.pivot.y - 0.12,
-      this.pivot.z
-    );
+    this.camera.lookAt(this.pivot.x, this.pivot.y - 0.12, this.pivot.z);
   }
 
   /**
-   * Panoramic arena camera for Main Menu background.
+   * Panoramic arena camera for Main Menu background showcasing the Two-Tier Skybridge & Staircases!
    */
   public updateMenuOrbit(elapsed: number): void {
     this.pivotInitialized = false;
-    const angle = elapsed * 0.16;
-    const r = 10.6;
-    this.camera.position.set(Math.cos(angle) * r, 5.2, Math.sin(angle) * r);
-    this.camera.lookAt(0, 1.3, 0);
+    const angle = elapsed * 0.14;
+    const r = 17.6;
+    this.camera.position.set(Math.cos(angle) * r, 8.8, Math.sin(angle) * r);
+    this.camera.lookAt(0, 3.1, 0);
   }
 
   /**
@@ -194,14 +215,10 @@ export class CameraRig {
    */
   public updateShowcaseCamera(pedestalX: number, pedestalZ: number): void {
     this.pivotInitialized = false;
-    // Place knight slightly on the right half so left UI panel has clean breathing room
     this.camera.position.set(pedestalX - 0.85, 1.95, pedestalZ + 3.45);
     this.camera.lookAt(pedestalX - 0.55, 1.28, pedestalZ);
   }
 
-  /**
-   * Computes fraction t in [0..1] where segment A->B exits circle of radius R centered at (0,0).
-   */
   private rayInsideCircleExitT(
     ax: number,
     az: number,

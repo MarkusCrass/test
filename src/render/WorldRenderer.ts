@@ -12,6 +12,7 @@ import { CombatEvent } from '../core/CombatSystem';
 import { MatchManager } from '../core/MatchManager';
 import { ArenaBuilder } from './ArenaBuilder';
 import { CameraRig } from './CameraRig';
+import { dungeonAssets } from './DungeonAssetCache';
 import { EffectsManager } from './EffectsManager';
 import { kayKitAssets } from './KayKitAssetCache';
 import { KnightVisualRig } from './KnightMesh';
@@ -91,7 +92,7 @@ export class WorldRenderer {
   private readonly showcaseGroup = new THREE.Group();
   private showcaseRig: KnightVisualRig | null = null;
   private showcaseClassId: KnightClassId | null = null;
-  private readonly showcasePos = new THREE.Vector3(0, 0.24, 4.2);
+  private readonly showcasePos = new THREE.Vector3(0, 0.24, 12.2);
 
   private totalElapsed = 0;
   private currentPixelScale: 1 | 2 | 3 = 1;
@@ -109,13 +110,13 @@ export class WorldRenderer {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0xc49c74, 0.0085);
+    this.scene.fog = new THREE.FogExp2(0xc49c74, 0.0052);
 
     this.cameraRig = new CameraRig(
       window.innerWidth / Math.max(1, window.innerHeight)
     );
 
-    const sunPos = new THREE.Vector3(15, 21, 12);
+    const sunPos = new THREE.Vector3(24, 34, 18);
     this.setupLighting(sunPos);
 
     this.sky = new SkyAndAtmosphere(sunPos);
@@ -139,31 +140,34 @@ export class WorldRenderer {
     this.buildShowcasePedestal();
     this.rebuildPostProcessing(1, 'ultra');
 
-    // Start preloading official CC0 KayKit rigged .glb knight models immediately
+    // Start preloading official CC0 KayKit rigged .glb knight & dungeon models immediately
     kayKitAssets.preload().catch((err) => {
-      console.error('KayKit preload error:', err);
+      console.error('KayKit character preload error:', err);
+    });
+    dungeonAssets.preload().catch((err) => {
+      console.error('KayKit dungeon preload error:', err);
     });
   }
 
   private setupLighting(sunPos: THREE.Vector3): void {
     // Sky-to-stone hemisphere fill
-    const hemi = new THREE.HemisphereLight(0xcbe2ff, 0x615244, 0.85);
+    const hemi = new THREE.HemisphereLight(0xcbe2ff, 0x615244, 0.88);
     this.scene.add(hemi);
 
-    // Golden-hour main directional sun with crisp 2048px shadows
+    // Golden-hour main directional sun with crisp 2048px shadows across the 44x44m 2-tier citadel
     this.sunLight = new THREE.DirectionalLight(0xffe9c4, 2.35);
     this.sunLight.position.copy(sunPos);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(2048, 2048);
-    this.sunLight.shadow.camera.near = 2;
-    this.sunLight.shadow.camera.far = 58;
-    const d = 17.5;
+    this.sunLight.shadow.camera.near = 4;
+    this.sunLight.shadow.camera.far = 96;
+    const d = 27.5;
     this.sunLight.shadow.camera.left = -d;
     this.sunLight.shadow.camera.right = d;
     this.sunLight.shadow.camera.top = d;
     this.sunLight.shadow.camera.bottom = -d;
     this.sunLight.shadow.bias = -0.0005;
-    this.sunLight.shadow.normalBias = 0.02;
+    this.sunLight.shadow.normalBias = 0.025;
     this.scene.add(this.sunLight);
 
     // Cool azure rim backlight from opposite side so dark graphite armor silhouettes pop!
@@ -408,7 +412,8 @@ export class WorldRenderer {
         dt,
         observed.body.x,
         observed.body.z,
-        match.arena
+        match.arena,
+        observed.body.y
       );
     }
 
@@ -433,7 +438,7 @@ export class WorldRenderer {
   public resetCameraBehindPlayer(match: MatchManager): void {
     const p = match.getPlayer();
     if (p) {
-      this.cameraRig.snapBehindTarget(p.body.x, p.body.z, p.yaw);
+      this.cameraRig.snapBehindTarget(p.body.x, p.body.z, p.yaw, p.body.y);
     }
   }
 
@@ -480,7 +485,7 @@ export class WorldRenderer {
 
     for (const f of match.fighters) {
       if (!f.isAlive || f.isHuman) continue;
-      tempV.set(f.body.x, 2.42, f.body.z);
+      tempV.set(f.body.x, f.body.y + 2.42, f.body.z);
       tempV.project(this.cameraRig.camera);
 
       const inFront = tempV.z >= -1 && tempV.z <= 1;

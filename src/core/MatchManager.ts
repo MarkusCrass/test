@@ -132,6 +132,7 @@ export class MatchManager {
       isHuman: true,
       classId: playerClass,
       x: pSpawn.x,
+      y: pSpawn.y ?? 0,
       z: pSpawn.z,
       yaw: pSpawn.yaw,
     });
@@ -176,6 +177,7 @@ export class MatchManager {
         isHuman: false,
         classId: cls,
         x: sp.x,
+        y: sp.y ?? 0,
         z: sp.z,
         yaw: sp.yaw,
       });
@@ -325,7 +327,7 @@ export class MatchManager {
           type: 'swing',
           attackerId: fighter.id,
           x: fighter.body.x,
-          y: 1.15,
+          y: fighter.body.y + 1.15,
           z: fighter.body.z,
           isHeavy: stepRes.swungAttack.isHeavy,
         });
@@ -363,7 +365,7 @@ export class MatchManager {
       }
     }
 
-    // Final Phase Perimeter Pressure: outside 11.2m ring deals gradual heat damage so fights conclude
+    // Final Phase Perimeter Pressure: outside 16.5m ring deals gradual heat damage so fights converge onto the Skybridge & central pit
     if (this.isFinalPhase) {
       this.hazardTickAccum += dt;
       if (this.hazardTickAccum >= 0.5) {
@@ -371,7 +373,7 @@ export class MatchManager {
         for (const f of this.fighters) {
           if (!f.isAlive) continue;
           const r = Math.hypot(f.body.x, f.body.z);
-          if (r > 11.2) {
+          if (r > 16.5) {
             const died = f.takeRawDamage(4, null);
             if (died) {
               output.events.push({
@@ -379,7 +381,7 @@ export class MatchManager {
                 attackerId: f.id,
                 victimId: f.id,
                 x: f.body.x,
-                y: 0.9,
+                y: f.body.y + 0.9,
                 z: f.body.z,
               });
             }

@@ -7,6 +7,7 @@ interface BurstParticle {
   vx: number;
   vy: number;
   vz: number;
+  floorY: number;
   gravity: number;
   bounce: number;
   life: number;
@@ -143,65 +144,68 @@ export class EffectsManager {
   }
 
   public spawnFromEvent(ev: CombatEvent): void {
+    // Infer underlying deck floor height (Tier 2 Skybridge y=4.0 vs Tier 1 Courtyard y=0.0)
+    const deckY = ev.y >= 3.4 ? 4.0 : 0.0;
+
     switch (ev.type) {
       case 'hit': {
         this.spawnFlash(ev.x, ev.y, ev.z, this.goldSparkMat, 1.0, 0.1);
-        this.spawnSparks(ev.x, ev.y, ev.z, 11, this.goldSparkMat, 6.4);
+        this.spawnSparks(ev.x, ev.y, ev.z, 11, this.goldSparkMat, 6.4, deckY);
         this.triggerClashLight(ev.x, ev.y, ev.z, 0xffb347, 10, 0.08);
         break;
       }
       case 'heavy_hit': {
         this.spawnFlash(ev.x, ev.y, ev.z, this.whiteHotMat, 1.6, 0.14);
-        this.spawnSparks(ev.x, ev.y, ev.z, 18, this.emberOrangeMat, 8.4);
-        this.spawnShockwave(ev.x, 0.15, ev.z, 0xff9e38, 0.7, 3.6, 0.28);
-        this.spawnDustRing(ev.x, 0.12, ev.z, 8, 3.8);
+        this.spawnSparks(ev.x, ev.y, ev.z, 18, this.emberOrangeMat, 8.4, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.15, ev.z, 0xff9e38, 0.7, 3.6, 0.28);
+        this.spawnDustRing(ev.x, deckY + 0.12, ev.z, 8, 3.8, deckY);
         this.triggerClashLight(ev.x, ev.y, ev.z, 0xff8c2b, 16, 0.12);
         break;
       }
       case 'blocked': {
         this.spawnFlash(ev.x, ev.y, ev.z, this.whiteHotMat, 0.9, 0.09);
-        this.spawnSparks(ev.x, ev.y, ev.z, 12, this.whiteHotMat, 6.8);
-        this.spawnShockwave(ev.x, ev.y * 0.7, ev.z, 0xffe299, 0.4, 2.0, 0.18);
+        this.spawnSparks(ev.x, ev.y, ev.z, 12, this.whiteHotMat, 6.8, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.75, ev.z, 0xffe299, 0.4, 2.0, 0.18);
         this.triggerClashLight(ev.x, ev.y, ev.z, 0xffe599, 11, 0.08);
         break;
       }
       case 'parried': {
         this.spawnFlash(ev.x, ev.y, ev.z, this.cyanParryMat, 1.85, 0.18);
-        this.spawnSparks(ev.x, ev.y, ev.z, 20, this.cyanParryMat, 9.0);
-        this.spawnShockwave(ev.x, 0.25, ev.z, 0x6ef2ff, 0.6, 4.4, 0.34);
+        this.spawnSparks(ev.x, ev.y, ev.z, 20, this.cyanParryMat, 9.0, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.25, ev.z, 0x6ef2ff, 0.6, 4.4, 0.34);
         this.triggerClashLight(ev.x, ev.y, ev.z, 0x5eeeff, 18, 0.15);
         break;
       }
       case 'guard_broken': {
         this.spawnFlash(ev.x, ev.y, ev.z, this.emberOrangeMat, 1.65, 0.16);
-        this.spawnSparks(ev.x, ev.y, ev.z, 16, this.emberOrangeMat, 7.6);
-        this.spawnShockwave(ev.x, 0.3, ev.z, 0xff5924, 0.6, 4.0, 0.32);
+        this.spawnSparks(ev.x, ev.y, ev.z, 16, this.emberOrangeMat, 7.6, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.3, ev.z, 0xff5924, 0.6, 4.0, 0.32);
         this.triggerClashLight(ev.x, ev.y, ev.z, 0xff5924, 15, 0.13);
         break;
       }
       case 'ground_slam': {
-        this.spawnDustRing(ev.x, 0.12, ev.z, 16, 5.6);
-        this.spawnSparks(ev.x, 0.22, ev.z, 14, this.emberOrangeMat, 6.8);
-        this.spawnShockwave(ev.x, 0.06, ev.z, 0xff9b38, 0.6, 5.2, 0.36);
-        this.spawnGroundCrack(ev.x, ev.z);
-        this.triggerClashLight(ev.x, 0.5, ev.z, 0xff8a24, 16, 0.14);
+        this.spawnDustRing(ev.x, deckY + 0.12, ev.z, 16, 5.6, deckY);
+        this.spawnSparks(ev.x, deckY + 0.22, ev.z, 14, this.emberOrangeMat, 6.8, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.06, ev.z, 0xff9b38, 0.6, 5.2, 0.36);
+        this.spawnGroundCrack(ev.x, ev.z, deckY);
+        this.triggerClashLight(ev.x, deckY + 0.5, ev.z, 0xff8a24, 16, 0.14);
         break;
       }
       case 'deflect_push':
       case 'shield_shove': {
         this.spawnFlash(ev.x, ev.y, ev.z, this.whiteHotMat, 1.0, 0.1);
-        this.spawnShockwave(ev.x, 0.25, ev.z, 0xffe099, 0.4, 2.8, 0.22);
-        this.spawnDustRing(ev.x, 0.12, ev.z, 7, 3.3);
+        this.spawnShockwave(ev.x, deckY + 0.25, ev.z, 0xffe099, 0.4, 2.8, 0.22);
+        this.spawnDustRing(ev.x, deckY + 0.12, ev.z, 7, 3.3, deckY);
         break;
       }
       case 'evaded': {
-        this.spawnDustRing(ev.x, 0.1, ev.z, 6, 2.6);
+        this.spawnDustRing(ev.x, deckY + 0.1, ev.z, 6, 2.6, deckY);
         break;
       }
       case 'death': {
-        this.spawnDustRing(ev.x, 0.12, ev.z, 12, 4.0);
-        this.spawnSparks(ev.x, 0.9, ev.z, 14, this.emberOrangeMat, 5.8);
-        this.spawnShockwave(ev.x, 0.08, ev.z, 0xff5533, 0.5, 3.8, 0.35);
+        this.spawnDustRing(ev.x, deckY + 0.12, ev.z, 12, 4.0, deckY);
+        this.spawnSparks(ev.x, deckY + 0.9, ev.z, 14, this.emberOrangeMat, 5.8, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.08, ev.z, 0xff5533, 0.5, 3.8, 0.35);
         break;
       }
       case 'swing':
@@ -277,7 +281,7 @@ export class EffectsManager {
     });
   }
 
-  private spawnGroundCrack(x: number, z: number): void {
+  private spawnGroundCrack(x: number, z: number, deckY = 0): void {
     if (!this.crackDecalTex) return;
     if (this.decals.length >= 6) {
       const old = this.decals.shift()!;
@@ -293,7 +297,7 @@ export class EffectsManager {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.rotation.z = Math.random() * Math.PI * 2;
-    mesh.position.set(x, 0.032, z);
+    mesh.position.set(x, deckY + 0.032, z);
     this.group.add(mesh);
 
     this.decals.push({
@@ -310,7 +314,8 @@ export class EffectsManager {
     z: number,
     count: number,
     mat: THREE.Material,
-    speed: number
+    speed: number,
+    floorY = 0
   ): void {
     for (let i = 0; i < count; i++) {
       if (this.particles.length >= this.maxParticles) {
@@ -330,6 +335,7 @@ export class EffectsManager {
         vx: Math.cos(angle) * spd,
         vy,
         vz: Math.sin(angle) * spd,
+        floorY,
         gravity: 15.0,
         bounce: 0.45,
         life: 0.28 + Math.random() * 0.2,
@@ -345,7 +351,8 @@ export class EffectsManager {
     y: number,
     z: number,
     count: number,
-    speed: number
+    speed: number,
+    floorY = 0
   ): void {
     for (let i = 0; i < count; i++) {
       if (this.particles.length >= this.maxParticles) {
@@ -364,6 +371,7 @@ export class EffectsManager {
         vx: Math.cos(a) * spd,
         vy: 0.75 + Math.random() * 1.2,
         vz: Math.sin(a) * spd,
+        floorY,
         gravity: 2.2,
         bounce: 0,
         life: 0.38 + Math.random() * 0.22,
@@ -442,8 +450,9 @@ export class EffectsManager {
         p.mesh.position.y += p.vy * dt;
         p.mesh.position.z += p.vz * dt;
 
-        if (p.mesh.position.y < 0.05) {
-          p.mesh.position.y = 0.05;
+        const minY = p.floorY + 0.05;
+        if (p.mesh.position.y < minY) {
+          p.mesh.position.y = minY;
           if (p.bounce > 0 && p.vy < 0) {
             p.vy = -p.vy * p.bounce;
             p.vx *= 0.72;
@@ -544,7 +553,7 @@ export class EffectsManager {
       node.root.visible = f.isAlive;
       if (!f.isAlive) continue;
 
-      node.root.position.set(f.body.x, 0, f.body.z);
+      node.root.position.set(f.body.x, f.body.y, f.body.z);
       node.root.rotation.y = f.yaw;
 
       if (

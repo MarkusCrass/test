@@ -126,6 +126,7 @@ export class Fighter {
     isHuman: boolean;
     classId: KnightClassId;
     x: number;
+    y?: number;
     z: number;
     yaw: number;
   }) {
@@ -138,7 +139,8 @@ export class Fighter {
     this.body = new CharacterBody(
       params.x,
       params.z,
-      this.config.visual.capsuleRadius
+      this.config.visual.capsuleRadius,
+      params.y ?? 0
     );
     this.yaw = params.yaw;
 

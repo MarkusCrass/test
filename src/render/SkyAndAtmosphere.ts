@@ -87,7 +87,7 @@ export class SkyAndAtmosphere {
   };
   private readonly motesPoints: THREE.Points;
   private readonly motesPositions: Float32Array;
-  private readonly motesCount = 130;
+  private readonly motesCount = 170;
 
   constructor(sunPosition: THREE.Vector3) {
     this.skyUniforms = {
@@ -95,7 +95,7 @@ export class SkyAndAtmosphere {
       uTime: { value: 0 },
     };
 
-    const skyGeo = new THREE.SphereGeometry(120, 32, 20);
+    const skyGeo = new THREE.SphereGeometry(165, 32, 20);
     const skyMat = new THREE.ShaderMaterial({
       vertexShader: SKY_VERTEX_SHADER,
       fragmentShader: SKY_FRAGMENT_SHADER,
@@ -106,14 +106,14 @@ export class SkyAndAtmosphere {
     const skyDome = new THREE.Mesh(skyGeo, skyMat);
     this.group.add(skyDome);
 
-    // Floating sunlit dust motes & warm torch embers in the arena air
+    // Floating sunlit dust motes & warm torch embers across both tiers of the citadel
     this.motesPositions = new Float32Array(this.motesCount * 3);
     const colors = new Float32Array(this.motesCount * 3);
     for (let i = 0; i < this.motesCount; i++) {
       const a = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(Math.random()) * 13.4;
+      const r = Math.sqrt(Math.random()) * 21.0;
       this.motesPositions[i * 3] = Math.cos(a) * r;
-      this.motesPositions[i * 3 + 1] = 0.4 + Math.random() * 5.2;
+      this.motesPositions[i * 3 + 1] = 0.4 + Math.random() * 8.4;
       this.motesPositions[i * 3 + 2] = Math.sin(a) * r;
 
       const isEmber = i % 3 === 0;
@@ -197,7 +197,7 @@ export class SkyAndAtmosphere {
       pos[idx + 1] += (0.22 + (i % 5) * 0.06) * dt;
       pos[idx + 2] += Math.cos(elapsed * 0.6 + i * 1.3) * 0.18 * dt;
 
-      if (pos[idx + 1] > 5.8) {
+      if (pos[idx + 1] > 9.2) {
         pos[idx + 1] = 0.35;
       }
     }

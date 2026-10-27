@@ -184,9 +184,15 @@ export function isLineBlockedByPillars(
   bx: number,
   bz: number,
   arena: ArenaConfig,
-  padding = 0.05
+  padding = 0.05,
+  elevationY = 0
 ): boolean {
   for (const pillar of arena.circles) {
+    const pMinY = pillar.minY ?? 0;
+    const pMaxY = pMinY + pillar.height;
+    if (elevationY >= pMaxY - 0.1 || elevationY + 1.8 <= pMinY) {
+      continue;
+    }
     const t = segmentCircleHitT(
       ax,
       az,
