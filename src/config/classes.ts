@@ -172,7 +172,7 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
     role: 'Универсальный боец',
     summary:
       'Сбалансированный мечник в стальных латах с коротким плащом. Надёжен в дуэли и в гуще схватки.',
-    maxHp: 100,
+    maxHp: 185,
     moveSpeed: 5.7,
     sprintSpeed: 8.1,
     turnSpeed: 10.5,
@@ -284,11 +284,11 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
         slot: 2,
         name: 'Обет стали',
         description:
-          'Боевой клич паладина: волна отталкивания вокруг, +18 HP, +35 выносливости и +25% к урону на 5с.',
+          'Боевой клич паладина: волна отталкивания вокруг, +30 HP, +35 выносливости и +25% к урону на 5с.',
         icon: '☀',
         cooldown: 12.5,
         staminaCost: 14,
-        healAmount: 18,
+        healAmount: 30,
         staminaRestore: 35,
         buffKind: 'damage_aura',
         buffDuration: 5.0,
@@ -350,7 +350,7 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
     },
     abilitiesList: [
       '[1] Героический прорыв — рывок с пробивающим блок рассечением',
-      '[2] Обет стали — клич +18 HP, волна отпора и +25% урона на 5с',
+      '[2] Обет стали — клич +30 HP, волна отпора и +25% урона на 5с',
       'Направленный блок мечом (ПКМ) и перекат (Alt/C)',
     ],
     visual: {
@@ -372,7 +372,7 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
     role: 'Мобильный агрессор',
     summary:
       'Облегчённая броня и два острых клинка. Стремительно сближается, обрушивает серии атак и ловит врагов на парировании.',
-    maxHp: 85,
+    maxHp: 155,
     moveSpeed: 6.75,
     sprintSpeed: 9.4,
     turnSpeed: 13.0,
@@ -597,7 +597,7 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
     role: 'Контроль дистанции',
     summary:
       'Мастер длинного древкового оружия. Держит врагов на острие пики, отбивает натиск и уходит отступающим шагом.',
-    maxHp: 90,
+    maxHp: 165,
     moveSpeed: 5.85,
     sprintSpeed: 8.35,
     turnSpeed: 10.2,
@@ -796,7 +796,7 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
     role: 'Тяжёлый защитный танк',
     summary:
       'Массивный латник с башенным щитом и сокрушительным боевым молотом. Медлителен, но держит удар и сносит блоки.',
-    maxHp: 120,
+    maxHp: 225,
     moveSpeed: 4.65,
     sprintSpeed: 6.75,
     turnSpeed: 8.6,

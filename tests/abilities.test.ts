@@ -57,7 +57,7 @@ describe('Class Signature Abilities [1] & [2] across all 4 Knights', () => {
       sword.update(1 / 60, createEmptyIntent(0), ARENA_CONFIG, true);
       combat.step([sword, blocker], ARENA_CONFIG, 1.0, 1 / 60);
     }
-    expect(sword.hp).toBe(68); // +18 HP healed!
+    expect(sword.hp).toBe(80); // +30 HP healed!
     expect(sword.damageAuraTimer).toBeGreaterThan(4.0);
   });
 

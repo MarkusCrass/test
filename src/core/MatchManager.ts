@@ -55,8 +55,8 @@ const BOT_NAMES: Record<KnightClassId, string[]> = {
   hammer: ['Торвальд Молот', 'Брат Гром'],
 };
 
-export const DEFAULT_MATCH_DURATION = 150; // 2m 30s
-export const FINAL_PHASE_THRESHOLD = 30; // Final 30s -> Sudden Death!
+export const DEFAULT_MATCH_DURATION = 190; // 3m 10s for deeper, higher-HP battles
+export const FINAL_PHASE_THRESHOLD = 35; // Final 35s -> Sudden Death!
 
 export class MatchManager {
   public state: MatchState = 'MainMenu';
@@ -318,7 +318,14 @@ export class MatchManager {
       } else {
         const bot = this.bots.get(fighter.id);
         intent = bot
-          ? bot.update(dt, this.fighters, botTargetCounts, this.arena, true)
+          ? bot.update(
+              dt,
+              this.fighters,
+              botTargetCounts,
+              this.arena,
+              true,
+              this.combatSystem.projectiles
+            )
           : createEmptyIntent(fighter.yaw);
       }
 

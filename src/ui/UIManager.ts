@@ -147,7 +147,7 @@ export class UIManager {
         <div id="world-labels-layer"></div>
 
         <div class="stone-panel hud-top-bar">
-          <div id="hud-timer" class="hud-timer">02:30</div>
+          <div id="hud-timer" class="hud-timer">03:10</div>
           <div id="hud-alive-pill" class="hud-alive-pill">ЖИВЫХ: 5 / 5</div>
         </div>
 
