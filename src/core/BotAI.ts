@@ -270,6 +270,27 @@ export class BotController {
     if (this.decisionTimer <= 0) {
       this.decisionTimer = 0.14 + this.rng() * 0.18;
 
+      // 5a. Class-Signature Abilities [1] & [2]!
+      if (
+        !lineBlocked &&
+        (self.state === 'Idle' || self.state === 'Moving') &&
+        Math.abs(angleDiff(self.yaw, yawToTarget)) < 0.78
+      ) {
+        const pickedSlot = this.chooseBotAbilitySlot(dist, target);
+        if (pickedSlot === 1 && self.canUseAbility(1)) {
+          this.aiState = 'Attacking';
+          intent.ability1Pressed = true;
+          this.attackCooldown = 0.55 + this.rng() * 0.4;
+          return intent;
+        }
+        if (pickedSlot === 2 && self.canUseAbility(2)) {
+          this.aiState = 'Attacking';
+          intent.ability2Pressed = true;
+          this.attackCooldown = 0.55 + this.rng() * 0.4;
+          return intent;
+        }
+      }
+
       if (
         !lineBlocked &&
         this.attackCooldown <= 0 &&
@@ -369,6 +390,11 @@ export class BotController {
     if (self.state === 'Attacking' || self.state === 'HeavyAttacking') {
       this.aiState =
         self.attackPhase === 'Recovery' ? 'Recovering' : 'Attacking';
+      // Steer toward target while spinning Dual Cyclone!
+      if (self.activeAbility?.id === 'dual_cyclone' && dist > 0.4) {
+        intent.moveX = dx / dist;
+        intent.moveZ = dz / dist;
+      }
       return intent;
     }
 
@@ -556,6 +582,65 @@ export class BotController {
     intent.moveZ = steered.z;
     intent.dodgePressed = true;
     this.defenseCooldown = 1.45 + this.rng() * 1.1;
+  }
+
+  private chooseBotAbilitySlot(
+    dist: number,
+    target: Fighter
+  ): 1 | 2 | null {
+    const self = this.fighter;
+    const roll = this.rng();
+    if (roll > 0.42) return null;
+
+    switch (self.classId) {
+      case 'sword': {
+        // [2] Warcry when wounded or in close brawl; [1] Heroic Rush to close 2.8..5.5m gap or break block
+        if (
+          self.canUseAbility(2) &&
+          (self.hp < self.maxHp * 0.72 || dist < 3.0) &&
+          self.damageAuraTimer <= 0
+        ) {
+          return 2;
+        }
+        if (
+          self.canUseAbility(1) &&
+          ((dist >= 2.4 && dist <= 5.6) || target.state === 'Blocking')
+        ) {
+          return 1;
+        }
+        return null;
+      }
+      case 'dual': {
+        // [2] Thrown Dagger at 3.8..12.5m; [1] Blade Cyclone at <= 3.1m
+        if (self.canUseAbility(2) && dist >= 3.8 && dist <= 12.5) {
+          return 2;
+        }
+        if (self.canUseAbility(1) && dist <= 3.1) {
+          return 1;
+        }
+        return null;
+      }
+      case 'spear': {
+        // [2] 360 Sweep Vault when crowded <= 2.9m; [1] Dragon Lunge at 2.8..6.2m
+        if (self.canUseAbility(2) && dist <= 2.9) {
+          return 2;
+        }
+        if (self.canUseAbility(1) && dist >= 2.8 && dist <= 6.2) {
+          return 1;
+        }
+        return null;
+      }
+      case 'hammer': {
+        // [1] Siege Shield Ram at 2.2..6.0m; [2] Titan Quake at <= 3.6m
+        if (self.canUseAbility(2) && dist <= 3.6 && self.ironBastionTimer <= 0) {
+          return 2;
+        }
+        if (self.canUseAbility(1) && dist >= 2.0 && dist <= 6.0) {
+          return 1;
+        }
+        return null;
+      }
+    }
   }
 
   private getClassRanges(): {

@@ -36,6 +36,22 @@ export class SoundManager {
         case 'swing':
           this.playSwing(Boolean(ev.isHeavy));
           break;
+        case 'ability_cast':
+          this.playAbilityCast(Boolean(ev.isHeavy));
+          break;
+        case 'warcry_nova':
+          this.playWarcryNova();
+          break;
+        case 'quake_slam':
+          this.playGroundSlam();
+          this.playParryRing();
+          break;
+        case 'dagger_throw':
+          this.playDaggerThrow();
+          break;
+        case 'dagger_hit':
+          this.playArmorHit(false);
+          break;
         case 'hit':
           this.playArmorHit(false);
           break;
@@ -215,6 +231,45 @@ export class SoundManager {
     gain.connect(this.ctx.destination);
     osc.start(now);
     osc.stop(now + 0.31);
+  }
+
+  private playAbilityCast(isHeavy: boolean): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    this.playNoiseBurst(isHeavy ? 0.2 : 0.14, 900, 220, 0.2);
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(isHeavy ? 240 : 380, now);
+    osc.frequency.exponentialRampToValueAtTime(isHeavy ? 480 : 680, now + 0.16);
+    gain.gain.setValueAtTime(0.16 * this.volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.19);
+  }
+
+  private playWarcryNova(): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    for (const freq of [330, 495, 660]) {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq * 0.96, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.02, now + 0.42);
+      gain.gain.setValueAtTime(0.13 * this.volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.47);
+    }
+  }
+
+  private playDaggerThrow(): void {
+    this.playNoiseBurst(0.09, 2400, 720, 0.22);
   }
 
   private playShove(): void {

@@ -337,7 +337,17 @@ export class MatchManager {
           z: fighter.body.z,
         });
       }
-      if (stepRes.swungAttack) {
+      if (stepRes.usedAbility) {
+        output.events.push({
+          type: 'ability_cast',
+          attackerId: fighter.id,
+          abilityId: stepRes.usedAbility.id,
+          x: fighter.body.x,
+          y: fighter.body.y + 1.15,
+          z: fighter.body.z,
+          isHeavy: stepRes.usedAbility.attackProfile.isHeavy,
+        });
+      } else if (stepRes.swungAttack) {
         output.events.push({
           type: 'swing',
           attackerId: fighter.id,
@@ -355,12 +365,13 @@ export class MatchManager {
       .map((f) => f.body);
     CharacterBody.resolveFighterCollisions(livingBodies, this.arena);
 
-    // Evaluate spatial weapon hits, blocks, parries, deflects, shoves
+    // Evaluate spatial weapon hits, blocks, parries, deflects, shoves & projectiles
     const dmgMult = this.isFinalPhase ? 1.45 : 1.0;
     const combatEvents = this.combatSystem.step(
       this.fighters,
       this.arena,
-      dmgMult
+      dmgMult,
+      dt
     );
     output.events.push(...combatEvents);
 

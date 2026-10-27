@@ -472,7 +472,7 @@ body {
   position: absolute;
   left: 18px;
   bottom: 18px;
-  width: min(330px, 78vw);
+  width: min(372px, 84vw);
   padding: 12px 14px;
 }
 
@@ -737,3 +737,165 @@ body {
   accent-color: var(--border-gold);
   cursor: pointer;
 }
+
+/* Class Selection Ability Cards & In-Game [1]/[2] Skill Hotbar */
+.sel-abilities-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sel-ability-card {
+  background: rgba(18, 22, 30, 0.85);
+  border: 1px solid #485266;
+  border-left: 3px solid var(--border-gold);
+  border-radius: 5px;
+  padding: 7px 9px;
+}
+
+.sel-ability-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 3px;
+}
+
+.sel-ability-key {
+  background: #2b3344;
+  color: #ffd97d;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.sel-ability-name {
+  color: #f4f7ff;
+  flex: 1;
+}
+
+.sel-ability-meta {
+  color: #a9b5cc;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sel-ability-desc {
+  font-size: 11.5px;
+  color: #c5cfdf;
+  line-height: 1.35;
+}
+
+.hud-buff-pill {
+  margin: 4px 0 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(235, 180, 52, 0.2);
+  border: 1px solid rgba(255, 214, 102, 0.65);
+  color: #ffe89e;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.hud-skill-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 6px 0 6px;
+}
+
+.hud-skill-slot {
+  position: relative;
+  overflow: hidden;
+  background: rgba(18, 22, 30, 0.92);
+  border: 1px solid #525d73;
+  border-radius: 5px;
+  padding: 6px 8px;
+  transition: border-color 0.12s ease, transform 0.1s ease;
+}
+
+.hud-skill-slot.ready {
+  border-color: #d9a74a;
+  box-shadow: inset 0 0 10px rgba(224, 177, 69, 0.16);
+}
+
+.hud-skill-slot.casting {
+  border-color: #fff0a6;
+  box-shadow: 0 0 12px rgba(255, 214, 102, 0.55);
+  transform: translateY(-1px);
+}
+
+.hud-skill-slot.on-cd,
+.hud-skill-slot.no-stam {
+  opacity: 0.68;
+  border-color: #3d4454;
+}
+
+.hud-skill-cd-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 12, 18, 0.76);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hud-skill-top,
+.hud-skill-title {
+  position: relative;
+  z-index: 2;
+}
+
+.hud-skill-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+
+.hud-skill-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #2d3546;
+  border: 1px solid #6b7894;
+  color: #ffe28a;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.hud-skill-icon {
+  font-size: 14px;
+}
+
+.hud-skill-status {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #ffd97d;
+}
+
+.hud-skill-slot.on-cd .hud-skill-status {
+  color: #ff9c7d;
+}
+
+.hud-skill-slot.no-stam .hud-skill-status {
+  color: #7db8ff;
+}
+
+.hud-skill-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #eef2fa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+

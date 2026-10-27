@@ -239,6 +239,30 @@ const CLIP_PHASE_WINDOWS: Record<
     strikeEnd: 0.68,
     end: 0.96,
   },
+  '2H_Melee_Attack_Spinning': {
+    start: 0.02,
+    strikeStart: 0.12,
+    strikeEnd: 0.88,
+    end: 0.98,
+  },
+  Spellcast_Raise: {
+    start: 0.04,
+    strikeStart: 0.34,
+    strikeEnd: 0.68,
+    end: 0.96,
+  },
+  Throw: {
+    start: 0.05,
+    strikeStart: 0.36,
+    strikeEnd: 0.64,
+    end: 0.96,
+  },
+  Block_Attack: {
+    start: 0.04,
+    strikeStart: 0.2,
+    strikeEnd: 0.72,
+    end: 0.96,
+  },
   Dualwield_Melee_Attack_Slice: {
     start: 0.06,
     strikeStart: 0.41,
@@ -274,6 +298,8 @@ export class KnightVisualRig {
 
   private readonly modelHolder = new THREE.Group();
   private readonly stunRing = new THREE.Group();
+  private readonly buffAuraRing: THREE.Mesh;
+  private readonly buffAuraMat: THREE.MeshBasicMaterial;
   private readonly footRing: THREE.Mesh;
   private readonly contactShadow: THREE.Mesh;
 
@@ -379,6 +405,25 @@ export class KnightVisualRig {
       this.stunRing.add(star);
     }
     this.root.add(this.stunRing);
+
+    const auraGeo = new THREE.TorusGeometry(
+      vis.capsuleRadius * 1.18,
+      0.045,
+      8,
+      28
+    );
+    auraGeo.rotateX(Math.PI / 2);
+    this.buffAuraMat = new THREE.MeshBasicMaterial({
+      color: 0xffcf48,
+      transparent: true,
+      opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.buffAuraRing = new THREE.Mesh(auraGeo, this.buffAuraMat);
+    this.buffAuraRing.position.y = 0.28;
+    this.buffAuraRing.visible = false;
+    this.root.add(this.buffAuraRing);
 
     kayKitAssets.onReady((pack) => {
       this.mountKayKitCharacter(pack);
@@ -901,13 +946,22 @@ export class KnightVisualRig {
   }
 
   /**
-   * Selects distinct, choreographed KayKit attack clips for EVERY combo step across all 4 classes!
+   * Selects distinct, choreographed KayKit attack & ability clips across all 4 classes!
    */
   private resolveAttackClipName(
     style: AttackAnimStyle,
     isHeavy: boolean,
     comboStep: number
   ): string {
+    if (style === 'ability_sword_rush') return '2H_Melee_Attack_Slice';
+    if (style === 'ability_sword_warcry') return 'Spellcast_Raise';
+    if (style === 'ability_dual_cyclone') return '2H_Melee_Attack_Spinning';
+    if (style === 'ability_dual_dagger') return 'Throw';
+    if (style === 'ability_spear_dragon') return '2H_Melee_Attack_Stab';
+    if (style === 'ability_spear_sweep') return '2H_Melee_Attack_Spin';
+    if (style === 'ability_hammer_ram') return 'Block_Attack';
+    if (style === 'ability_hammer_quake') return '2H_Melee_Attack_Chop';
+
     if (style === 'dual_left') return 'Dualwield_Melee_Attack_Slice';
     if (style === 'dual_cross') return 'Dualwield_Melee_Attack_Chop';
     if (style === 'dual_finisher') {
@@ -966,6 +1020,28 @@ export class KnightVisualRig {
     if (this.stunRing.visible) {
       this.stunRing.rotation.y = fighter.animTime * 4.8;
     }
+
+    // Active Class Buff Aura ring (Valor / Haste / Iron Bastion)
+    const hasBuff =
+      fighter.isAlive &&
+      (fighter.damageAuraTimer > 0 ||
+        fighter.hasteTimer > 0 ||
+        fighter.ironBastionTimer > 0);
+    this.buffAuraRing.visible = hasBuff;
+    if (hasBuff) {
+      if (fighter.damageAuraTimer > 0) {
+        this.buffAuraMat.color.setHex(0xffcf48);
+      } else if (fighter.hasteTimer > 0) {
+        this.buffAuraMat.color.setHex(0x42f5c8);
+      } else {
+        this.buffAuraMat.color.setHex(0xff8438);
+      }
+      this.buffAuraRing.position.y =
+        0.32 + Math.sin(fighter.animTime * 6.5) * 0.08;
+      const pulse = 1 + Math.sin(fighter.animTime * 9.0) * 0.06;
+      this.buffAuraRing.scale.setScalar(pulse);
+    }
+
     this.footRing.visible = fighter.isAlive;
 
     if (!this.mixer) {
@@ -1009,6 +1085,7 @@ export class KnightVisualRig {
     let targetPitch = 0;
     let targetRoll = 0;
     let targetChestTwist = 0;
+    let spinYawOffset = 0;
 
     if (inSwing && fighter.activeAttack) {
       const atk = fighter.activeAttack;
@@ -1040,25 +1117,34 @@ export class KnightVisualRig {
         if (fighter.attackPhase === 'Windup') {
           const p =
             1 - clamp(fighter.attackPhaseTimer / atk.windupDuration, 0, 1);
-          // Fast initial draw into taut martial-arts anticipation hold!
           const eased = 1 - Math.pow(1 - p, 1.85);
           norm = lerp(win.start, win.strikeStart, eased);
-          targetPitch = -0.07 * eased;
+          targetPitch =
+            atk.animStyle === 'ability_sword_warcry' ? -0.14 * eased : -0.07 * eased;
           targetChestTwist = -0.16 * swingSign * eased;
         } else if (fighter.attackPhase === 'Active') {
           const p =
             1 - clamp(fighter.attackPhaseTimer / atk.activeDuration, 0, 1);
-          // Explosive fast-out power snap across the active strike window!
           const eased = 1 - Math.pow(1 - p, 2.35);
           norm = lerp(win.strikeStart, win.strikeEnd, eased);
-          targetPitch = (atk.isHeavy ? 0.19 : 0.12) * Math.sin(p * Math.PI * 0.85 + 0.15);
+          targetPitch =
+            (atk.isHeavy ? 0.19 : 0.12) * Math.sin(p * Math.PI * 0.85 + 0.15);
           targetChestTwist = 0.22 * swingSign * eased;
+          if (atk.animStyle === 'ability_dual_cyclone') {
+            // 3 full 360° blade revolutions across Active window!
+            spinYawOffset = p * Math.PI * 6;
+          } else if (atk.animStyle === 'ability_spear_sweep') {
+            spinYawOffset = eased * Math.PI * 2;
+          }
         } else {
           const p =
             1 - clamp(fighter.attackPhaseTimer / atk.recoveryDuration, 0, 1);
           const eased = 1 - Math.pow(1 - p, 1.65);
           norm = lerp(win.strikeEnd, win.end, eased);
-          targetPitch = (atk.isHeavy ? 0.12 : 0.06) * (1 - eased);
+          targetPitch =
+            atk.animStyle === 'ability_spear_sweep'
+              ? -0.16 * (1 - eased)
+              : (atk.isHeavy ? 0.12 : 0.06) * (1 - eased);
           targetChestTwist = 0.14 * swingSign * (1 - eased);
         }
 
@@ -1187,7 +1273,15 @@ export class KnightVisualRig {
     }
 
     this.lockInPlaceRoot();
-    this.applySecondaryProceduralMotion(dt, fighter, horizSpeed, targetPitch, targetRoll, targetChestTwist);
+    this.applySecondaryProceduralMotion(
+      dt,
+      fighter,
+      horizSpeed,
+      targetPitch,
+      targetRoll,
+      targetChestTwist,
+      spinYawOffset
+    );
 
     // Update 3D Spline Weapon Slash Ribbons in World Space!
     this.root.updateMatrixWorld(true);
@@ -1234,7 +1328,8 @@ export class KnightVisualRig {
     horizSpeed: number,
     targetPitch: number,
     targetRoll: number,
-    targetChestTwist: number
+    targetChestTwist: number,
+    spinYawOffset = 0
   ): void {
     const smoothAlpha = 1 - Math.exp(-16 * dt);
     this.smoothPitch = lerp(this.smoothPitch, targetPitch, smoothAlpha);
@@ -1253,8 +1348,7 @@ export class KnightVisualRig {
     }
 
     this.modelHolder.position.y = landDipY;
-    this.modelHolder.rotation.x = this.smoothPitch;
-    this.modelHolder.rotation.z = this.smoothRoll;
+    this.modelHolder.rotation.set(this.smoothPitch, spinYawOffset, this.smoothRoll);
 
     if (this.chestBone) {
       this.chestBone.rotation.y += this.smoothChestTwist;

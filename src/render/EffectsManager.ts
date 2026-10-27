@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CombatEvent } from '../core/CombatSystem';
+import { CombatEvent, ThrownProjectile } from '../core/CombatSystem';
 import { Fighter } from '../core/Fighter';
 
 interface BurstParticle {
@@ -54,12 +54,15 @@ export class EffectsManager {
   private readonly flashes: FlashStar[] = [];
   private readonly shockwaves: ShockwaveRing[] = [];
   private readonly decals: GroundDecal[] = [];
+  private readonly projectileMeshes = new Map<number, THREE.Group>();
   private readonly maxParticles = 140;
 
   private readonly sparkGeo = new THREE.OctahedronGeometry(0.065, 0);
   private readonly dustGeo = new THREE.DodecahedronGeometry(0.19, 0);
   private readonly flashGeo = new THREE.OctahedronGeometry(0.36, 0);
   private readonly ringGeo = new THREE.RingGeometry(0.42, 0.56, 28);
+  private readonly daggerBladeGeo = new THREE.ConeGeometry(0.065, 0.52, 4);
+  private readonly daggerGuardGeo = new THREE.BoxGeometry(0.22, 0.035, 0.045);
 
   // HDR emissive colors (>1.0) so UnrealBloom gives sparks & parries a crisp golden/cyan glow!
   private readonly goldSparkMat = new THREE.MeshBasicMaterial({
@@ -132,6 +135,11 @@ export class EffectsManager {
     }
     this.decals.length = 0;
 
+    for (const pm of this.projectileMeshes.values()) {
+      this.group.remove(pm);
+    }
+    this.projectileMeshes.clear();
+
     this.clashLight.intensity = 0;
 
     for (const node of this.debugNodes.values()) {
@@ -141,6 +149,40 @@ export class EffectsManager {
       node.sectorFill.geometry.dispose();
     }
     this.debugNodes.clear();
+  }
+
+  public syncProjectiles(projectiles: ThrownProjectile[], dt: number): void {
+    const activeIds = new Set<number>();
+    for (const p of projectiles) {
+      activeIds.add(p.id);
+      let g = this.projectileMeshes.get(p.id);
+      if (!g) {
+        g = new THREE.Group();
+        const blade = new THREE.Mesh(this.daggerBladeGeo, this.whiteHotMat);
+        blade.rotation.x = Math.PI / 2;
+        blade.position.z = 0.16;
+        const guard = new THREE.Mesh(this.daggerGuardGeo, this.goldSparkMat);
+        guard.position.z = -0.08;
+        const glowRing = new THREE.Mesh(
+          new THREE.RingGeometry(0.12, 0.22, 16),
+          this.cyanParryMat
+        );
+        g.add(blade, guard, glowRing);
+        this.group.add(g);
+        this.projectileMeshes.set(p.id, g);
+      }
+      g.position.set(p.x, p.y, p.z);
+      g.rotation.y = p.yaw;
+      g.children[0].rotation.z += dt * 28.0;
+      g.children[2].rotation.z -= dt * 18.0;
+    }
+
+    for (const [id, mesh] of this.projectileMeshes.entries()) {
+      if (!activeIds.has(id)) {
+        this.group.remove(mesh);
+        this.projectileMeshes.delete(id);
+      }
+    }
   }
 
   public spawnLandingDust(x: number, y: number, z: number): void {
@@ -194,6 +236,39 @@ export class EffectsManager {
         this.spawnShockwave(ev.x, deckY + 0.06, ev.z, 0xff9b38, 0.6, 5.2, 0.36);
         this.spawnGroundCrack(ev.x, ev.z, deckY);
         this.triggerClashLight(ev.x, deckY + 0.5, ev.z, 0xff8a24, 16, 0.14);
+        break;
+      }
+      case 'quake_slam': {
+        this.spawnDustRing(ev.x, deckY + 0.14, ev.z, 22, 7.2, deckY);
+        this.spawnSparks(ev.x, deckY + 0.28, ev.z, 22, this.emberOrangeMat, 8.6, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.08, ev.z, 0xff6e24, 0.8, 7.6, 0.46);
+        this.spawnShockwave(ev.x, deckY + 0.35, ev.z, 0xffc857, 0.5, 5.4, 0.34);
+        this.spawnGroundCrack(ev.x, ev.z, deckY);
+        this.triggerClashLight(ev.x, deckY + 0.65, ev.z, 0xff6e24, 22, 0.2);
+        break;
+      }
+      case 'warcry_nova': {
+        this.spawnFlash(ev.x, deckY + 1.35, ev.z, this.goldSparkMat, 1.75, 0.18);
+        this.spawnSparks(ev.x, deckY + 1.1, ev.z, 18, this.goldSparkMat, 7.4, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.16, ev.z, 0xffd659, 0.6, 6.4, 0.42);
+        this.spawnShockwave(ev.x, deckY + 0.95, ev.z, 0xfff0a8, 0.4, 4.6, 0.3);
+        this.triggerClashLight(ev.x, deckY + 1.4, ev.z, 0xffd659, 18, 0.18);
+        break;
+      }
+      case 'dagger_throw': {
+        this.spawnFlash(ev.x, ev.y, ev.z, this.cyanParryMat, 0.75, 0.08);
+        break;
+      }
+      case 'dagger_hit': {
+        this.spawnFlash(ev.x, ev.y, ev.z, this.cyanParryMat, 1.35, 0.13);
+        this.spawnSparks(ev.x, ev.y, ev.z, 14, this.cyanParryMat, 7.8, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.55, ev.z, 0x4ef5d2, 0.35, 2.4, 0.2);
+        this.triggerClashLight(ev.x, ev.y, ev.z, 0x4ef5d2, 13, 0.1);
+        break;
+      }
+      case 'ability_cast': {
+        this.spawnDustRing(ev.x, deckY + 0.1, ev.z, 8, 3.4, deckY);
+        this.spawnShockwave(ev.x, deckY + 0.14, ev.z, 0xffe49e, 0.45, 2.6, 0.22);
         break;
       }
       case 'deflect_push':

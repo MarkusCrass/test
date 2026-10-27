@@ -11,7 +11,51 @@ export type AttackAnimStyle =
   | 'spear_poke'
   | 'spear_impale'
   | 'hammer_swing'
-  | 'hammer_slam';
+  | 'hammer_slam'
+  | 'ability_sword_rush'
+  | 'ability_sword_warcry'
+  | 'ability_dual_cyclone'
+  | 'ability_dual_dagger'
+  | 'ability_spear_dragon'
+  | 'ability_spear_sweep'
+  | 'ability_hammer_ram'
+  | 'ability_hammer_quake';
+
+export type AbilityKind =
+  | 'sword_rush'
+  | 'sword_warcry'
+  | 'dual_cyclone'
+  | 'dual_dagger'
+  | 'spear_dragon'
+  | 'spear_sweep'
+  | 'hammer_ram'
+  | 'hammer_quake';
+
+export type BuffKind = 'damage_aura' | 'haste' | 'iron_bastion';
+
+export interface ClassAbilityConfig {
+  id: AbilityKind;
+  slot: 1 | 2;
+  name: string;
+  description: string;
+  icon: string;
+  cooldown: number;
+  staminaCost: number;
+  attackProfile: AttackConfig;
+  appliesFullStun?: boolean;
+  multiHitTicks?: number;
+  steerableDuringActive?: boolean;
+  frontalGuardDuringActive?: boolean;
+  backVaultSpeed?: number;
+  spawnsProjectile?: boolean;
+  projectileSpeed?: number;
+  projectileRange?: number;
+  projectileDamage?: number;
+  healAmount?: number;
+  staminaRestore?: number;
+  buffKind?: BuffKind;
+  buffDuration?: number;
+}
 
 export interface AttackConfig {
   id: string;
@@ -106,6 +150,7 @@ export interface KnightClassConfig {
   stamina: StaminaConfig;
   lightCombo: AttackConfig[];
   heavyAttack: AttackConfig;
+  abilities: [ClassAbilityConfig, ClassAbilityConfig];
   defense: DefenseConfig;
   dodge: DodgeConfig;
   uiRatings: {
@@ -203,6 +248,72 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
       stunDurationOnHit: 0.45,
       animStyle: 'overhead_cleave',
     },
+    abilities: [
+      {
+        id: 'sword_rush',
+        slot: 1,
+        name: 'Героический прорыв',
+        description:
+          'Стремительный рывок вперёд с широким пробивающим блок рассечением крылатым мечом.',
+        icon: '⚔',
+        cooldown: 7.0,
+        staminaCost: 20,
+        attackProfile: {
+          id: 'ab_sword_rush',
+          name: 'Героический прорыв',
+          isHeavy: true,
+          damage: 27,
+          windupDuration: 0.18,
+          activeDuration: 0.22,
+          recoveryDuration: 0.28,
+          range: 3.1,
+          hitAngleDeg: 135,
+          staminaCost: 20,
+          knockback: 8.6,
+          blockable: false,
+          guardStaminaDamage: 50,
+          interruptible: false,
+          lungeSpeed: 12.2,
+          maxTurnRateWindup: 3.2,
+          stunDurationOnHit: 0.42,
+          animStyle: 'ability_sword_rush',
+        },
+      },
+      {
+        id: 'sword_warcry',
+        slot: 2,
+        name: 'Обет стали',
+        description:
+          'Боевой клич паладина: волна отталкивания вокруг, +18 HP, +35 выносливости и +25% к урону на 5с.',
+        icon: '☀',
+        cooldown: 12.5,
+        staminaCost: 14,
+        healAmount: 18,
+        staminaRestore: 35,
+        buffKind: 'damage_aura',
+        buffDuration: 5.0,
+        attackProfile: {
+          id: 'ab_sword_warcry',
+          name: 'Обет стали',
+          isHeavy: false,
+          damage: 10,
+          windupDuration: 0.2,
+          activeDuration: 0.14,
+          recoveryDuration: 0.24,
+          range: 3.4,
+          hitAngleDeg: 360,
+          staminaCost: 14,
+          knockback: 8.8,
+          blockable: false,
+          guardStaminaDamage: 30,
+          interruptible: false,
+          lungeSpeed: 0,
+          maxTurnRateWindup: 4.0,
+          stunDurationOnHit: 0.35,
+          animStyle: 'ability_sword_warcry',
+        },
+      },
+    ],
     defense: {
       mode: 'directional_block',
       name: 'Направленный блок мечом',
@@ -238,10 +349,9 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
       reach: 3,
     },
     abilitiesList: [
-      'Быстрый рубящий удар (связка из 2 ударов)',
-      'Заряженный тяжёлый удар сверху',
-      'Направленный блок мечом (ПКМ)',
-      'Классическое уклонение (Space)',
+      '[1] Героический прорыв — рывок с пробивающим блок рассечением',
+      '[2] Обет стали — клич +18 HP, волна отпора и +25% урона на 5с',
+      'Направленный блок мечом (ПКМ) и перекат (Alt/C)',
     ],
     visual: {
       primarySteel: 0x9aa9b8,
@@ -358,6 +468,76 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
       stunDurationOnHit: 0.38,
       animStyle: 'dual_finisher',
     },
+    abilities: [
+      {
+        id: 'dual_cyclone',
+        slot: 1,
+        name: 'Танец стали',
+        description:
+          'Управляемый вихрь двумя клинками на 360°: до 3 круговых порезов подряд в движении!',
+        icon: '🌪',
+        cooldown: 8.0,
+        staminaCost: 22,
+        multiHitTicks: 3,
+        steerableDuringActive: true,
+        attackProfile: {
+          id: 'ab_dual_cyclone',
+          name: 'Танец стали',
+          isHeavy: false,
+          damage: 13,
+          windupDuration: 0.12,
+          activeDuration: 0.54,
+          recoveryDuration: 0.22,
+          range: 2.75,
+          hitAngleDeg: 360,
+          staminaCost: 22,
+          knockback: 4.6,
+          blockable: true,
+          guardStaminaDamage: 18,
+          interruptible: false,
+          lungeSpeed: 6.8,
+          maxTurnRateWindup: 5.0,
+          stunDurationOnHit: 0.22,
+          animStyle: 'ability_dual_cyclone',
+        },
+      },
+      {
+        id: 'dual_dagger',
+        slot: 2,
+        name: 'Метательный клинок',
+        description:
+          'Мгновенный бросок стального кинжала на 15м (22 урона) и ускорение +25% на 3.5с.',
+        icon: '🗡',
+        cooldown: 6.0,
+        staminaCost: 14,
+        spawnsProjectile: true,
+        projectileSpeed: 23.0,
+        projectileRange: 15.5,
+        projectileDamage: 22,
+        buffKind: 'haste',
+        buffDuration: 3.5,
+        attackProfile: {
+          id: 'ab_dual_dagger',
+          name: 'Метательный клинок',
+          isHeavy: false,
+          damage: 14,
+          windupDuration: 0.14,
+          activeDuration: 0.1,
+          recoveryDuration: 0.2,
+          range: 1.8,
+          hitAngleDeg: 70,
+          staminaCost: 14,
+          knockback: 3.5,
+          blockable: true,
+          guardStaminaDamage: 14,
+          interruptible: true,
+          lungeSpeed: -2.4,
+          maxTurnRateWindup: 6.0,
+          stunDurationOnHit: 0.3,
+          animStyle: 'ability_dual_dagger',
+        },
+      },
+    ],
     defense: {
       mode: 'timed_parry',
       name: 'Короткое парирование',
@@ -394,10 +574,9 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
       reach: 2,
     },
     abilitiesList: [
-      'Быстрая серия из 3 ударов с перекрёстным финалом',
-      'Заряженный вихревой выпад двумя клинками',
-      'Короткое парирование с оглушением врага (ПКМ)',
-      'Стремительный рывок (Space)',
+      '[1] Танец стали — управляемый 360° вихрь из 3 круговых ударов',
+      '[2] Метательный клинок — бросок кинжала на 15м + ускорение',
+      'Короткое парирование с оглушением (ПКМ) и рывок (Alt/C)',
     ],
     visual: {
       primarySteel: 0x8d9eab,
@@ -494,6 +673,69 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
       stunDurationOnHit: 0.44,
       animStyle: 'spear_impale',
     },
+    abilities: [
+      {
+        id: 'spear_dragon',
+        slot: 1,
+        name: 'Выпад дракона',
+        description:
+          'Стремительный полёт-рывок вперёд с протазаном на 4.4м: пробивает блок и отбрасывает врага!',
+        icon: '🔱',
+        cooldown: 7.5,
+        staminaCost: 22,
+        attackProfile: {
+          id: 'ab_spear_dragon',
+          name: 'Выпад дракона',
+          isHeavy: true,
+          damage: 31,
+          windupDuration: 0.2,
+          activeDuration: 0.22,
+          recoveryDuration: 0.28,
+          range: 4.4,
+          hitAngleDeg: 58,
+          staminaCost: 22,
+          knockback: 11.4,
+          blockable: false,
+          guardStaminaDamage: 55,
+          interruptible: false,
+          lungeSpeed: 14.2,
+          maxTurnRateWindup: 2.8,
+          stunDurationOnHit: 0.46,
+          animStyle: 'ability_spear_dragon',
+        },
+      },
+      {
+        id: 'spear_sweep',
+        slot: 2,
+        name: 'Круговой заслон',
+        description:
+          'Круговой удар протазаном на 360° с мощным отбрасыванием и мгновенным отскоком назад!',
+        icon: '🌀',
+        cooldown: 9.0,
+        staminaCost: 19,
+        backVaultSpeed: 9.6,
+        attackProfile: {
+          id: 'ab_spear_sweep',
+          name: 'Круговой заслон',
+          isHeavy: false,
+          damage: 21,
+          windupDuration: 0.15,
+          activeDuration: 0.18,
+          recoveryDuration: 0.28,
+          range: 3.45,
+          hitAngleDeg: 360,
+          staminaCost: 19,
+          knockback: 11.8,
+          blockable: true,
+          guardStaminaDamage: 32,
+          interruptible: false,
+          lungeSpeed: 0,
+          maxTurnRateWindup: 4.0,
+          stunDurationOnHit: 0.38,
+          animStyle: 'ability_spear_sweep',
+        },
+      },
+    ],
     defense: {
       mode: 'spear_deflect',
       name: 'Отбивающий приём древком',
@@ -531,10 +773,9 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
       reach: 5,
     },
     abilitiesList: [
-      'Дальнобойный быстрый выпад копьём (до 3.7м)',
-      'Заряженный пронзающий укол на 4.3м',
-      'Отбивающий приём с отбрасыванием вблизи (ПКМ)',
-      'Отступающий шаг для контроля дистанции (Space)',
+      '[1] Выпад дракона — реактивный бронебойный рывок пикой на 4.4м',
+      '[2] Круговой заслон — взмах на 360° с отбрасыванием и отскоком',
+      'Отбивающий приём древком (ПКМ) и отступающий шаг (Alt/C)',
     ],
     visual: {
       primarySteel: 0xa2adb8,
@@ -631,6 +872,73 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
       stunDurationOnHit: 0.65,
       animStyle: 'hammer_slam',
     },
+    abilities: [
+      {
+        id: 'hammer_ram',
+        slot: 1,
+        name: 'Осадный таран',
+        description:
+          'Неудержимый разбег под шипастым щитом: сносит врагов (13.5 нокбэк) и оглушает на 1.15с!',
+        icon: '🛡',
+        cooldown: 8.5,
+        staminaCost: 22,
+        appliesFullStun: true,
+        steerableDuringActive: true,
+        frontalGuardDuringActive: true,
+        attackProfile: {
+          id: 'ab_hammer_ram',
+          name: 'Осадный таран',
+          isHeavy: true,
+          damage: 20,
+          windupDuration: 0.16,
+          activeDuration: 0.46,
+          recoveryDuration: 0.26,
+          range: 2.15,
+          hitAngleDeg: 125,
+          staminaCost: 22,
+          knockback: 13.8,
+          blockable: false,
+          guardStaminaDamage: 60,
+          interruptible: false,
+          lungeSpeed: 10.8,
+          maxTurnRateWindup: 3.2,
+          stunDurationOnHit: 1.15,
+          animStyle: 'ability_hammer_ram',
+        },
+      },
+      {
+        id: 'hammer_quake',
+        slot: 2,
+        name: 'Гнев титана',
+        description:
+          'Удар молотом в землю вызывает землетрясение на 4.2м вокруг и даёт броню «Железный бастион» (-35% урона на 5.5с).',
+        icon: '🔨',
+        cooldown: 12.0,
+        staminaCost: 25,
+        buffKind: 'iron_bastion',
+        buffDuration: 5.5,
+        attackProfile: {
+          id: 'ab_hammer_quake',
+          name: 'Гнев титана',
+          isHeavy: true,
+          damage: 30,
+          windupDuration: 0.34,
+          activeDuration: 0.18,
+          recoveryDuration: 0.38,
+          range: 4.2,
+          hitAngleDeg: 360,
+          staminaCost: 25,
+          knockback: 11.2,
+          blockable: false,
+          guardStaminaDamage: 65,
+          interruptible: false,
+          lungeSpeed: 1.5,
+          maxTurnRateWindup: 1.8,
+          stunDurationOnHit: 0.55,
+          animStyle: 'ability_hammer_quake',
+        },
+      },
+    ],
     defense: {
       mode: 'heavy_shield',
       name: 'Направленный блок щитом',
@@ -668,10 +976,9 @@ export const KNIGHT_CLASSES: Record<KnightClassId, KnightClassConfig> = {
       reach: 2,
     },
     abilitiesList: [
-      'Мощные удары молотом с высоким отбрасыванием',
-      'Неблокируемый заряженный раскол земли (гиперброня)',
-      'Широкий направленный блок башенным щитом (ПКМ)',
-      'Защитный толчок щитом / силовой шаг (Space)',
+      '[1] Осадный таран — спринт щитом с оглушением на 1.15с и сносом с моста',
+      '[2] Гнев титана — раскол земли 360° + «Железный бастион» (-35% урона)',
+      'Блок башенным щитом (ПКМ) и толчок щитом (Alt/C)',
     ],
     visual: {
       primarySteel: 0x7e8a97,

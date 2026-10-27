@@ -1,6 +1,7 @@
 import { ArenaConfig } from '../config/arenaConfig';
 import {
   AttackConfig,
+  ClassAbilityConfig,
   KNIGHT_CLASSES,
   KnightClassConfig,
   KnightClassId,
@@ -33,6 +34,8 @@ export interface FighterInputIntent {
   blockHeld: boolean;
   dodgePressed: boolean;
   jumpPressed?: boolean;
+  ability1Pressed?: boolean;
+  ability2Pressed?: boolean;
 }
 
 export function createEmptyIntent(yaw = 0): FighterInputIntent {
@@ -48,6 +51,8 @@ export function createEmptyIntent(yaw = 0): FighterInputIntent {
     blockHeld: false,
     dodgePressed: false,
     jumpPressed: false,
+    ability1Pressed: false,
+    ability2Pressed: false,
   };
 }
 
@@ -88,8 +93,18 @@ export class Fighter {
   private prevAttackHeld = false;
   private prevBlockHeld = false;
 
-  // Attack execution data
+  // Attack & Class Ability execution data
   public activeAttack: AttackConfig | null = null;
+  public activeAbility: ClassAbilityConfig | null = null;
+  public readonly abilityCooldowns: [number, number] = [0, 0];
+  public abilityPulseAccum = 0;
+  public pendingDaggerProjectile = false;
+
+  // Active class buff timers
+  public damageAuraTimer = 0; // Sword [2]: +25% damage
+  public hasteTimer = 0; // Dual [2]: +25% movement speed
+  public ironBastionTimer = 0; // Hammer [2]: -35% incoming damage + hyper-armor
+
   public attackPhase: AttackPhase = 'None';
   public attackPhaseTimer = 0;
   public swingInstanceId = 0;
@@ -170,9 +185,36 @@ export class Fighter {
   }
 
   public get hasDodgeIframes(): boolean {
-    return (
+    if (
       this.state === 'Dodging' &&
       this.dodgeElapsed <= this.config.dodge.iframesDuration
+    ) {
+      return true;
+    }
+    if (
+      this.activeAbility?.id === 'spear_sweep' &&
+      this.attackPhase === 'Recovery' &&
+      this.attackPhaseTimer > 0.1
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  public get hasFrontalAbilityGuard(): boolean {
+    return Boolean(
+      this.isAlive &&
+        this.activeAbility?.frontalGuardDuringActive &&
+        (this.attackPhase === 'Windup' || this.attackPhase === 'Active')
+    );
+  }
+
+  public canUseAbility(slot: 1 | 2): boolean {
+    const ab = this.config.abilities[slot - 1];
+    return (
+      this.isAlive &&
+      this.abilityCooldowns[slot - 1] <= 0 &&
+      this.canSpendStamina(ab.staminaCost)
     );
   }
 
@@ -212,12 +254,29 @@ export class Fighter {
     jumped: boolean;
     landed: boolean;
     swungAttack: AttackConfig | null;
+    usedAbility: ClassAbilityConfig | null;
   } {
     let stepped = false;
     let jumped = false;
     let swungAttack: AttackConfig | null = null;
+    let usedAbility: ClassAbilityConfig | null = null;
 
     this.animTime += dt;
+    if (this.abilityCooldowns[0] > 0) {
+      this.abilityCooldowns[0] = Math.max(0, this.abilityCooldowns[0] - dt);
+    }
+    if (this.abilityCooldowns[1] > 0) {
+      this.abilityCooldowns[1] = Math.max(0, this.abilityCooldowns[1] - dt);
+    }
+    if (this.damageAuraTimer > 0) {
+      this.damageAuraTimer = Math.max(0, this.damageAuraTimer - dt);
+    }
+    if (this.hasteTimer > 0) {
+      this.hasteTimer = Math.max(0, this.hasteTimer - dt);
+    }
+    if (this.ironBastionTimer > 0) {
+      this.ironBastionTimer = Math.max(0, this.ironBastionTimer - dt);
+    }
     if (this.hitFlashTimer > 0) {
       this.hitFlashTimer = Math.max(0, this.hitFlashTimer - dt);
     }
@@ -244,7 +303,13 @@ export class Fighter {
       this.body.vx = 0;
       this.body.vz = 0;
       this.body.moveAndSlide(dt, arena);
-      return { stepped: false, jumped: false, landed: false, swungAttack: null };
+      return {
+        stepped: false,
+        jumped: false,
+        landed: false,
+        swungAttack: null,
+        usedAbility: null,
+      };
     }
 
     if (combatEnabled) {
@@ -267,6 +332,29 @@ export class Fighter {
     switch (this.state) {
       case 'Idle':
       case 'Moving': {
+        if (effectiveIntent.ability1Pressed && this.canUseAbility(1)) {
+          usedAbility = this.startAbility(
+            1,
+            effectiveIntent.aimYaw,
+            effectiveIntent.hasAimOverride
+          );
+          if (usedAbility) {
+            swungAttack = usedAbility.attackProfile;
+          }
+          break;
+        }
+        if (effectiveIntent.ability2Pressed && this.canUseAbility(2)) {
+          usedAbility = this.startAbility(
+            2,
+            effectiveIntent.aimYaw,
+            effectiveIntent.hasAimOverride
+          );
+          if (usedAbility) {
+            swungAttack = usedAbility.attackProfile;
+          }
+          break;
+        }
+
         const started = this.handleNeutralInput(
           dt,
           effectiveIntent,
@@ -281,6 +369,24 @@ export class Fighter {
       }
 
       case 'Blocking': {
+        if (effectiveIntent.ability1Pressed && this.canUseAbility(1)) {
+          usedAbility = this.startAbility(
+            1,
+            effectiveIntent.aimYaw,
+            effectiveIntent.hasAimOverride
+          );
+          if (usedAbility) swungAttack = usedAbility.attackProfile;
+          break;
+        }
+        if (effectiveIntent.ability2Pressed && this.canUseAbility(2)) {
+          usedAbility = this.startAbility(
+            2,
+            effectiveIntent.aimYaw,
+            effectiveIntent.hasAimOverride
+          );
+          if (usedAbility) swungAttack = usedAbility.attackProfile;
+          break;
+        }
         this.updateBlockingState(dt, effectiveIntent, mx, mz, hasMove);
         break;
       }
@@ -292,7 +398,28 @@ export class Fighter {
 
       case 'Attacking':
       case 'HeavyAttacking': {
-        this.updateAttackState(dt, effectiveIntent);
+        // Allow responsive combo-cancel into an Ability [1]/[2] during late Recovery!
+        if (this.attackPhase === 'Recovery' && this.attackPhaseTimer <= 0.12) {
+          if (effectiveIntent.ability1Pressed && this.canUseAbility(1)) {
+            usedAbility = this.startAbility(
+              1,
+              effectiveIntent.aimYaw,
+              effectiveIntent.hasAimOverride
+            );
+            if (usedAbility) swungAttack = usedAbility.attackProfile;
+            break;
+          }
+          if (effectiveIntent.ability2Pressed && this.canUseAbility(2)) {
+            usedAbility = this.startAbility(
+              2,
+              effectiveIntent.aimYaw,
+              effectiveIntent.hasAimOverride
+            );
+            if (usedAbility) swungAttack = usedAbility.attackProfile;
+            break;
+          }
+        }
+        this.updateAttackState(dt, effectiveIntent, mx, mz, hasMove);
         break;
       }
 
@@ -381,7 +508,7 @@ export class Fighter {
     this.prevAttackHeld = effectiveIntent.attackHeld;
     this.prevBlockHeld = effectiveIntent.blockHeld;
 
-    return { stepped, jumped, landed, swungAttack };
+    return { stepped, jumped, landed, swungAttack, usedAbility };
   }
 
   private handleNeutralInput(
@@ -506,6 +633,9 @@ export class Fighter {
     let speed = this.isSprinting
       ? this.config.sprintSpeed
       : this.config.moveSpeed;
+    if (this.hasteTimer > 0) {
+      speed *= 1.25; // Dual [2] Haste buff!
+    }
     if (this.isChargingHeavy) {
       speed *= 0.62; // Slowed footwork while drawing weapon back for heavy strike
     }
@@ -559,6 +689,43 @@ export class Fighter {
     return res;
   }
 
+  public startAbility(
+    slot: 1 | 2,
+    aimYaw: number,
+    hasAimOverride: boolean
+  ): ClassAbilityConfig | null {
+    const ab = this.config.abilities[slot - 1];
+    if (this.abilityCooldowns[slot - 1] > 0) return null;
+    if (!this.spendStamina(ab.staminaCost)) return null;
+
+    this.abilityCooldowns[slot - 1] = ab.cooldown;
+
+    if (hasAimOverride) {
+      this.yaw = rotateTowardsAngle(this.yaw, aimYaw, 2.2);
+    }
+
+    this.isSprinting = false;
+    this.isChargingHeavy = false;
+    this.chargeTimer = 0;
+    this.deflectPulsePending = false;
+
+    this.activeAbility = ab;
+    this.abilityPulseAccum = 0;
+    this.pendingDaggerProjectile = false;
+
+    const atk = ab.attackProfile;
+    this.state = atk.isHeavy ? 'HeavyAttacking' : 'Attacking';
+    this.activeAttack = atk;
+    this.attackPhase = 'Windup';
+    this.attackPhaseTimer = atk.windupDuration;
+    this.swingInstanceId += 1;
+    this.hitTargetsThisSwing.clear();
+
+    this.body.vx = 0;
+    this.body.vz = 0;
+    return ab;
+  }
+
   public startAttack(
     attack: AttackConfig,
     aimYaw: number,
@@ -577,6 +744,8 @@ export class Fighter {
     this.isSprinting = false;
     this.isChargingHeavy = false;
     this.chargeTimer = 0;
+    this.activeAbility = null;
+    this.abilityPulseAccum = 0;
 
     this.state = attack.isHeavy ? 'HeavyAttacking' : 'Attacking';
     this.activeAttack = attack;
@@ -590,14 +759,22 @@ export class Fighter {
     return attack;
   }
 
-  private updateAttackState(dt: number, intent: FighterInputIntent): void {
+  private updateAttackState(
+    dt: number,
+    intent: FighterInputIntent,
+    mx = 0,
+    mz = 0,
+    hasMove = false
+  ): void {
     const attack = this.activeAttack;
     if (!attack) {
+      this.activeAbility = null;
       this.state = 'Idle';
       this.attackPhase = 'None';
       return;
     }
 
+    const ab = this.activeAbility;
     this.attackPhaseTimer -= dt;
 
     if (this.attackPhase === 'Windup') {
@@ -617,12 +794,67 @@ export class Fighter {
         const overflow = -this.attackPhaseTimer;
         this.attackPhase = 'Active';
         this.attackPhaseTimer = Math.max(0.01, attack.activeDuration - overflow);
+
+        // Apply on-activation Class Ability effects!
+        if (ab) {
+          if (ab.healAmount) {
+            this.hp = clamp(this.hp + ab.healAmount, 0, this.maxHp);
+          }
+          if (ab.staminaRestore) {
+            this.stamina = clamp(
+              this.stamina + ab.staminaRestore,
+              0,
+              this.maxStamina
+            );
+          }
+          if (ab.buffKind === 'damage_aura') {
+            this.damageAuraTimer = ab.buffDuration ?? 5.0;
+          } else if (ab.buffKind === 'haste') {
+            this.hasteTimer = ab.buffDuration ?? 3.5;
+          } else if (ab.buffKind === 'iron_bastion') {
+            this.ironBastionTimer = ab.buffDuration ?? 5.5;
+          }
+          if (ab.spawnsProjectile) {
+            this.pendingDaggerProjectile = true;
+          }
+        }
       }
     } else if (this.attackPhase === 'Active') {
-      // Facing & trajectory are LOCKED during Active window! Camera rotation cannot alter swing!
-      const fwd = forwardFromYaw(this.yaw);
-      this.body.vx = fwd.x * attack.lungeSpeed;
-      this.body.vz = fwd.z * attack.lungeSpeed;
+      // Normal attacks lock facing & trajectory; steerable abilities allow controlled steering!
+      if (ab?.steerableDuringActive) {
+        if (ab.id === 'dual_cyclone') {
+          if (hasMove) {
+            this.body.vx = mx * attack.lungeSpeed;
+            this.body.vz = mz * attack.lungeSpeed;
+          } else {
+            const fwd = forwardFromYaw(this.yaw);
+            this.body.vx = fwd.x * (attack.lungeSpeed * 0.55);
+            this.body.vz = fwd.z * (attack.lungeSpeed * 0.55);
+          }
+        } else {
+          // Hammer Siege Ram: slight steering while charging forward!
+          if (intent.hasAimOverride) {
+            this.yaw = rotateTowardsAngle(this.yaw, intent.aimYaw, 1.9 * dt);
+          }
+          const fwd = forwardFromYaw(this.yaw);
+          this.body.vx = fwd.x * attack.lungeSpeed;
+          this.body.vz = fwd.z * attack.lungeSpeed;
+        }
+      } else {
+        const fwd = forwardFromYaw(this.yaw);
+        this.body.vx = fwd.x * attack.lungeSpeed;
+        this.body.vz = fwd.z * attack.lungeSpeed;
+      }
+
+      // Multi-hit spinning ability pulse (Dual [1] Blade Cyclone)
+      if (ab?.multiHitTicks && ab.multiHitTicks > 1) {
+        const tickInterval = attack.activeDuration / ab.multiHitTicks;
+        this.abilityPulseAccum += dt;
+        if (this.abilityPulseAccum >= tickInterval) {
+          this.abilityPulseAccum -= tickInterval;
+          this.hitTargetsThisSwing.clear();
+        }
+      }
 
       if (this.attackPhaseTimer <= 0) {
         const overflow = -this.attackPhaseTimer;
@@ -630,19 +862,27 @@ export class Fighter {
         this.attackPhaseTimer = Math.max(0.01, attack.recoveryDuration - overflow);
       }
     } else if (this.attackPhase === 'Recovery') {
-      // Smooth physical momentum deceleration during follow-through; rotation stays locked
       const remRatio = clamp(
         this.attackPhaseTimer / Math.max(0.05, attack.recoveryDuration),
         0,
         1
       );
-      const glideSpeed = attack.lungeSpeed * 0.28 * remRatio * remRatio;
       const fwd = forwardFromYaw(this.yaw);
-      this.body.vx = fwd.x * glideSpeed;
-      this.body.vz = fwd.z * glideSpeed;
+
+      if (ab?.backVaultSpeed) {
+        // Spear [2] Sweep Vault: spring backward onto safe polearm spacing!
+        const vaultVel = ab.backVaultSpeed * (0.4 + 0.6 * remRatio);
+        this.body.vx = -fwd.x * vaultVel;
+        this.body.vz = -fwd.z * vaultVel;
+      } else {
+        const glideSpeed = attack.lungeSpeed * 0.28 * remRatio * remRatio;
+        this.body.vx = fwd.x * glideSpeed;
+        this.body.vz = fwd.z * glideSpeed;
+      }
 
       if (this.attackPhaseTimer <= 0) {
         this.activeAttack = null;
+        this.activeAbility = null;
         this.attackPhase = 'None';
         this.state = 'Idle';
         this.comboResetTimer = this.config.comboWindow;
@@ -744,6 +984,7 @@ export class Fighter {
 
     this.isSprinting = false;
     this.activeAttack = null;
+    this.activeAbility = null;
     this.attackPhase = 'None';
     this.state = 'Dodging';
     this.dodgeElapsed = 0;
@@ -791,6 +1032,7 @@ export class Fighter {
   public applyStun(duration: number): void {
     if (!this.isAlive) return;
     this.activeAttack = null;
+    this.activeAbility = null;
     this.attackPhase = 'None';
     this.isChargingHeavy = false;
     this.isSprinting = false;
@@ -802,13 +1044,17 @@ export class Fighter {
 
   public applyHitReaction(duration: number, canInterrupt: boolean): void {
     if (!this.isAlive) return;
+    if (this.ironBastionTimer > 0) {
+      // Iron Bastion buff prevents hit-stagger!
+      return;
+    }
     if (
       (this.state === 'Attacking' || this.state === 'HeavyAttacking') &&
       this.activeAttack &&
       !this.activeAttack.interruptible &&
       !canInterrupt
     ) {
-      // Uninterruptible hyperarmor (e.g. Hammer heavy slam) continues swinging!
+      // Uninterruptible hyperarmor continues swinging!
       return;
     }
 
@@ -817,6 +1063,7 @@ export class Fighter {
     }
 
     this.activeAttack = null;
+    this.activeAbility = null;
     this.attackPhase = 'None';
     this.isChargingHeavy = false;
     this.isSprinting = false;
@@ -837,6 +1084,7 @@ export class Fighter {
       this.hp = 0;
       this.state = 'Dead';
       this.activeAttack = null;
+      this.activeAbility = null;
       this.attackPhase = 'None';
       this.isChargingHeavy = false;
       this.isSprinting = false;

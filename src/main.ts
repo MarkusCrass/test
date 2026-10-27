@@ -19,6 +19,8 @@ class KnightsGameApp {
   private rmbHeld = false;
   private dodgeQueued = false;
   private jumpQueued = false;
+  private ability1Queued = false;
+  private ability2Queued = false;
 
   private pointerLocked = false;
   private intentionalUnlock = false;
@@ -107,6 +109,8 @@ class KnightsGameApp {
     this.rmbHeld = false;
     this.dodgeQueued = false;
     this.jumpQueued = false;
+    this.ability1Queued = false;
+    this.ability2Queued = false;
   }
 
   private isCombatInteractive(): boolean {
@@ -224,7 +228,13 @@ class KnightsGameApp {
       }
 
       this.keysDown.add(e.code);
-      if (e.code === 'Space' && !e.repeat) {
+      if ((e.code === 'Digit1' || e.code === 'Numpad1') && !e.repeat) {
+        e.preventDefault();
+        this.ability1Queued = true;
+      } else if ((e.code === 'Digit2' || e.code === 'Numpad2') && !e.repeat) {
+        e.preventDefault();
+        this.ability2Queued = true;
+      } else if (e.code === 'Space' && !e.repeat) {
         e.preventDefault();
         this.jumpQueued = true;
       } else if (
@@ -342,8 +352,12 @@ class KnightsGameApp {
     intent.blockHeld = this.rmbHeld;
     intent.dodgePressed = this.dodgeQueued;
     intent.jumpPressed = this.jumpQueued;
+    intent.ability1Pressed = this.ability1Queued;
+    intent.ability2Pressed = this.ability2Queued;
     this.dodgeQueued = false;
     this.jumpQueued = false;
+    this.ability1Queued = false;
+    this.ability2Queued = false;
 
     return intent;
   }

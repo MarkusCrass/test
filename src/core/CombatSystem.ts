@@ -1,5 +1,5 @@
 import { ArenaConfig } from '../config/arenaConfig';
-import { AttackConfig } from '../config/classes';
+import { AbilityKind, AttackConfig } from '../config/classes';
 import { Fighter } from './Fighter';
 import {
   angleDiff,
@@ -11,6 +11,11 @@ import {
 
 export type CombatEventType =
   | 'swing'
+  | 'ability_cast'
+  | 'warcry_nova'
+  | 'quake_slam'
+  | 'dagger_throw'
+  | 'dagger_hit'
   | 'hit'
   | 'heavy_hit'
   | 'blocked'
@@ -26,11 +31,26 @@ export interface CombatEvent {
   type: CombatEventType;
   attackerId: string;
   victimId?: string;
+  abilityId?: AbilityKind;
   x: number;
   y: number;
   z: number;
   damage?: number;
   isHeavy?: boolean;
+}
+
+export interface ThrownProjectile {
+  id: number;
+  ownerId: string;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vz: number;
+  yaw: number;
+  damage: number;
+  knockback: number;
+  remainingDist: number;
 }
 
 interface PendingStrike {
@@ -47,25 +67,59 @@ const DEG2RAD = Math.PI / 180;
 
 export class CombatSystem {
   private emittedSlamSwings = new Set<string>();
+  public readonly projectiles: ThrownProjectile[] = [];
+  private nextProjectileId = 1;
 
   public reset(): void {
     this.emittedSlamSwings.clear();
+    this.projectiles.length = 0;
   }
 
   /**
-   * Evaluates all active hitboxes, spear deflect pulses, and shield shoves for the current tick.
-   * Two-stage collection + resolution guarantees simultaneous strikes resolve fairly.
+   * Evaluates all active hitboxes, class abilities, projectiles, spear deflects & shield shoves.
    */
   public step(
     fighters: Fighter[],
     arena: ArenaConfig,
-    damageMultiplier = 1.0
+    damageMultiplier = 1.0,
+    dt = 1 / 60
   ): CombatEvent[] {
     const events: CombatEvent[] = [];
 
-    // 1. Handle Spear Deflect active pulse & Hammer Shield Shove
+    // 1. Handle Spear Deflect, Hammer Shove, Dagger Projectile Spawn & Nova/Quake Bursts
     for (const f of fighters) {
       if (!f.isAlive) continue;
+
+      if (f.pendingDaggerProjectile) {
+        f.pendingDaggerProjectile = false;
+        const ab = f.config.abilities[1];
+        const fwd = forwardFromYaw(f.yaw);
+        const speed = ab.projectileSpeed ?? 23.0;
+        const spawnX = f.body.x + fwd.x * 0.75;
+        const spawnY = f.body.y + 1.18;
+        const spawnZ = f.body.z + fwd.z * 0.75;
+        this.projectiles.push({
+          id: this.nextProjectileId++,
+          ownerId: f.id,
+          x: spawnX,
+          y: spawnY,
+          z: spawnZ,
+          vx: fwd.x * speed,
+          vz: fwd.z * speed,
+          yaw: f.yaw,
+          damage: ab.projectileDamage ?? 22,
+          knockback: 5.2,
+          remainingDist: ab.projectileRange ?? 15.5,
+        });
+        events.push({
+          type: 'dagger_throw',
+          attackerId: f.id,
+          abilityId: 'dual_dagger',
+          x: spawnX,
+          y: spawnY,
+          z: spawnZ,
+        });
+      }
 
       if (f.state === 'Blocking' && f.deflectPulsePending) {
         f.deflectPulsePending = false;
@@ -80,26 +134,54 @@ export class CombatSystem {
         this.resolveShieldShove(f, fighters, arena, events);
       }
 
-      // Emit ground dust burst once when Hammer's heavy slam enters Active phase
-      if (
-        f.isHitboxActive &&
-        f.activeAttack?.animStyle === 'hammer_slam'
-      ) {
-        const key = `${f.id}_${f.swingInstanceId}`;
-        if (!this.emittedSlamSwings.has(key)) {
-          this.emittedSlamSwings.add(key);
-          const fwd = forwardFromYaw(f.yaw);
-          events.push({
-            type: 'ground_slam',
-            attackerId: f.id,
-            x: f.body.x + fwd.x * 1.7,
-            y: f.body.y + 0.1,
-            z: f.body.z + fwd.z * 1.7,
-            isHeavy: true,
-          });
+      // Emit ground dust / ability nova bursts once when entering Active phase
+      if (f.isHitboxActive && f.activeAttack) {
+        const style = f.activeAttack.animStyle;
+        if (
+          style === 'hammer_slam' ||
+          style === 'ability_hammer_quake' ||
+          style === 'ability_sword_warcry'
+        ) {
+          const key = `${f.id}_${f.swingInstanceId}`;
+          if (!this.emittedSlamSwings.has(key)) {
+            this.emittedSlamSwings.add(key);
+            const fwd = forwardFromYaw(f.yaw);
+            if (style === 'ability_sword_warcry') {
+              events.push({
+                type: 'warcry_nova',
+                attackerId: f.id,
+                abilityId: 'sword_warcry',
+                x: f.body.x,
+                y: f.body.y + 0.25,
+                z: f.body.z,
+              });
+            } else if (style === 'ability_hammer_quake') {
+              events.push({
+                type: 'quake_slam',
+                attackerId: f.id,
+                abilityId: 'hammer_quake',
+                x: f.body.x + fwd.x * 1.1,
+                y: f.body.y + 0.1,
+                z: f.body.z + fwd.z * 1.1,
+                isHeavy: true,
+              });
+            } else {
+              events.push({
+                type: 'ground_slam',
+                attackerId: f.id,
+                x: f.body.x + fwd.x * 1.7,
+                y: f.body.y + 0.1,
+                z: f.body.z + fwd.z * 1.7,
+                isHeavy: true,
+              });
+            }
+          }
         }
       }
     }
+
+    // 1b. Advance flying Dagger Projectiles!
+    this.stepProjectiles(dt, fighters, arena, damageMultiplier, events);
 
     // 2. Collect all valid weapon sector hits before mutating states
     const pendingStrikes: PendingStrike[] = [];
@@ -209,6 +291,11 @@ export class CombatSystem {
     if (!victim.isAlive) return;
     const baseY = victim.body.y;
 
+    const attackerAuraMult = attacker.damageAuraTimer > 0 ? 1.25 : 1.0;
+    const victimBastionMult = victim.ironBastionTimer > 0 ? 0.65 : 1.0;
+    const totalDamageMult =
+      damageMultiplier * attackerAuraMult * victimBastionMult;
+
     // 1. Dodge invulnerability frames
     if (victim.hasDodgeIframes) {
       events.push({
@@ -222,8 +309,8 @@ export class CombatSystem {
       return;
     }
 
-    // 2. Check directional defense (Block / Timed Parry / Spear Deflect)
-    if (victim.state === 'Blocking') {
+    // 2. Check directional defense (Block / Timed Parry / Spear Deflect / Shield Charge Guard)
+    if (victim.state === 'Blocking' || victim.hasFrontalAbilityGuard) {
       const angleToAttacker = yawFromDir(
         attacker.body.x - victim.body.x,
         attacker.body.z - victim.body.z,
@@ -272,7 +359,7 @@ export class CombatSystem {
 
             const rawChip =
               attack.damage *
-              damageMultiplier *
+              totalDamageMult *
               (1 - def.damageReduction) *
               (1 - victim.config.armorReduction);
             const chipDamage = Math.round(rawChip * 10) / 10;
@@ -315,7 +402,7 @@ export class CombatSystem {
             victim.drainStaminaClamped(victim.stamina);
             const breakDmg = Math.round(
               attack.damage *
-                damageMultiplier *
+                totalDamageMult *
                 0.5 *
                 (1 - victim.config.armorReduction)
             );
@@ -356,7 +443,7 @@ export class CombatSystem {
 
     // 3. Direct Unblocked Hit!
     const mitigated =
-      attack.damage * damageMultiplier * (1 - victim.config.armorReduction);
+      attack.damage * totalDamageMult * (1 - victim.config.armorReduction);
     const finalDamage = Math.max(1, Math.round(mitigated));
 
     victim.body.applyImpulse(dirX * attack.knockback, dirZ * attack.knockback);
@@ -384,8 +471,156 @@ export class CombatSystem {
         y: baseY + 0.9,
         z: victim.body.z,
       });
+    } else if (attacker.activeAbility?.appliesFullStun) {
+      // Hammer [1] Siege Ram applies a full Stunned state with overhead stars!
+      victim.applyStun(attack.stunDurationOnHit);
     } else {
       victim.applyHitReaction(attack.stunDurationOnHit, attack.isHeavy);
+    }
+  }
+
+  private stepProjectiles(
+    dt: number,
+    fighters: Fighter[],
+    arena: ArenaConfig,
+    damageMultiplier: number,
+    events: CombatEvent[]
+  ): void {
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const p = this.projectiles[i];
+      const prevX = p.x;
+      const prevZ = p.z;
+      const stepDist = Math.hypot(p.vx * dt, p.vz * dt);
+      p.x += p.vx * dt;
+      p.z += p.vz * dt;
+      p.remainingDist -= stepDist;
+
+      // Check outer wall or stone column impact
+      const outOfBounds =
+        (arena.boundsHalfX &&
+          (Math.abs(p.x) >= arena.boundsHalfX ||
+            Math.abs(p.z) >= arena.boundsHalfZ)) ||
+        Math.hypot(p.x, p.z) >= arena.radius - 0.2;
+
+      const hitPillar = isLineBlockedByPillars(
+        prevX,
+        prevZ,
+        p.x,
+        p.z,
+        arena,
+        0.1,
+        Math.max(0, p.y - 1.1)
+      );
+
+      if (outOfBounds || hitPillar || p.remainingDist <= 0) {
+        if (outOfBounds || hitPillar) {
+          events.push({
+            type: 'blocked',
+            attackerId: p.ownerId,
+            x: p.x,
+            y: p.y,
+            z: p.z,
+            damage: 0,
+          });
+        }
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+
+      // Check fighter collision along projectile path
+      const owner = fighters.find((f) => f.id === p.ownerId) ?? null;
+      let consumed = false;
+
+      for (const victim of fighters) {
+        if (victim.id === p.ownerId || !victim.isAlive) continue;
+        if (Math.abs(victim.body.y + 1.05 - p.y) > 1.35) continue;
+
+        const d = distXZ(p.x, p.z, victim.body.x, victim.body.z);
+        if (d > victim.body.radius + 0.32) continue;
+
+        consumed = true;
+        if (victim.hasDodgeIframes) {
+          events.push({
+            type: 'evaded',
+            attackerId: p.ownerId,
+            victimId: victim.id,
+            x: victim.body.x,
+            y: victim.body.y + 1.0,
+            z: victim.body.z,
+          });
+          break;
+        }
+
+        const spd = Math.max(0.01, Math.hypot(p.vx, p.vz));
+        const dirX = p.vx / spd;
+        const dirZ = p.vz / spd;
+
+        // Check if victim is blocking toward incoming dagger
+        if (victim.state === 'Blocking' || victim.hasFrontalAbilityGuard) {
+          const angToDagger = yawFromDir(-dirX, -dirZ, victim.yaw);
+          const halfArc = victim.config.defense.blockAngleDeg * 0.5 * DEG2RAD;
+          if (Math.abs(angleDiff(victim.yaw, angToDagger)) <= halfArc) {
+            victim.blockImpactTimer = 0.24;
+            victim.stats.blocksSucceeded += 1;
+            events.push({
+              type: 'blocked',
+              attackerId: p.ownerId,
+              victimId: victim.id,
+              x: p.x,
+              y: p.y,
+              z: p.z,
+              damage: 0,
+            });
+            break;
+          }
+        }
+
+        const auraMult = owner && owner.damageAuraTimer > 0 ? 1.25 : 1.0;
+        const bastionMult = victim.ironBastionTimer > 0 ? 0.65 : 1.0;
+        const dmg = Math.max(
+          1,
+          Math.round(
+            p.damage *
+              damageMultiplier *
+              auraMult *
+              bastionMult *
+              (1 - victim.config.armorReduction)
+          )
+        );
+
+        victim.body.applyImpulse(dirX * p.knockback, dirZ * p.knockback);
+        const killed = victim.takeRawDamage(dmg, p.ownerId);
+        if (owner) owner.stats.damageDealt += dmg;
+
+        events.push({
+          type: 'dagger_hit',
+          attackerId: p.ownerId,
+          victimId: victim.id,
+          x: p.x,
+          y: p.y,
+          z: p.z,
+          damage: dmg,
+        });
+
+        if (killed) {
+          if (owner) owner.stats.kills += 1;
+          events.push({
+            type: 'death',
+            attackerId: p.ownerId,
+            victimId: victim.id,
+            x: victim.body.x,
+            y: victim.body.y + 0.9,
+            z: victim.body.z,
+          });
+        } else {
+          victim.applyHitReaction(0.36, false);
+        }
+        break;
+      }
+
+      if (consumed) {
+        this.projectiles.splice(i, 1);
+      }
     }
   }
 

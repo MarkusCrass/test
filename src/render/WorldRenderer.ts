@@ -341,15 +341,25 @@ export class WorldRenderer {
       const involvesObserved =
         ev.attackerId === observedFighterId || ev.victimId === observedFighterId;
       if (involvesObserved) {
-        if (ev.type === 'heavy_hit' || ev.type === 'ground_slam') {
+        if (ev.type === 'quake_slam') {
+          this.cameraRig.addShake(0.85);
+        } else if (ev.type === 'heavy_hit' || ev.type === 'ground_slam') {
           this.cameraRig.addShake(0.62);
-        } else if (ev.type === 'parried' || ev.type === 'guard_broken') {
+        } else if (
+          ev.type === 'parried' ||
+          ev.type === 'guard_broken' ||
+          ev.type === 'warcry_nova'
+        ) {
           this.cameraRig.addShake(0.55);
-        } else if (ev.type === 'hit' || ev.type === 'blocked') {
+        } else if (
+          ev.type === 'hit' ||
+          ev.type === 'dagger_hit' ||
+          ev.type === 'blocked'
+        ) {
           this.cameraRig.addShake(0.28);
         }
-      } else if (ev.type === 'ground_slam') {
-        this.cameraRig.addShake(0.2);
+      } else if (ev.type === 'ground_slam' || ev.type === 'quake_slam') {
+        this.cameraRig.addShake(0.28);
       }
     }
   }
@@ -405,6 +415,7 @@ export class WorldRenderer {
     this.trailsGroup.visible = true;
 
     this.syncFighterMeshes(match);
+    this.effects.syncProjectiles(match.combatSystem.projectiles, dt);
 
     const observed = match.getObservedFighter();
     if (observed) {

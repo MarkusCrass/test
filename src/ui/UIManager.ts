@@ -61,6 +61,8 @@ export class UIManager {
   private readonly hpTextEl: HTMLElement;
   private readonly stamFillEl: HTMLElement;
   private readonly stamTextEl: HTMLElement;
+  private readonly skillBarEl: HTMLElement;
+  private readonly activeBuffEl: HTMLElement;
   private readonly chargeMeterEl: HTMLElement;
   private readonly chargeFillEl: HTMLElement;
   private readonly pointerPromptEl: HTMLElement;
@@ -105,8 +107,8 @@ export class UIManager {
             <div><span class="key-chip">ЛКМ</span> Лёгкий удар</div>
             <div><span class="key-chip">Удерж. ЛКМ</span> Тяжёлый удар</div>
             <div><span class="key-chip">ПКМ</span> Блок / Парирование</div>
-            <div><span class="key-chip">Space</span> Прыжок</div>
-            <div><span class="key-chip">Alt / C</span> Уклонение / Толчок</div>
+            <div><span class="key-chip">1 / 2</span> Способности класса</div>
+            <div><span class="key-chip">Space</span> Прыжок · <span class="key-chip">Alt / C</span> Рывок</div>
             <div><span class="key-chip">Shift</span> Бег · <span class="key-chip">F3</span> Хитбоксы · <span class="key-chip">Esc</span> Пауза</div>
           </div>
         </div>
@@ -178,12 +180,14 @@ export class UIManager {
             <div id="hud-hp-fill" class="hp-fill" style="width: 100%"></div>
             <div id="hud-hp-text" class="bar-text">ЗДОРОВЬЕ: 100 / 100</div>
           </div>
-          <div class="bar-container" style="height: 15px; margin-bottom: 4px;">
+          <div class="bar-container" style="height: 15px; margin-bottom: 6px;">
             <div id="hud-stam-fill" class="stamina-fill" style="width: 100%"></div>
             <div id="hud-stam-text" class="bar-text">ВЫНОСЛИВОСТЬ: 100</div>
           </div>
+          <div id="hud-active-buff" class="hud-buff-pill hidden"></div>
+          <div id="hud-skill-bar" class="hud-skill-bar"></div>
           <div class="hud-hint-line">
-            ЛКМ: Удар / Заряд · ПКМ: Защита · Space: Прыжок · Alt/C: Рывок · Esc: Пауза
+            ЛКМ: Удар · ПКМ: Защита · 1/2: Способности · Space: Прыжок · Alt/C: Рывок
           </div>
         </div>
 
@@ -315,6 +319,8 @@ export class UIManager {
     this.hpTextEl = this.q('#hud-hp-text');
     this.stamFillEl = this.q('#hud-stam-fill');
     this.stamTextEl = this.q('#hud-stam-text');
+    this.skillBarEl = this.q('#hud-skill-bar');
+    this.activeBuffEl = this.q('#hud-active-buff');
     this.chargeMeterEl = this.q('#hud-charge-meter');
     this.chargeFillEl = this.q('#hud-charge-fill');
     this.pointerPromptEl = this.q('#hud-pointer-prompt');
@@ -551,11 +557,30 @@ export class UIManager {
           <strong style="text-align:right">${cfg.heavyAttack.range.toFixed(1)} м</strong>
         </div>
       </div>
-      <div style="font-size: 11px; font-weight: 800; color: var(--border-gold); text-transform: uppercase;">
-        Боевые приёмы класса
+      <div style="font-size: 11px; font-weight: 800; color: var(--border-gold); text-transform: uppercase; margin-bottom: 6px;">
+        Активные способности [1] и [2]
+      </div>
+      <div class="sel-abilities-grid">
+        ${cfg.abilities
+          .map(
+            (ab) => `
+          <div class="sel-ability-card">
+            <div class="sel-ability-head">
+              <span class="sel-ability-key">[${ab.slot}] ${ab.icon}</span>
+              <span class="sel-ability-name">${ab.name}</span>
+              <span class="sel-ability-meta">${ab.cooldown}с · ${ab.staminaCost} СТ</span>
+            </div>
+            <div class="sel-ability-desc">${ab.description}</div>
+          </div>
+        `
+          )
+          .join('')}
+      </div>
+      <div style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-top: 8px;">
+        Базовые приёмы
       </div>
       <ul class="ability-list">
-        ${cfg.abilitiesList.map((a) => `<li>${a}</li>`).join('')}
+        ${cfg.abilitiesList.slice(0, 3).map((a) => `<li>${a}</li>`).join('')}
       </ul>
     `;
   }
@@ -697,6 +722,55 @@ export class UIManager {
       const stPct = Math.max(0, (player.stamina / player.maxStamina) * 100);
       this.stamFillEl.style.width = `${stPct}%`;
       this.stamTextEl.textContent = `ВЫНОСЛИВОСТЬ: ${Math.floor(player.stamina)} / ${player.maxStamina}`;
+
+      // Active Buff indicator
+      if (player.damageAuraTimer > 0) {
+        this.activeBuffEl.classList.remove('hidden');
+        this.activeBuffEl.textContent = `✨ ОБЕТ СТАЛИ: +25% УРОН (${player.damageAuraTimer.toFixed(1)}с)`;
+      } else if (player.hasteTimer > 0) {
+        this.activeBuffEl.classList.remove('hidden');
+        this.activeBuffEl.textContent = `💨 ШАГ ТЕНЕЙ: +25% СКОРОСТЬ (${player.hasteTimer.toFixed(1)}с)`;
+      } else if (player.ironBastionTimer > 0) {
+        this.activeBuffEl.classList.remove('hidden');
+        this.activeBuffEl.textContent = `🛡️ ЖЕЛЕЗНЫЙ БАСТИОН: -35% УРОН (${player.ironBastionTimer.toFixed(1)}с)`;
+      } else {
+        this.activeBuffEl.classList.add('hidden');
+      }
+
+      // Live [1] & [2] Class Skill Hotbar
+      const clsCfg = KNIGHT_CLASSES[player.classId];
+      this.skillBarEl.innerHTML = clsCfg.abilities
+        .map((ab, idx) => {
+          const cd = player.abilityCooldowns[idx];
+          const cdPct = Math.min(100, Math.max(0, (cd / ab.cooldown) * 100));
+          const noStam = player.stamina < ab.staminaCost;
+          const isCasting = player.activeAbility?.id === ab.id;
+          const stateClass = isCasting
+            ? 'casting'
+            : cd > 0
+            ? 'on-cd'
+            : noStam
+            ? 'no-stam'
+            : 'ready';
+          const statusLabel =
+            cd > 0
+              ? `${cd.toFixed(1)}с`
+              : noStam
+              ? `${ab.staminaCost} СТ`
+              : 'ГОТОВО';
+          return `
+            <div class="hud-skill-slot ${stateClass}">
+              <div class="hud-skill-cd-fill" style="height:${cdPct}%"></div>
+              <div class="hud-skill-top">
+                <span class="hud-skill-key">${ab.slot}</span>
+                <span class="hud-skill-icon">${ab.icon}</span>
+                <span class="hud-skill-status">${statusLabel}</span>
+              </div>
+              <div class="hud-skill-title">${ab.name}</div>
+            </div>
+          `;
+        })
+        .join('');
 
       if (player.isChargingHeavy) {
         this.chargeMeterEl.classList.remove('hidden');
