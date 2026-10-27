@@ -1,9 +1,13 @@
 import * as THREE from 'three';
+import { KnightClassId } from '../config/classes';
 
 /**
- * Generates high-craft stylized PBR textures (Albedo + Sobel Height-to-Normal + Roughness)
- * for medieval stone flagstones, castle ashlar masonry, aged oak timber, forged steel,
- * woven heraldic banners, and soft ground contact shadows.
+ * High-Detail Hand-Crafted Procedural PBR Texture & Material Library:
+ * - 1024x1024 Bespoke Radial Medieval Courtyard Floor (concentric cobbles, inlaid compass medallion, moss & wear) + Normal Map
+ * - Ashlar Fortress Stone Masonry + Normal Map
+ * - Interlocking Iron Chainmail Hauberk + Normal Map
+ * - Aged Oak Timber & Forged Tempered Steel + Normal Maps
+ * - Hand-Painted Class Heraldry (Shields, Surcoats, Swallowtail Tournament Banners)
  */
 export class MaterialLibrary {
   public readonly floorTex: THREE.CanvasTexture;
@@ -14,40 +18,45 @@ export class MaterialLibrary {
   public readonly woodNormalTex: THREE.CanvasTexture;
   public readonly steelTex: THREE.CanvasTexture;
   public readonly steelNormalTex: THREE.CanvasTexture;
+  public readonly chainmailTex: THREE.CanvasTexture;
+  public readonly chainmailNormalTex: THREE.CanvasTexture;
   public readonly contactShadowTex: THREE.CanvasTexture;
   public readonly crackDecalTex: THREE.CanvasTexture;
 
   public readonly floorMat: THREE.MeshStandardMaterial;
   public readonly curbStoneMat: THREE.MeshStandardMaterial;
   public readonly wallMat: THREE.MeshStandardMaterial;
+  public readonly darkStoneMat: THREE.MeshStandardMaterial;
   public readonly pillarMat: THREE.MeshStandardMaterial;
   public readonly woodMat: THREE.MeshStandardMaterial;
   public readonly darkIronMat: THREE.MeshStandardMaterial;
+  public readonly chainmailMat: THREE.MeshStandardMaterial;
   public readonly bronzeTrimMat: THREE.MeshStandardMaterial;
+  public readonly leatherMat: THREE.MeshStandardMaterial;
   public readonly grassMat: THREE.MeshStandardMaterial;
+  public readonly ivyMat: THREE.MeshStandardMaterial;
   public readonly cliffRockMat: THREE.MeshStandardMaterial;
+  public readonly emberCoalMat: THREE.MeshBasicMaterial;
   public readonly flameOuterMat: THREE.MeshBasicMaterial;
   public readonly flameCoreMat: THREE.MeshBasicMaterial;
 
   constructor() {
-    const floorPack = this.createStoneSlabMaps(256);
+    // 1. Bespoke 1024x1024 Radial Courtyard Cobblestone & Compass Floor (mapped 1:1 to arena disc!)
+    const floorPack = this.createRadialCourtyardMaps(1024);
     this.floorTex = floorPack.albedo;
     this.floorNormalTex = floorPack.normal;
-    for (const t of [this.floorTex, this.floorNormalTex]) {
-      t.wrapS = THREE.RepeatWrapping;
-      t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(7, 7);
-    }
 
+    // 2. Fortress Ashlar Wall Masonry
     const wallPack = this.createMasonryWallMaps(256);
     this.wallTex = wallPack.albedo;
     this.wallNormalTex = wallPack.normal;
     for (const t of [this.wallTex, this.wallNormalTex]) {
       t.wrapS = THREE.RepeatWrapping;
       t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(12, 2);
+      t.repeat.set(2, 2);
     }
 
+    // 3. Aged Oak Timber
     const woodPack = this.createWoodPlankMaps(128);
     this.woodTex = woodPack.albedo;
     this.woodNormalTex = woodPack.normal;
@@ -57,6 +66,7 @@ export class MaterialLibrary {
       t.repeat.set(2, 2);
     }
 
+    // 4. Forged Tempered Steel
     const steelPack = this.createForgedSteelMaps(128);
     this.steelTex = steelPack.albedo;
     this.steelNormalTex = steelPack.normal;
@@ -65,85 +75,130 @@ export class MaterialLibrary {
       t.wrapT = THREE.RepeatWrapping;
     }
 
+    // 5. Interlocking Ring Chainmail
+    const mailPack = this.createChainmailMaps(128);
+    this.chainmailTex = mailPack.albedo;
+    this.chainmailNormalTex = mailPack.normal;
+    for (const t of [this.chainmailTex, this.chainmailNormalTex]) {
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(4, 4);
+    }
+
     this.contactShadowTex = this.createContactShadowTexture(128);
     this.crackDecalTex = this.createGroundCrackTexture(128);
 
     this.floorMat = new THREE.MeshStandardMaterial({
       map: this.floorTex,
       normalMap: this.floorNormalTex,
-      normalScale: new THREE.Vector2(1.15, 1.15),
-      roughness: 0.84,
-      metalness: 0.05,
+      normalScale: new THREE.Vector2(1.35, 1.35),
+      roughness: 0.82,
+      metalness: 0.06,
     });
 
     this.curbStoneMat = new THREE.MeshStandardMaterial({
-      color: 0x7b828e,
-      normalMap: this.floorNormalTex,
+      color: 0x828894,
+      normalMap: this.wallNormalTex,
       normalScale: new THREE.Vector2(0.55, 0.55),
       roughness: 0.78,
-      metalness: 0.08,
+      metalness: 0.07,
     });
 
     this.wallMat = new THREE.MeshStandardMaterial({
       map: this.wallTex,
       normalMap: this.wallNormalTex,
-      normalScale: new THREE.Vector2(1.25, 1.25),
-      roughness: 0.86,
+      normalScale: new THREE.Vector2(1.3, 1.3),
+      roughness: 0.85,
       metalness: 0.05,
     });
 
+    this.darkStoneMat = new THREE.MeshStandardMaterial({
+      color: 0x4f5561,
+      normalMap: this.wallNormalTex,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      roughness: 0.88,
+      metalness: 0.06,
+    });
+
     this.pillarMat = new THREE.MeshStandardMaterial({
-      color: 0x828894,
+      color: 0x888f9c,
       normalMap: this.wallNormalTex,
       normalScale: new THREE.Vector2(0.75, 0.75),
-      roughness: 0.8,
+      roughness: 0.76,
       metalness: 0.08,
     });
 
     this.woodMat = new THREE.MeshStandardMaterial({
       map: this.woodTex,
       normalMap: this.woodNormalTex,
-      normalScale: new THREE.Vector2(0.95, 0.95),
-      roughness: 0.84,
+      normalScale: new THREE.Vector2(1.0, 1.0),
+      roughness: 0.82,
       metalness: 0.04,
     });
 
     this.darkIronMat = new THREE.MeshStandardMaterial({
-      color: 0x313742,
+      color: 0x2c323d,
       normalMap: this.steelNormalTex,
-      normalScale: new THREE.Vector2(0.45, 0.45),
-      roughness: 0.48,
-      metalness: 0.72,
-    });
-
-    this.bronzeTrimMat = new THREE.MeshStandardMaterial({
-      color: 0xd8a23a,
-      roughness: 0.36,
+      normalScale: new THREE.Vector2(0.5, 0.5),
+      roughness: 0.44,
       metalness: 0.78,
     });
 
+    this.chainmailMat = new THREE.MeshStandardMaterial({
+      map: this.chainmailTex,
+      normalMap: this.chainmailNormalTex,
+      normalScale: new THREE.Vector2(1.15, 1.15),
+      roughness: 0.46,
+      metalness: 0.76,
+    });
+
+    this.bronzeTrimMat = new THREE.MeshStandardMaterial({
+      color: 0xdfa83c,
+      roughness: 0.3,
+      metalness: 0.84,
+    });
+
+    this.leatherMat = new THREE.MeshStandardMaterial({
+      color: 0x4e2d18,
+      normalMap: this.woodNormalTex,
+      normalScale: new THREE.Vector2(0.45, 0.45),
+      roughness: 0.74,
+      metalness: 0.06,
+    });
+
     this.grassMat = new THREE.MeshStandardMaterial({
-      color: 0x3d9946,
+      color: 0x3b9644,
       roughness: 0.92,
       metalness: 0.0,
       flatShading: true,
     });
 
+    this.ivyMat = new THREE.MeshStandardMaterial({
+      color: 0x2e7d38,
+      roughness: 0.88,
+      metalness: 0.0,
+      flatShading: true,
+    });
+
     this.cliffRockMat = new THREE.MeshStandardMaterial({
-      color: 0x4c535f,
+      color: 0x4b525e,
       roughness: 0.94,
       metalness: 0.04,
       flatShading: true,
     });
 
-    // High-HDR color (>1.0 via emissive/toneMapped:false) so UnrealBloom picks up real flames!
+    this.emberCoalMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(1.6, 0.42, 0.08),
+      toneMapped: false,
+    });
+
     this.flameOuterMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(1.9, 0.72, 0.14),
+      color: new THREE.Color(1.95, 0.74, 0.14),
       toneMapped: false,
     });
 
     this.flameCoreMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(2.4, 1.85, 0.75),
+      color: new THREE.Color(2.45, 1.9, 0.8),
       toneMapped: false,
     });
   }
@@ -162,14 +217,11 @@ export class MaterialLibrary {
   private toAlbedoTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
+    tex.anisotropy = 8;
     tex.needsUpdate = true;
     return tex;
   }
 
-  /**
-   * Converts a grayscale height array [0..1] of size N*N into a tangent-space Normal Map CanvasTexture.
-   */
   private heightToNormalTexture(
     heights: Float32Array,
     size: number,
@@ -218,92 +270,219 @@ export class MaterialLibrary {
     ctx.putImageData(img, 0, 0);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.NoColorSpace;
-    tex.anisotropy = 4;
+    tex.anisotropy = 8;
     tex.needsUpdate = true;
     return tex;
   }
 
-  private createStoneSlabMaps(size: number): {
+  /**
+   * Paints a 1024x1024 custom radial stone courtyard floor with concentric wedge-cut
+   * medieval cobblestones, drainage channels, inlaid tournament rings, compass rose,
+   * battle wear, and mossy outer joints!
+   */
+  private createRadialCourtyardMaps(size: number): {
     albedo: THREE.CanvasTexture;
     normal: THREE.CanvasTexture;
   } {
     const { canvas, ctx } = this.makeCanvas(size);
-    const heights = new Float32Array(size * size);
-    const img = ctx.createImageData(size, size);
-    const data = img.data;
+    const cx = size / 2;
+    const cy = size / 2;
+    const maxR = size * 0.49;
 
-    let seed = 101;
-    const hash = (x: number, y: number): number => {
-      const n = Math.sin(x * 127.1 + y * 311.7 + seed) * 43758.5453;
-      return n - Math.floor(n);
+    // Base mortar bed
+    ctx.fillStyle = '#383c44';
+    ctx.fillRect(0, 0, size, size);
+
+    let seed = 777;
+    const rand = (): number => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 0x100000000;
     };
 
-    const rows = 4;
-    const cols = 4;
-    const cellW = size / cols;
-    const cellH = size / rows;
-
-    const palette = [
-      [112, 117, 126],
-      [103, 109, 118],
-      [121, 124, 130],
-      [98, 103, 112],
-      [116, 114, 110], // subtle warm limestone block
+    const stoneColors = [
+      '#6d737e',
+      '#646a75',
+      '#767c87',
+      '#5f6570',
+      '#75736e', // warm weathered sandstone block
+      '#6a7178',
     ];
 
-    for (let y = 0; y < size; y++) {
-      const row = Math.floor(y / cellH);
-      const localY = y - row * cellH;
-      const shiftX = (row % 2) * (cellW * 0.5);
+    // Draw 22 concentric cobblestone rings from r = 56px out to maxR
+    let rInner = 62;
+    let ringIdx = 0;
+    while (rInner < maxR) {
+      const isBandRing = ringIdx === 6 || ringIdx === 14;
+      const ringThickness = isBandRing ? 18 : 19 + (ringIdx % 3) * 3;
+      const rOuter = Math.min(maxR, rInner + ringThickness);
+      const midR = (rInner + rOuter) * 0.5;
+      const circumference = 2 * Math.PI * midR;
+      const targetStoneW = isBandRing ? 34 : 24;
+      const count = Math.max(12, Math.round(circumference / targetStoneW));
+      const angleStep = (Math.PI * 2) / count;
+      const angleOffset = (ringIdx % 2) * (angleStep * 0.5);
 
-      for (let x = 0; x < size; x++) {
-        const shiftedX = (x + shiftX) % size;
-        const col = Math.floor(shiftedX / cellW);
-        const localX = shiftedX - col * cellW;
+      // Outer perimeter moss factor
+      const outerMossChance = Math.max(0, (rInner - maxR * 0.78) / (maxR * 0.22));
 
-        // Distance to mortar edge for smooth beveled stone chamfer
-        const edgeDistX = Math.min(localX, cellW - localX);
-        const edgeDistY = Math.min(localY, cellH - localY);
-        const edgeDist = Math.min(edgeDistX, edgeDistY);
+      for (let i = 0; i < count; i++) {
+        const a0 = i * angleStep + angleOffset + 0.006;
+        const a1 = (i + 1) * angleStep + angleOffset - 0.006;
 
-        const bevel = Math.min(1, Math.max(0, (edgeDist - 1.5) / 5.0));
-        const grain =
-          (hash(Math.floor(x / 2), Math.floor(y / 2)) - 0.5) * 0.14 +
-          (hash(x, y) - 0.5) * 0.06;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rOuter - 1.4, a0, a1, false);
+        ctx.arc(cx, cy, rInner + 1.4, a1, a0, true);
+        ctx.closePath();
 
-        const blockSeed = Math.floor(hash(col * 13 + row * 7, row * 29) * palette.length);
-        const base = palette[blockSeed % palette.length];
-
-        const h = Math.max(0, Math.min(1, bevel * 0.85 + grain + 0.1));
-        heights[y * size + x] = h;
-
-        // Subtle moss tint inside mortar crevices
-        const isMortar = edgeDist < 2.2;
-        const moss = isMortar && hash(col + x * 0.1, row + y * 0.1) > 0.62;
-
-        const shade = 0.52 + bevel * 0.48 + grain * 0.55;
-        const idx = (y * size + x) * 4;
-        if (moss) {
-          data[idx] = Math.round(62 * shade + 12);
-          data[idx + 1] = Math.round(88 * shade + 18);
-          data[idx + 2] = Math.round(58 * shade + 10);
-        } else if (isMortar) {
-          data[idx] = 56;
-          data[idx + 1] = 60;
-          data[idx + 2] = 67;
+        if (isBandRing) {
+          ctx.fillStyle = i % 2 === 0 ? '#848891' : '#777c86';
         } else {
-          data[idx] = Math.min(255, Math.max(0, Math.round(base[0] * shade)));
-          data[idx + 1] = Math.min(255, Math.max(0, Math.round(base[1] * shade)));
-          data[idx + 2] = Math.min(255, Math.max(0, Math.round(base[2] * shade)));
+          ctx.fillStyle = stoneColors[Math.floor(rand() * stoneColors.length)];
         }
-        data[idx + 3] = 255;
+        ctx.fill();
+
+        // Subtle stone bevel highlight on sun-facing edge
+        ctx.strokeStyle = 'rgba(210, 218, 230, 0.14)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        // Occasional moss patch in outer joints
+        if (outerMossChance > 0 && rand() < outerMossChance * 0.55) {
+          const ma = (a0 + a1) * 0.5;
+          ctx.fillStyle = 'rgba(58, 118, 56, 0.52)';
+          ctx.beginPath();
+          ctx.arc(
+            cx + Math.cos(ma) * rInner,
+            cy + Math.sin(ma) * rInner,
+            3.5 + rand() * 3.5,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+      }
+
+      rInner = rOuter;
+      ringIdx += 1;
+    }
+
+    // Draw 8 radial stone rib spokes for grand architectural symmetry
+    ctx.save();
+    ctx.translate(cx, cy);
+    for (let s = 0; s < 8; s++) {
+      ctx.save();
+      ctx.rotate((s * Math.PI) / 4);
+      ctx.fillStyle = 'rgba(138, 143, 152, 0.42)';
+      ctx.fillRect(62, -4, maxR - 66, 8);
+      ctx.strokeStyle = 'rgba(42, 46, 54, 0.65)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(62, -4, maxR - 66, 8);
+      ctx.restore();
+    }
+
+    // Central Carved Stone & Tarnished Gold Compass Rose Medallion (r <= 62px)
+    ctx.beginPath();
+    ctx.arc(0, 0, 62, 0, Math.PI * 2);
+    ctx.fillStyle = '#555b66';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#c5983e';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 48, 0, Math.PI * 2);
+    ctx.fillStyle = '#707682';
+    ctx.fill();
+
+    // 8-point Heraldic Compass Star
+    for (let p = 0; p < 8; p++) {
+      ctx.save();
+      ctx.rotate((p * Math.PI) / 4);
+      const len = p % 2 === 0 ? 45 : 32;
+      ctx.beginPath();
+      ctx.moveTo(0, -len);
+      ctx.lineTo(9, -9);
+      ctx.lineTo(0, 0);
+      ctx.closePath();
+      ctx.fillStyle = p % 2 === 0 ? '#d8a848' : '#9aa2b0';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(0, -len);
+      ctx.lineTo(-9, -9);
+      ctx.lineTo(0, 0);
+      ctx.closePath();
+      ctx.fillStyle = p % 2 === 0 ? '#a67c2b' : '#6c7380';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+    ctx.fillStyle = '#dfb04b';
+    ctx.fill();
+    ctx.restore();
+
+    // Add fine pixel stone grain & battle scratch marks across the whole courtyard
+    const img = ctx.getImageData(0, 0, size, size);
+    const data = img.data;
+    const heights = new Float32Array(size * size);
+
+    for (let i = 0; i < size * size; i++) {
+      const idx = i * 4;
+      const grain = (rand() - 0.5) * 14;
+      const r = Math.min(255, Math.max(0, data[idx] + grain));
+      const g = Math.min(255, Math.max(0, data[idx + 1] + grain));
+      const b = Math.min(255, Math.max(0, data[idx + 2] + grain));
+      data[idx] = r;
+      data[idx + 1] = g;
+      data[idx + 2] = b;
+      // Luminance closely tracks mortar depth vs raised stone face!
+      heights[i] = (r * 0.3 + g * 0.59 + b * 0.11) / 255;
+    }
+    ctx.putImageData(img, 0, 0);
+
+    return {
+      albedo: this.toAlbedoTexture(canvas),
+      normal: this.heightToNormalTexture(heights, size, 2.4),
+    };
+  }
+
+  private createChainmailMaps(size: number): {
+    albedo: THREE.CanvasTexture;
+    normal: THREE.CanvasTexture;
+  } {
+    const { canvas, ctx } = this.makeCanvas(size);
+    ctx.fillStyle = '#252930';
+    ctx.fillRect(0, 0, size, size);
+
+    const rows = 8;
+    const cols = 8;
+    const stepX = size / cols;
+    const stepY = size / rows;
+
+    ctx.lineWidth = 3.2;
+    for (let r = -1; r <= rows; r++) {
+      const offsetX = (r % 2) * (stepX * 0.5);
+      for (let c = -1; c <= cols; c++) {
+        const rx = c * stepX + offsetX;
+        const ry = r * stepY;
+        ctx.strokeStyle = r % 2 === 0 ? '#9ba5b4' : '#858f9e';
+        ctx.beginPath();
+        ctx.ellipse(rx, ry, stepX * 0.44, stepY * 0.36, 0.18, 0, Math.PI * 2);
+        ctx.stroke();
       }
     }
 
-    ctx.putImageData(img, 0, 0);
+    const img = ctx.getImageData(0, 0, size, size);
+    const heights = new Float32Array(size * size);
+    for (let i = 0; i < size * size; i++) {
+      heights[i] = img.data[i * 4] / 255;
+    }
+
     return {
       albedo: this.toAlbedoTexture(canvas),
-      normal: this.heightToNormalTexture(heights, size, 2.6),
+      normal: this.heightToNormalTexture(heights, size, 2.5),
     };
   }
 
@@ -326,10 +505,11 @@ export class MaterialLibrary {
     const cellW = size / cols;
     const cellH = size / rows;
     const stones = [
-      [104, 110, 120],
-      [94, 100, 110],
-      [114, 118, 126],
-      [89, 95, 105],
+      [108, 114, 124],
+      [96, 102, 112],
+      [118, 122, 130],
+      [92, 98, 108],
+      [112, 110, 105],
     ];
 
     for (let y = 0; y < size; y++) {
@@ -346,13 +526,13 @@ export class MaterialLibrary {
           Math.min(localX, cellW - localX),
           Math.min(localY, cellH - localY)
         );
-        const bevel = Math.min(1, Math.max(0, (edge - 1.5) / 4.0));
+        const bevel = Math.min(1, Math.max(0, (edge - 1.5) / 4.2));
         const noise = (hash(Math.floor(x / 2), Math.floor(y / 2)) - 0.5) * 0.16;
 
         heights[y * size + x] = Math.max(0, Math.min(1, bevel * 0.85 + noise + 0.1));
 
         const c = stones[(row * 5 + col * 3) % stones.length];
-        const shade = edge < 1.8 ? 0.45 : 0.68 + bevel * 0.32 + noise * 0.5;
+        const shade = edge < 1.8 ? 0.42 : 0.68 + bevel * 0.32 + noise * 0.5;
         const idx = (y * size + x) * 4;
         data[idx] = Math.min(255, Math.max(0, Math.round(c[0] * shade)));
         data[idx + 1] = Math.min(255, Math.max(0, Math.round(c[1] * shade)));
@@ -380,9 +560,9 @@ export class MaterialLibrary {
     const planks = 4;
     const pw = size / planks;
     const tones = [
-      [130, 82, 46],
+      [132, 84, 47],
       [116, 72, 39],
-      [139, 89, 50],
+      [142, 91, 52],
       [108, 66, 35],
     ];
 
@@ -427,16 +607,18 @@ export class MaterialLibrary {
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const brush = Math.sin(y * 1.9 + Math.sin(x * 0.25) * 0.8) * 0.04;
-        const hammer =
-          Math.sin(x * 0.22) * Math.cos(y * 0.22) * 0.06;
-        const h = 0.5 + brush + hammer;
+        const hammer = Math.sin(x * 0.22) * Math.cos(y * 0.22) * 0.06;
+        // Subtle diagonal battle scratch
+        const scratch =
+          Math.abs(((x + y * 2) % 47) - 23) < 0.8 ? -0.08 : 0.0;
+        const h = 0.5 + brush + hammer + scratch;
         heights[y * size + x] = h;
 
-        const v = Math.round(218 + (brush + hammer) * 140);
+        const v = Math.round(220 + (brush + hammer + scratch) * 145);
         const idx = (y * size + x) * 4;
-        data[idx] = v;
-        data[idx + 1] = Math.min(255, v + 4);
-        data[idx + 2] = Math.min(255, v + 10);
+        data[idx] = Math.max(0, Math.min(255, v));
+        data[idx + 1] = Math.max(0, Math.min(255, v + 4));
+        data[idx + 2] = Math.max(0, Math.min(255, v + 10));
         data[idx + 3] = 255;
       }
     }
@@ -444,7 +626,7 @@ export class MaterialLibrary {
     ctx.putImageData(img, 0, 0);
     return {
       albedo: this.toAlbedoTexture(canvas),
-      normal: this.heightToNormalTexture(heights, size, 1.1),
+      normal: this.heightToNormalTexture(heights, size, 1.25),
     };
   }
 
@@ -458,8 +640,8 @@ export class MaterialLibrary {
       size / 2,
       size * 0.48
     );
-    grad.addColorStop(0, 'rgba(6, 8, 12, 0.72)');
-    grad.addColorStop(0.55, 'rgba(8, 10, 15, 0.34)');
+    grad.addColorStop(0, 'rgba(6, 8, 12, 0.76)');
+    grad.addColorStop(0.55, 'rgba(8, 10, 15, 0.36)');
     grad.addColorStop(1, 'rgba(8, 10, 15, 0.0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
@@ -478,7 +660,6 @@ export class MaterialLibrary {
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, size, size);
 
-    // Jagged radial stone fracture lines
     ctx.strokeStyle = 'rgba(22, 18, 15, 0.92)';
     ctx.lineWidth = 2.5;
     for (let i = 0; i < 9; i++) {
@@ -500,57 +681,175 @@ export class MaterialLibrary {
     return this.toAlbedoTexture(canvas);
   }
 
+  /**
+   * Hand-painted Heraldic Surcoat / Shield / Cape Fabric Texture tailored per Knight Class!
+   */
+  public createClassHeraldryTexture(
+    classId: KnightClassId,
+    clothHex: number
+  ): THREE.CanvasTexture {
+    const size = 128;
+    const { canvas, ctx } = this.makeCanvas(size);
+    const base = new THREE.Color(clothHex);
+    const darkCss = `#${base.clone().multiplyScalar(0.62).getHexString()}`;
+    const mainCss = `#${base.getHexString()}`;
+    const lightCss = `#${base.clone().multiplyScalar(1.18).getHexString()}`;
+
+    // Quartered heraldic background!
+    ctx.fillStyle = mainCss;
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = darkCss;
+    ctx.fillRect(0, 0, size / 2, size / 2);
+    ctx.fillRect(size / 2, size / 2, size / 2, size / 2);
+
+    // Woven linen fabric texture lines
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    for (let y = 0; y < size; y += 3) {
+      ctx.fillRect(0, y, size, 1);
+    }
+
+    // Gold embroidered border trim
+    ctx.strokeStyle = '#f2c350';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(5, 5, size - 10, size - 10);
+
+    ctx.strokeStyle = lightCss;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(11, 11, size - 22, size - 22);
+
+    // Class-specific hand-drawn heraldic crest in center!
+    ctx.save();
+    ctx.translate(size / 2, size / 2);
+    ctx.fillStyle = '#ffd970';
+    ctx.strokeStyle = '#3b2508';
+    ctx.lineWidth = 2;
+
+    if (classId === 'sword') {
+      // Crowned Fleur-de-Lis / Royal Sword Crest
+      ctx.fillRect(-4, -34, 8, 66);
+      ctx.fillRect(-20, -10, 40, 7);
+      ctx.beginPath();
+      ctx.arc(0, -10, 14, 0, Math.PI * 2);
+      ctx.stroke();
+      // Crown points above
+      ctx.beginPath();
+      ctx.moveTo(-16, -24);
+      ctx.lineTo(-10, -36);
+      ctx.lineTo(0, -28);
+      ctx.lineTo(10, -36);
+      ctx.lineTo(16, -24);
+      ctx.closePath();
+      ctx.fill();
+    } else if (classId === 'dual') {
+      // Crossed Twin Blades & Diamond Studs
+      for (const s of [-1, 1]) {
+        ctx.save();
+        ctx.rotate(s * 0.65);
+        ctx.fillRect(-3, -36, 6, 68);
+        ctx.fillRect(-13, 14, 26, 5);
+        ctx.restore();
+      }
+    } else if (classId === 'spear') {
+      // Winged Spearhead & Chevrons
+      ctx.beginPath();
+      ctx.moveTo(0, -38);
+      ctx.lineTo(16, -6);
+      ctx.lineTo(5, -10);
+      ctx.lineTo(5, 34);
+      ctx.lineTo(-5, 34);
+      ctx.lineTo(-5, -10);
+      ctx.lineTo(-16, -6);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      // Blazing Fortress Sun & Warhammer Crest
+      for (let i = 0; i < 8; i++) {
+        ctx.save();
+        ctx.rotate((i * Math.PI) / 4);
+        ctx.beginPath();
+        ctx.moveTo(0, -34);
+        ctx.lineTo(7, -14);
+        ctx.lineTo(-7, -14);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, 16, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    return this.toAlbedoTexture(canvas);
+  }
+
+  /**
+   * Swallowtail Tournament Wall Banner with alpha-cutout swallowtail V-notch!
+   */
   public createBannerTexture(hexColor: number): THREE.CanvasTexture {
     const size = 128;
     const { canvas, ctx } = this.makeCanvas(size);
     const c = new THREE.Color(hexColor);
 
-    // Rich fabric gradient
+    ctx.clearRect(0, 0, size, size);
+
+    // Swallowtail silhouette clipping path!
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(4, 0);
+    ctx.lineTo(size - 4, 0);
+    ctx.lineTo(size - 6, size - 4);
+    ctx.lineTo(size / 2, size - 28); // Swallowtail V-cutout!
+    ctx.lineTo(6, size - 4);
+    ctx.closePath();
+    ctx.clip();
+
     const grad = ctx.createLinearGradient(0, 0, 0, size);
-    grad.addColorStop(0, `#${c.clone().multiplyScalar(1.12).getHexString()}`);
-    grad.addColorStop(1, `#${c.clone().multiplyScalar(0.72).getHexString()}`);
+    grad.addColorStop(0, `#${c.clone().multiplyScalar(1.16).getHexString()}`);
+    grad.addColorStop(1, `#${c.clone().multiplyScalar(0.68).getHexString()}`);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
 
-    // Subtle woven cloth crosshatch
-    ctx.fillStyle = 'rgba(0,0,0,0.09)';
+    // Subtle vertical stripe
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.fillRect(size * 0.36, 0, size * 0.28, size);
+
+    // Woven texture
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
     for (let y = 0; y < size; y += 4) {
       ctx.fillRect(0, y, size, 1);
     }
 
-    // Embroidered royal gold borders
-    ctx.fillStyle = '#f2c14e';
-    ctx.fillRect(8, 0, 6, size);
-    ctx.fillRect(size - 14, 0, 6, size);
-    ctx.fillRect(8, size - 16, size - 16, 6);
+    // Gold embroidered side trims
+    ctx.fillStyle = '#f3c452';
+    ctx.fillRect(10, 0, 6, size);
+    ctx.fillRect(size - 16, 0, 6, size);
 
-    // Central medieval crest (shield + sword + crown)
-    ctx.save();
-    ctx.translate(size / 2, size * 0.44);
-    ctx.fillStyle = '#f6cf65';
+    // Ornate Heraldic Escutcheon Shield + Crossed Swords + Crown
+    ctx.translate(size / 2, size * 0.4);
+    ctx.fillStyle = '#f8d26a';
     ctx.beginPath();
-    ctx.moveTo(-22, -22);
-    ctx.lineTo(22, -22);
-    ctx.lineTo(18, 10);
-    ctx.lineTo(0, 28);
-    ctx.lineTo(-18, 10);
+    ctx.moveTo(-24, -24);
+    ctx.lineTo(24, -24);
+    ctx.lineTo(20, 10);
+    ctx.lineTo(0, 30);
+    ctx.lineTo(-20, 10);
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = `#${c.clone().multiplyScalar(0.6).getHexString()}`;
+    ctx.fillStyle = `#${c.clone().multiplyScalar(0.55).getHexString()}`;
     ctx.beginPath();
-    ctx.moveTo(-16, -16);
-    ctx.lineTo(16, -16);
-    ctx.lineTo(13, 7);
-    ctx.lineTo(0, 21);
-    ctx.lineTo(-13, 7);
+    ctx.moveTo(-18, -18);
+    ctx.lineTo(18, -18);
+    ctx.lineTo(15, 8);
+    ctx.lineTo(0, 23);
+    ctx.lineTo(-15, 8);
     ctx.closePath();
     ctx.fill();
 
-    // Sword silhouette inside crest
-    ctx.fillStyle = '#fff3c4';
-    ctx.fillRect(-3, -28, 6, 44);
-    ctx.fillRect(-13, -10, 26, 5);
+    ctx.fillStyle = '#fff5cf';
+    ctx.fillRect(-3, -30, 6, 48);
+    ctx.fillRect(-15, -11, 30, 5);
     ctx.restore();
 
     return this.toAlbedoTexture(canvas);

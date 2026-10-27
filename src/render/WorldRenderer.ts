@@ -379,7 +379,7 @@ export class WorldRenderer {
       if (this.showcaseRig) {
         this.showcaseRig.updatePreviewIdle(this.totalElapsed);
         this.showcaseRig.root.rotation.y =
-          Math.sin(this.totalElapsed * 0.85) * 0.62 + 0.25;
+          Math.sin(this.totalElapsed * 0.72) * 0.92 + 0.22;
       }
       this.cameraRig.updateShowcaseCamera(
         this.showcasePos.x,
