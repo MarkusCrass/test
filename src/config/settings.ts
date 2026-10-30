@@ -1,3 +1,6 @@
+import type { Lang } from './locales';
+import { detectLanguage, isLanguage } from './locales';
+
 export type GraphicsQuality = 'ultra' | 'high' | 'low';
 
 export type ArenaThemeId =
@@ -81,6 +84,7 @@ export interface GameSettings {
   pixelScale: 1 | 2 | 3; // 1 = crisp HD Stylized 3D (default), 2/3 = edge-aware 3D pixel art
   graphicsQuality: GraphicsQuality; // default 'ultra'
   arenaTheme: ArenaThemeId; // default 'oak_tournament' (3D Wood & Warm Limestone)
+  language: Lang; // default 'ru'
 }
 
 const STORAGE_KEY = 'knights_last_standing_settings_v2';
@@ -92,6 +96,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   pixelScale: 1,
   graphicsQuality: 'ultra',
   arenaTheme: 'oak_tournament',
+  language: 'ru',
 };
 
 export function isValidArenaTheme(v: unknown): v is ArenaThemeId {
@@ -109,7 +114,7 @@ export function loadSettings(): GameSettings {
       return { ...DEFAULT_SETTINGS };
     }
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
+    if (!raw) return { ...DEFAULT_SETTINGS, language: detectLanguage(typeof navigator === 'undefined' ? undefined : navigator.language) };
     const parsed = JSON.parse(raw) as Partial<GameSettings>;
     const q = parsed.graphicsQuality;
     return {
@@ -135,9 +140,21 @@ export function loadSettings(): GameSettings {
       arenaTheme: isValidArenaTheme(parsed.arenaTheme)
         ? parsed.arenaTheme
         : 'oak_tournament',
+      language: isLanguage(parsed.language) ? parsed.language : detectLanguage(typeof navigator === 'undefined' ? undefined : navigator.language),
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
+  }
+}
+
+/** Whether the player has explicitly stored a language preference. */
+export function hasSavedLanguage(): boolean {
+  try {
+    if (typeof localStorage === 'undefined') return false;
+    const value = localStorage.getItem(STORAGE_KEY);
+    return value !== null && isLanguage((JSON.parse(value) as Partial<GameSettings>).language);
+  } catch {
+    return false;
   }
 }
 

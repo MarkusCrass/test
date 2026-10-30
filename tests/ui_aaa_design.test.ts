@@ -46,6 +46,7 @@ class MiniClassList {
 
 class MiniElement {
   public tagName: string;
+  setAttribute(_name: string, _value: string): void {}
   public id = '';
   public classList = new MiniClassList();
   public dataset: Record<string, string> = {};
@@ -264,6 +265,7 @@ describe('Modern Spatial Glass & Bento Hero Hub UI', () => {
 
   it('supports 1-click hero & mode switching right on Main Hub, Controls modal, 5-player party lobby, and HUD lifecycle', () => {
     (globalThis as Record<string, unknown>).document = {
+      documentElement: { dir: 'ltr', lang: 'ru' },
       createElement: (tag: string) => new MiniElement(tag),
       body: new MiniElement('body'),
       execCommand: () => true,

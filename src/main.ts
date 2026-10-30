@@ -7,7 +7,8 @@ import '@fontsource/inter/latin-600.css';
 import '@fontsource/inter/latin-800.css';
 import './style.css';
 import { KnightClassId } from './config/classes';
-import { loadSettings, saveSettings } from './config/settings';
+import { hasSavedLanguage, loadSettings, saveSettings } from './config/settings';
+import { detectLanguage } from './config/locales';
 import { loadProfile } from './config/playerProfile';
 import { createEmptyIntent, FighterInputIntent } from './core/Fighter';
 import { MatchManager, MatchMode, MatchState } from './core/MatchManager';
@@ -91,10 +92,17 @@ class KnightsGameApp {
           }
         } catch (_) {}
 
-        // Получить окружение (язык, регион)
+        // Prefer the Yandex locale when the player has not chosen a language.
+        // SDK implementations may expose the environment synchronously or asynchronously.
         try {
-          const env = sdk.getEnvironment?.();
-          console.log('Yandex env:', env?.locale, env?.region);
+          const environment = sdk.getEnvironment?.() ?? sdk.environment;
+          Promise.resolve(environment).then((env: any) => {
+            if (hasSavedLanguage()) return;
+            const locale = env?.i18n?.lang ?? env?.locale ?? env?.lang;
+            if (typeof locale !== 'string') return;
+            this.settings = { ...this.settings, language: detectLanguage(locale) };
+            this.ui.updateSettingsExternal(this.settings);
+          }).catch(() => {});
         } catch (_) {}
 
         // Сообщаем Яндекс Играм, что игра готова

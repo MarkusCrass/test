@@ -3861,3 +3861,16 @@ body {
 #modal-ad {
   z-index: 70;
 }
+
+.language-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+  gap: 6px;
+}
+.language-tabs .lang-btn {
+  min-width: 0;
+  text-transform: uppercase;
+}
+:lang(ar) {
+  font-family: Arial, sans-serif;
+}

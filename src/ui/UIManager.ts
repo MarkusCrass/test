@@ -4,6 +4,13 @@ import {
   KnightClassId,
 } from '../config/classes';
 import {
+  Lang,
+  LANGS,
+  t,
+  isRtl,
+  classDisplayName,
+} from '../config/locales';
+import {
   addCoins,
   isKnightUnlocked,
   loadProfile,
@@ -106,18 +113,6 @@ const CLASS_EMBLEM_ICON: Record<KnightClassId, string> = {
   skeleton_knight: 'skeleton_knight_light.svg',
   skeleton_reaper: 'skeleton_reaper_light.svg',
   skeleton_berserker: 'skeleton_berserker_light.svg',
-};
-
-const CLASS_SHORT_NAME: Record<KnightClassId, string> = {
-  sword: 'Мечник',
-  dual: 'Дуэлянт',
-  spear: 'Копейщик',
-  hammer: 'Бастион',
-  barbarian: 'Варвар',
-  duelist: 'Фехтовальщик',
-  skeleton_knight: 'Страж склепа',
-  skeleton_reaper: 'Жнец костей',
-  skeleton_berserker: 'Гладиатор',
 };
 
 /**
@@ -320,7 +315,7 @@ export class UIManager {
     this.root.innerHTML = `
       <!-- PERSISTENT FLOATING TOP NAVIGATION DOCK -->
       <header id="hub-top-dock" class="hub-top-dock pointer-auto">
-        <div class="hub-brand-pill" id="btn-brand-home" title="На главную">
+        <div class="hub-brand-pill" id="btn-brand-home" title="На главную" data-i18n-title="mpBack">
           <span class="hub-brand-mark">${ICONS.blades}</span>
           <div class="hub-brand-text">
             <strong>Knights</strong>
@@ -328,29 +323,29 @@ export class UIManager {
           </div>
         </div>
 
-        <nav class="hub-seg-nav" aria-label="Разделы игры">
+        <nav class="hub-seg-nav" aria-label="${this.tl('navArena')}">
           <button id="nav-tab-arena" class="hub-seg-btn active">
             ${ICONS.bolt}
-            <span>Арена</span>
+            <span data-i18n="navArena">${this.tl('navArena')}</span>
           </button>
           <button id="btn-menu-select" class="hub-seg-btn">
             ${ICONS.shield}
-            <span>Герои</span>
+            <span data-i18n="navHeroes">${this.tl('navHeroes')}</span>
           </button>
           <button id="btn-menu-multiplayer" class="hub-seg-btn">
             ${ICONS.globe}
-            <span>Онлайн</span>
+            <span data-i18n="navOnline">${this.tl('navOnline')}</span>
           </button>
         </nav>
 
         <div class="hub-util-pills">
-          <button id="btn-open-controls" class="hub-util-btn" title="Управление">
+          <button id="btn-open-controls" class="hub-util-btn" title="${this.tl('navControls')}">
             ${ICONS.gamepad}
-            <span>Управление</span>
+            <span data-i18n="navControls">${this.tl('navControls')}</span>
           </button>
-          <button id="btn-menu-settings" class="hub-util-btn" title="Настройки">
+          <button id="btn-menu-settings" class="hub-util-btn" title="${this.tl('navSettings')}">
             ${ICONS.sliders}
-            <span>Настройки</span>
+            <span data-i18n="navSettings">${this.tl('navSettings')}</span>
           </button>
           <div class="hub-coin-display">
             ${ICONS.trophy}
@@ -364,16 +359,16 @@ export class UIManager {
         <aside class="hub-left-stack pointer-auto">
           <div class="hub-coin-balance">
             <span class="hub-coin-icon">${ICONS.trophy}</span>
-            <span class="hub-coin-label">Монеты:</span>
+            <span class="hub-coin-label" data-i18n="coinLabel">${this.tl('coinLabel')}</span>
             <span id="hub-main-coin-display">${this.profile.coins}</span>
           </div>
-          <button id="btn-watch-ad" class="hub-ad-btn" title="Посмотреть рекламу за 10 монет">
+          <button id="btn-watch-ad" class="hub-ad-btn" title="${this.tl('adSub')}">
             ${ICONS.bolt}
-            <span>Реклама → +10 монет</span>
+            <span data-i18n="adSub">${this.tl('adSub')}</span>
           </button>
           <div class="hub-stack-header">
-            <span class="hub-eyebrow">Выберите режим боя</span>
-            <h1 class="hub-headline">Готовы к схватке?</h1>
+            <span class="hub-eyebrow" data-i18n="eyebrowArena">${this.tl('eyebrowArena')}</span>
+            <h1 class="hub-headline" data-i18n="headlineReady">${this.tl('headlineReady')}</h1>
           </div>
 
           <div class="hub-mode-cards">
@@ -381,10 +376,10 @@ export class UIManager {
               <div class="hub-mode-orb orb-coral">${ICONS.users}</div>
               <div class="hub-mode-info">
                 <div class="hub-mode-top">
-                  <span class="hub-mode-name">Королевская схватка</span>
-                  <span class="hub-mode-tag tag-coral">5 бойцов</span>
+                  <span class="hub-mode-name" data-i18n="modeFfaName">Королевская схватка</span>
+                  <span class="hub-mode-tag tag-coral" data-i18n="modeFfaTag">5 бойцов</span>
                 </div>
-                <p class="hub-mode-desc">Каждый сам за себя на двухуровневом мосту цитадели</p>
+                <p class="hub-mode-desc" data-i18n="modeFfaDesc">Каждый сам за себя на двухуровневом мосту цитадели</p>
               </div>
             </div>
 
@@ -392,12 +387,12 @@ export class UIManager {
               <div class="hub-mode-orb orb-violet">${ICONS.blades}</div>
               <div class="hub-mode-info">
                 <div class="hub-mode-top">
-                  <span class="hub-mode-name">Дуэль 1 на 1</span>
-                  <span class="hub-mode-tag tag-violet">Тренировка</span>
+                  <span class="hub-mode-name" data-i18n="modeDuelName">Дуэль 1 на 1</span>
+                  <span class="hub-mode-tag tag-violet" data-i18n="modeDuelTag">Тренировка</span>
                 </div>
-                <p class="hub-mode-desc">Чистая дуэль против ИИ для отработки парирований</p>
+                <p class="hub-mode-desc" data-i18n="modeDuelDesc">Чистая дуэль против ИИ для отработки парирований</p>
               </div>
-              <button id="btn-menu-duel" class="hub-card-mini-play" title="Сразу начать дуэль">
+              <button id="btn-menu-duel" class="hub-card-mini-play" title="Сразу начать дуэль" data-i18n-title="fightNow">
                 ${ICONS.play}
               </button>
             </div>
@@ -406,10 +401,10 @@ export class UIManager {
               <div class="hub-mode-orb orb-cyan">${ICONS.globe}</div>
               <div class="hub-mode-info">
                 <div class="hub-mode-top">
-                  <span class="hub-mode-name">Сетевая игра</span>
-                  <span class="hub-mode-tag tag-cyan">До 5 игроков</span>
+                  <span class="hub-mode-name" data-i18n="modeOnlineName">Сетевая игра</span>
+                  <span class="hub-mode-tag tag-cyan" data-i18n="modeOnlineTag">До 5 игроков</span>
                 </div>
-                <p class="hub-mode-desc">Быстрый поиск матча, список залов и вход по коду друга</p>
+                <p class="hub-mode-desc" data-i18n="modeOnlineDesc">Быстрый поиск матча, список залов и вход по коду друга</p>
               </div>
               <span class="hub-card-chevron">${ICONS.chevronRight}</span>
             </div>
@@ -417,7 +412,7 @@ export class UIManager {
 
           <div class="hub-arena-theme-card">
             <div class="hub-arena-theme-head">
-              <span class="hub-arena-theme-title">Покрытие арены</span>
+              <span class="hub-arena-theme-title" data-i18n="settingsTheme">Покрытие арены</span>
               <span id="hub-arena-theme-label" class="hub-arena-theme-badge">Дубовый помост</span>
             </div>
             <div id="hub-arena-theme-strip" class="arena-theme-swatches">
@@ -443,15 +438,15 @@ export class UIManager {
 
         <div class="hub-spin-hint">
           ${ICONS.rotate3d}
-          <span>Потяните мышью для обзора 360°</span>
+          <span data-i18n="rotateHint">Потяните мышью для обзора 360°</span>
         </div>
 
         <footer class="hub-bottom-dock pointer-auto">
           <div class="hub-quick-heroes-box">
             <div class="hub-quick-heroes-head">
-              <span>Ваш герой</span>
+              <span data-i18n="heroYourHero">Ваш герой</span>
               <button id="btn-hub-inspect" class="hub-link-pill">
-                <span>Навыки и характеристики</span>
+                <span data-i18n="heroInspect">Навыки и характеристики</span>
                 ${ICONS.chevronRight}
               </button>
             </div>
@@ -461,7 +456,7 @@ export class UIManager {
           <button id="btn-menu-quick" class="hub-play-cta">
             <span class="hub-play-icon">${ICONS.play}</span>
             <span class="hub-play-copy">
-              <strong id="hub-play-title" class="hub-play-title">В БОЙ!</strong>
+              <strong id="hub-play-title" class="hub-play-title" data-i18n="playFight">В БОЙ!</strong>
               <span id="hub-play-sub" class="hub-play-sub">5 бойцов · Рыцарь клинка</span>
             </span>
           </button>
@@ -476,12 +471,12 @@ export class UIManager {
 
         <div class="hub-spin-hint">
           ${ICONS.rotate3d}
-          <span>Потяните мышью для обзора 360°</span>
+          <span data-i18n="rotateHint">Потяните мышью для обзора 360°</span>
         </div>
 
         <footer class="armory-bottom-dock pointer-auto">
           <div class="armory-bottom-left">
-            <button id="btn-sel-back" class="btn btn-icon-circle" title="Назад в Арену">
+            <button id="btn-sel-back" class="btn btn-icon-circle" title="Назад в Арену" data-i18n-title="backArena">
               ${ICONS.arrowLeft}
             </button>
             <div id="class-tabs" class="armory-hero-pills"></div>
@@ -493,12 +488,12 @@ export class UIManager {
 
           <div class="armory-launch-group">
             <div class="mode-toggle-row">
-              <button id="mode-ffa5" class="mode-btn active">5 бойцов</button>
+              <button id="mode-ffa5" class="mode-btn active" data-i18n="modeFfaTag">5 бойцов</button>
               <button id="mode-duel" class="mode-btn">1 на 1</button>
             </div>
             <button id="btn-sel-start" class="hub-play-cta compact">
               <span class="hub-play-icon">${ICONS.play}</span>
-              <strong class="hub-play-title">В БОЙ!</strong>
+              <strong class="hub-play-title" data-i18n="playFight">В БОЙ!</strong>
             </button>
           </div>
         </footer>
@@ -511,11 +506,11 @@ export class UIManager {
             <div class="mp-header-left">
               <div class="mp-header-orb">${ICONS.globe}</div>
               <div>
-                <h2 class="mp-heading">Сетевая арена</h2>
-                <p class="mp-subheading">До 5 живых игроков в матче · Серверная физика 60 Гц</p>
+                <h2 class="mp-heading" data-i18n="mpTitle">Сетевая арена</h2>
+                <p class="mp-subheading" data-i18n="mpSubtitle">До 5 живых игроков в матче · Серверная физика 60 Гц</p>
               </div>
             </div>
-            <div id="mp-conn-pill" class="mp-conn-pill connecting">Подключение...</div>
+            <div id="mp-conn-pill" class="mp-conn-pill connecting" data-i18n="mpConnecting">Подключение...</div>
           </div>
 
           <div id="mp-alert-banner" class="mp-alert-banner hidden"></div>
@@ -524,7 +519,7 @@ export class UIManager {
           <div id="mp-browser-view" class="mp-browser-view">
             <div class="mp-profile-bar">
               <div class="mp-name-field">
-                <label for="mp-name-input" class="bento-label">Ваш никнейм</label>
+                <label for="mp-name-input" class="bento-label" data-i18n="mpName">Ваш никнейм</label>
                 <div class="mp-input-wrap">
                   <span class="mp-input-icon">${ICONS.user}</span>
                   <input
@@ -538,7 +533,7 @@ export class UIManager {
                 </div>
               </div>
               <div class="mp-class-picker-wrap">
-                <div class="bento-label">Выбранный герой</div>
+                <div class="bento-label" data-i18n="mpSelectedHero">Выбранный герой</div>
                 <div id="mp-class-tabs" class="mp-mini-class-tabs"></div>
               </div>
             </div>
@@ -549,30 +544,30 @@ export class UIManager {
                 <button id="btn-mp-quick" class="mp-quickplay-card">
                   <span class="mp-qp-orb">${ICONS.bolt}</span>
                   <span class="mp-qp-copy">
-                    <strong>Быстрый поиск боя</strong>
-                    <span>Мгновенный вход в открытую комнату</span>
+                    <strong data-i18n="mpQuickJoin">Быстрый поиск боя</strong>
+                    <span data-i18n="mpQuickDesc">Мгновенный вход в открытую комнату</span>
                   </span>
                   <span class="mp-qp-arrow">${ICONS.arrowRight}</span>
                 </button>
 
                 <div class="mp-card-box">
-                  <div class="mp-box-title">Создать свою комнату</div>
+                  <div class="mp-box-title" data-i18n="mpCreateTitle">Создать свою комнату</div>
                   <label for="mp-opt-bots" class="mp-check-line">
-                    <span>Дополнить ботами ИИ до 5 бойцов</span>
+                    <span data-i18n="mpFillBots">Дополнить ботами ИИ до 5 бойцов</span>
                     <input id="mp-opt-bots" type="checkbox" class="ios-switch" checked />
                   </label>
                   <label for="mp-opt-public" class="mp-check-line">
-                    <span>Показывать в открытом списке</span>
+                    <span data-i18n="mpPublic">Показывать в открытом списке</span>
                     <input id="mp-opt-public" type="checkbox" class="ios-switch" checked />
                   </label>
                   <button id="btn-mp-create" class="btn btn-accent-violet" style="width: 100%; margin-top: 4px;">
                     ${ICONS.users}
-                    <span>Создать комнату</span>
+                    <span data-i18n="mpCreateRoom">Создать комнату</span>
                   </button>
                 </div>
 
                 <div class="mp-card-box">
-                  <div class="mp-box-title">Присоединиться по коду</div>
+                  <div class="mp-box-title" data-i18n="mpJoinCode">Присоединиться по коду</div>
                   <div class="mp-code-join-row">
                     <input
                       id="mp-code-input"
@@ -581,7 +576,7 @@ export class UIManager {
                       placeholder="КОД"
                       class="mp-text-input mp-code-field"
                     />
-                    <button id="btn-mp-join-code" class="btn btn-primary">Войти</button>
+                    <button id="btn-mp-join-code" class="btn btn-primary" data-i18n="mpJoin">Войти</button>
                   </div>
                 </div>
               </div>
@@ -589,10 +584,10 @@ export class UIManager {
               <!-- Right column: Live Public Rooms List -->
               <div class="mp-col-rooms">
                 <div class="mp-rooms-head">
-                  <span class="mp-box-title">Открытые комнаты</span>
+                  <span class="mp-box-title" data-i18n="mpOpenRooms">Открытые комнаты</span>
                   <button id="btn-mp-refresh" class="btn btn-sm">
                     ${ICONS.refresh}
-                    <span>Обновить</span>
+                    <span data-i18n="mpRefresh">Обновить</span>
                   </button>
                 </div>
                 <div id="mp-rooms-list" class="mp-rooms-list"></div>
@@ -602,9 +597,9 @@ export class UIManager {
             <div class="mp-footer-bar">
               <button id="btn-mp-back" class="btn btn-ghost">
                 ${ICONS.arrowLeft}
-                <span>На главную</span>
+                <span data-i18n="mpBack">На главную</span>
               </button>
-              <span class="mp-footer-note">Отправьте 4-буквенный код друзьям для мгновенного входа</span>
+              <span class="mp-footer-note" data-i18n="mpShare">Отправьте 4-буквенный код друзьям для мгновенного входа</span>
             </div>
           </div>
 
@@ -612,28 +607,28 @@ export class UIManager {
           <div id="mp-room-view" class="mp-room-view hidden">
             <div class="mp-room-top-bar">
               <div class="mp-room-code-plaque">
-                <span class="mp-code-kicker">Код комнаты</span>
+                <span class="mp-code-kicker" data-i18n="mpRoomCode">Код комнаты</span>
                 <strong id="mp-room-code-text" class="mp-code-big">----</strong>
                 <button id="btn-mp-copy-code" class="btn btn-sm">
                   ${ICONS.copy}
-                  <span>Скопировать</span>
+                  <span data-i18n="mpCopyCode">Скопировать</span>
                 </button>
               </div>
 
               <div class="mp-room-toggles">
                 <label for="mp-room-bots-toggle" class="mp-check-line compact">
-                  <span>Боты ИИ</span>
+                  <span data-i18n="mpBots">Боты ИИ</span>
                   <input id="mp-room-bots-toggle" type="checkbox" class="ios-switch" checked />
                 </label>
                 <label for="mp-room-public-toggle" class="mp-check-line compact">
-                  <span>Публичная</span>
+                  <span data-i18n="mpPublicLabel">Публичная</span>
                   <input id="mp-room-public-toggle" type="checkbox" class="ios-switch" checked />
                 </label>
               </div>
             </div>
 
             <div class="mp-room-class-strip">
-              <span class="bento-label" style="margin: 0;">Сменить героя:</span>
+              <span class="bento-label" style="margin: 0;" data-i18n="mpChangeHero">Сменить героя:</span>
               <div id="mp-room-class-tabs" class="mp-mini-class-tabs"></div>
             </div>
 
@@ -642,13 +637,13 @@ export class UIManager {
             <div class="mp-footer-bar">
               <button id="btn-mp-leave" class="btn btn-ghost">
                 ${ICONS.arrowLeft}
-                <span>Покинуть комнату</span>
+                <span data-i18n="mpLeave">Покинуть комнату</span>
               </button>
               <div class="mp-room-cta-right">
-                <button id="btn-mp-ready" class="btn btn-accent-violet">Готов к бою</button>
+                <button id="btn-mp-ready" class="btn btn-accent-violet" data-i18n="mpReady">Готов к бою</button>
                 <button id="btn-mp-start" class="btn btn-primary btn-hero">
                   ${ICONS.play}
-                  <span>Начать матч!</span>
+                  <span data-i18n="mpStart">Начать матч!</span>
                 </button>
               </div>
             </div>
@@ -668,7 +663,7 @@ export class UIManager {
           <span class="hud-top-divider" aria-hidden="true"></span>
           <div id="hud-alive-pill" class="hud-alive-pill">5 / 5 в живых</div>
           <span id="hud-net-sep" class="hud-top-divider hidden" aria-hidden="true"></span>
-          <div id="hud-net-pill" class="hud-net-pill hidden">Онлайн</div>
+          <div id="hud-net-pill" class="hud-net-pill hidden" data-i18n="navOnline">Онлайн</div>
         </div>
 
         <div id="hud-pointer-prompt" class="pointer-prompt hidden">
@@ -678,7 +673,7 @@ export class UIManager {
         <div id="hud-countdown" class="countdown-banner hidden">3</div>
 
         <div class="hud-roster">
-          <div class="roster-title">Бойцы на арене</div>
+          <div class="roster-title" data-i18n="rosterTitle">Бойцы на арене</div>
           <div id="hud-roster-list" class="roster-list-inner"></div>
         </div>
 
@@ -732,14 +727,14 @@ export class UIManager {
         <div id="hud-spectator-bar" class="spectator-bar pointer-auto hidden">
           <div class="spectator-title">
             ${ICONS.skull}
-            <span>Вы выбыли · Режим наблюдения</span>
+            <span data-i18n="spectating">Вы выбыли · Режим наблюдения</span>
           </div>
           <div id="spectator-sub" class="spectator-sub">Камера следует за выжившими...</div>
           <div class="spectator-actions">
-            <button id="btn-spec-prev" class="btn btn-sm">Пред. [Q]</button>
-            <button id="btn-spec-next" class="btn btn-sm">След. [E]</button>
-            <button id="btn-spec-restart" class="btn btn-primary btn-sm">Снова в бой</button>
-            <button id="btn-spec-menu" class="btn btn-ghost btn-sm">В меню</button>
+            <button id="btn-spec-prev" class="btn btn-sm" data-i18n="specPrevious">Пред. [Q]</button>
+            <button id="btn-spec-next" class="btn btn-sm" data-i18n="specNext">След. [E]</button>
+            <button id="btn-spec-restart" class="btn btn-primary btn-sm" data-i18n="specRestart">Снова в бой</button>
+            <button id="btn-spec-menu" class="btn btn-ghost btn-sm" data-i18n="backMenu">В меню</button>
           </div>
         </div>
       </div>
@@ -747,30 +742,30 @@ export class UIManager {
       <!-- PAUSE MODAL -->
       <div id="modal-pause" class="modal-backdrop hidden">
         <div class="glass-modal pause-sheet">
-          <div class="modal-pill-badge">Матч на паузе</div>
-          <h2 class="modal-sheet-title">Пауза</h2>
-          <p class="modal-sheet-sub">Выберите действие для продолжения</p>
+          <div class="modal-pill-badge" data-i18n="pauseBadge">Матч на паузе</div>
+          <h2 class="modal-sheet-title" data-i18n="pauseTitle">Пауза</h2>
+          <p class="modal-sheet-sub" data-i18n="pauseSub">Выберите действие для продолжения</p>
 
           <div class="pause-actions-stack">
             <button id="btn-pause-resume" class="btn btn-primary btn-hero">
               ${ICONS.play}
-              <span>Продолжить бой</span>
+              <span data-i18n="pauseResume">Продолжить бой</span>
             </button>
             <button id="btn-pause-restart" class="btn btn-accent-violet">
               ${ICONS.refresh}
-              <span>Начать заново</span>
+              <span data-i18n="pauseRestart">Начать заново</span>
             </button>
             <button id="btn-pause-settings" class="btn">
               ${ICONS.sliders}
-              <span>Настройки</span>
+              <span data-i18n="navSettings">Настройки</span>
             </button>
             <button id="btn-pause-controls" class="btn">
               ${ICONS.gamepad}
-              <span>Управление</span>
+              <span data-i18n="navControls">Управление</span>
             </button>
             <button id="btn-pause-menu" class="btn btn-ghost">
               ${ICONS.door}
-              <span>Выйти в меню</span>
+              <span data-i18n="pauseMenu">Выйти в меню</span>
             </button>
           </div>
         </div>
@@ -781,10 +776,10 @@ export class UIManager {
         <div class="glass-modal controls-sheet">
           <div class="modal-top-row">
             <div>
-              <div class="modal-pill-badge">Справка по клавишам</div>
-              <h2 class="modal-sheet-title">Управление в бою</h2>
+              <div class="modal-pill-badge" data-i18n="controlsBadge">Справка по клавишам</div>
+              <h2 class="modal-sheet-title" data-i18n="controlsTitle">Управление в бою</h2>
             </div>
-            <button id="btn-controls-x" class="icon-close-btn" title="Закрыть">
+            <button id="btn-controls-x" class="icon-close-btn" title="Закрыть" data-i18n-title="adCloseBtn">
               ${ICONS.close}
             </button>
           </div>
@@ -792,41 +787,41 @@ export class UIManager {
           <div class="controls-bento-grid">
             <div class="ctrl-card">
               <div class="ctrl-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
-              <div class="ctrl-info"><strong>Перемещение</strong><span>Свободное движение + Shift для спринта</span></div>
+              <div class="ctrl-info"><strong data-i18n="controlMove">Перемещение</strong><span data-i18n="controlMoveDesc">Свободное движение + Shift для спринта</span></div>
             </div>
             <div class="ctrl-card">
               <div class="ctrl-keys"><kbd>Мышь</kbd> + <kbd>Колесо</kbd></div>
-              <div class="ctrl-info"><strong>ММО-камера 360° и Зум</strong><span>Полное вращение вокруг героя, взгляд вверх/вниз и отдаление</span></div>
+              <div class="ctrl-info"><strong data-i18n="controlCamera">ММО-камера 360° и Зум</strong><span data-i18n="controlCameraDesc">Полное вращение вокруг героя, взгляд вверх/вниз и отдаление</span></div>
             </div>
             <div class="ctrl-card">
               <div class="ctrl-keys"><kbd>СКМ</kbd> / <kbd>V</kbd> · <kbd>~</kbd></div>
-              <div class="ctrl-info"><strong>Свободный обзор и Прицел</strong><span>Обзор 360° на бегу (СКМ/V) · Свободный прицел по экрану (~)</span></div>
+              <div class="ctrl-info"><strong data-i18n="controlLook">Свободный обзор и Прицел</strong><span data-i18n="controlLookDesc">Обзор 360° на бегу (СКМ/V) · Свободный прицел по экрану (~)</span></div>
             </div>
             <div class="ctrl-card">
               <div class="ctrl-keys"><kbd>ЛКМ</kbd> / <kbd>Удерж.</kbd></div>
-              <div class="ctrl-info"><strong>Комбо и Пробой</strong><span>Мгновенная серия ударов и заряженный пробой в точку прицела</span></div>
+              <div class="ctrl-info"><strong data-i18n="controlAttack">Комбо и Пробой</strong><span data-i18n="controlAttackDesc">Мгновенная серия ударов и заряженный пробой в точку прицела</span></div>
             </div>
             <div class="ctrl-card">
               <div class="ctrl-keys"><kbd>ПКМ</kbd></div>
-              <div class="ctrl-info"><strong>Блок и парирование</strong><span>Вовремя нажатый блок оглушает врага</span></div>
+              <div class="ctrl-info"><strong data-i18n="controlBlock">Блок и парирование</strong><span data-i18n="controlBlockDesc">Вовремя нажатый блок оглушает врага</span></div>
             </div>
             <div class="ctrl-card">
               <div class="ctrl-keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div>
-              <div class="ctrl-info"><strong>Активные навыки</strong><span>Три уникальных приёма каждого героя</span></div>
+              <div class="ctrl-info"><strong data-i18n="controlSkills">Активные навыки</strong><span data-i18n="controlSkillsDesc">Три уникальных приёма каждого героя</span></div>
             </div>
             <div class="ctrl-card">
               <div class="ctrl-keys"><kbd>Space</kbd></div>
-              <div class="ctrl-info"><strong>Прыжок</strong><span>Прыжки через преграды и двухуровневый мост</span></div>
+              <div class="ctrl-info"><strong data-i18n="controlJump">Прыжок</strong><span data-i18n="controlJumpDesc">Прыжки через преграды и двухуровневый мост</span></div>
             </div>
             <div class="ctrl-card">
               <div class="ctrl-keys"><kbd>Alt</kbd> / <kbd>C</kbd></div>
-              <div class="ctrl-info"><strong>Рывок / Толчок</strong><span>Резкое уклонение или силовой толчок щитом</span></div>
+              <div class="ctrl-info"><strong data-i18n="controlDodge">Рывок / Толчок</strong><span data-i18n="controlDodgeDesc">Резкое уклонение или силовой толчок щитом</span></div>
             </div>
           </div>
 
           <div class="modal-bottom-row">
             <span class="modal-hint-note">В бою удерживайте <strong>Tab</strong>, чтобы показать курсор, или нажмите <strong>Esc</strong> для паузы</span>
-            <button id="btn-controls-close" class="btn btn-primary">Понятно</button>
+            <button id="btn-controls-close" class="btn btn-primary" data-i18n="ok">Понятно</button>
           </div>
         </div>
       </div>
@@ -837,7 +832,7 @@ export class UIManager {
           <div class="results-header">
             <div class="results-trophy-orb">${ICONS.trophy}</div>
             <div>
-              <div id="res-badge" class="modal-pill-badge">Итоги матча</div>
+              <div id="res-badge" class="modal-pill-badge" data-i18n="resBadge">Итоги матча</div>
               <h2 id="res-headline" class="modal-sheet-title results-headline">ПОБЕДА!</h2>
               <div id="res-sub" class="results-sub"></div>
             </div>
@@ -847,12 +842,12 @@ export class UIManager {
             <table class="standings-table">
               <thead>
                 <tr>
-                  <th>Место</th>
-                  <th>Боец</th>
-                  <th>Герой</th>
-                  <th>Статус</th>
-                  <th>Фраги</th>
-                  <th>Урон</th>
+                  <th data-i18n="resPlace">Место</th>
+                  <th data-i18n="resFighter">Боец</th>
+                  <th data-i18n="resHero">Герой</th>
+                  <th data-i18n="resStatus">Статус</th>
+                  <th data-i18n="resKills">Фраги</th>
+                  <th data-i18n="resDamage">Урон</th>
                 </tr>
               </thead>
               <tbody id="res-tbody"></tbody>
@@ -860,11 +855,11 @@ export class UIManager {
           </div>
 
           <div class="results-actions">
-            <button id="btn-res-menu" class="btn btn-ghost">В меню</button>
-            <button id="btn-res-class" class="btn btn-accent-violet">Сменить героя</button>
+            <button id="btn-res-menu" class="btn btn-ghost" data-i18n="backMenu">В меню</button>
+            <button id="btn-res-class" class="btn btn-accent-violet" data-i18n="changeHero">Сменить героя</button>
             <button id="btn-res-again" class="btn btn-primary btn-hero">
               ${ICONS.play}
-              <span>Играть снова!</span>
+              <span data-i18n="playAgain">Играть снова!</span>
             </button>
           </div>
         </div>
@@ -876,22 +871,22 @@ export class UIManager {
           <div class="ad-header">
             <div class="ad-icon">📺</div>
             <div>
-              <div class="ad-pill">Реклама</div>
-              <h2 class="ad-title">Смотрите рекламу</h2>
-              <div id="ad-sub" class="ad-sub">Получите +10 монет за просмотр</div>
+              <div class="ad-pill" data-i18n="adBadge">Реклама</div>
+              <h2 class="ad-title" data-i18n="adTitle">Смотрите рекламу</h2>
+              <div id="ad-sub" class="ad-sub" data-i18n="adSub">Получите +10 монет за просмотр</div>
             </div>
           </div>
           <div class="ad-body">
             <div class="ad-countdown-wrap">
-              <span class="ad-countdown-label">Реклама пойдёт через</span>
+              <span class="ad-countdown-label" data-i18n="adCountdownLabel">Реклама пойдёт через</span>
               <span id="ad-countdown" class="ad-countdown">5</span>
             </div>
           </div>
           <div class="ad-actions">
-            <button id="btn-ad-close" class="btn btn-ghost ad-close-btn hidden">Закрыть</button>
+            <button id="btn-ad-close" class="btn btn-ghost ad-close-btn hidden" data-i18n="adCloseBtn">Закрыть</button>
             <button id="btn-ad-reward" class="btn btn-primary btn-hero ad-reward-btn hidden">
               ${ICONS.trophy}
-              <span>Получить +10 монет</span>
+              <span data-i18n="adRewardBtn">Получить +10 монет</span>
             </button>
           </div>
         </div>
@@ -902,17 +897,17 @@ export class UIManager {
         <div class="glass-modal settings-sheet">
           <div class="modal-top-row">
             <div>
-              <div class="modal-pill-badge">Параметры</div>
-              <h2 class="modal-sheet-title">Настройки игры</h2>
+              <div class="modal-pill-badge" data-i18n="settingsBadge">Параметры</div>
+              <h2 class="modal-sheet-title" data-i18n="settingsTitle">Настройки игры</h2>
             </div>
-            <button id="btn-settings-x" class="icon-close-btn" title="Закрыть">
+            <button id="btn-settings-x" class="icon-close-btn" title="Закрыть" data-i18n-title="adCloseBtn">
               ${ICONS.close}
             </button>
           </div>
 
           <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Громкость звука</span>
+              <span data-i18n="settingsVol">Громкость звука</span>
               <span id="lbl-vol" class="setting-val-pill">70%</span>
             </div>
             <input id="inp-vol" type="range" min="0" max="100" step="1" class="setting-slider" />
@@ -920,7 +915,7 @@ export class UIManager {
 
           <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Чувствительность мыши</span>
+              <span data-i18n="settingsSens">Чувствительность мыши</span>
               <span id="lbl-sens" class="setting-val-pill">1.00x</span>
             </div>
             <input id="inp-sens" type="range" min="20" max="250" step="5" class="setting-slider" />
@@ -928,7 +923,7 @@ export class UIManager {
 
           <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Покрытие и стиль арены</span>
+              <span data-i18n="settingsThemeFull">Покрытие и стиль арены</span>
               <span id="lbl-arena-theme" class="setting-val-pill">Дубовый помост</span>
             </div>
             <div id="settings-arena-theme-strip" class="arena-theme-swatches">
@@ -953,33 +948,54 @@ export class UIManager {
 
           <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Качество графики</span>
-              <span id="lbl-qual" class="setting-val-pill">Ультра</span>
+              <span data-i18n="settingsQuality">Качество графики</span>
+              <span id="lbl-qual" class="setting-val-pill" data-i18n="qualityUltra">Ультра</span>
             </div>
             <div class="mode-toggle-row" style="grid-template-columns: 1fr 1fr 1fr;">
-              <button id="qual-ultra" class="mode-btn active">Ультра</button>
-              <button id="qual-high" class="mode-btn">Высокое</button>
-              <button id="qual-low" class="mode-btn">Быстрое</button>
+              <button id="qual-ultra" class="mode-btn active" data-i18n="qualityUltra">Ультра</button>
+              <button id="qual-high" class="mode-btn" data-i18n="qualityHigh">Высокое</button>
+              <button id="qual-low" class="mode-btn" data-i18n="qualityLow">Быстрое</button>
             </div>
           </div>
 
           <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Стиль рендера</span>
+              <span data-i18n="renderStyle">Стиль рендера</span>
               <span id="lbl-pix" class="setting-val-pill">Чёткий HD 3D (1x)</span>
             </div>
             <input id="inp-pix" type="range" min="1" max="3" step="1" class="setting-slider" />
           </div>
 
           <label for="inp-debug" class="setting-plaque setting-check-row">
-            <span>Показывать сектора ударов и цели ИИ [F3]</span>
+            <span data-i18n="settingsDebug">Показывать сектора ударов и цели ИИ [F3]</span>
             <input id="inp-debug" type="checkbox" class="ios-switch" />
           </label>
+
+          <div class="setting-group setting-plaque">
+            <div class="setting-label">
+              <span>Язык / Language / Dil / Idioma / اللغة</span>
+              <span id="lbl-lang" class="setting-val-pill">Русский</span>
+            </div>
+            <div id="lang-tabs" class="language-tabs" role="group" aria-label="Language">
+              ${LANGS.map(
+                (l) => `
+                <button
+                  type="button"
+                  class="lang-btn mode-btn"
+                  data-lang="${l.code}"
+                  title="${l.name}"
+                >
+                  ${l.code}
+                </button>
+              `
+              ).join('')}
+            </div>
+          </div>
 
           <div class="modal-bottom-row" style="justify-content: flex-end;">
             <button id="btn-settings-close" class="btn btn-primary" style="min-width: 155px;">
               ${ICONS.check}
-              <span>Готово</span>
+              <span data-i18n="settingsDone">Готово</span>
             </button>
           </div>
         </div>
@@ -1080,11 +1096,15 @@ export class UIManager {
     this.syncModeButtons();
     this.updatePublicRooms([]);
     this.syncSettingsControls();
+    this.applyTranslations();
   }
 
   public updateSettingsExternal(next: GameSettings): void {
     this.settings = { ...next };
     this.syncSettingsControls();
+    this.applyTranslations();
+    this.renderSelectionClass(this.currentSelectedClass, false);
+    this.renderMpClassButtons();
   }
 
   public getEnteredPlayerName(): string {
@@ -1178,7 +1198,7 @@ export class UIManager {
               canJoin
                 ? `<button class="btn btn-primary btn-sm mp-join-row-btn" data-code="${escapeHtml(
                     r.roomCode
-                  )}">Войти</button>`
+                  )}" data-i18n="mpJoin">Войти</button>`
                 : `<span class="mp-room-locked">${
                     r.phase === 'in_match' ? 'Идёт бой' : 'Заполнена'
                   }</span>`
@@ -1363,7 +1383,7 @@ export class UIManager {
       this.pauseRestartBtnEl.classList.toggle('hidden', match.isOnlineMatch);
       this.pauseMenuBtnEl.innerHTML = match.isOnlineMatch
         ? `${ICONS.door}<span>Покинуть сетевой бой</span>`
-        : `${ICONS.door}<span>Выйти в меню</span>`;
+        : `${ICONS.door}<span data-i18n="pauseMenu">Выйти в меню</span>`;
 
       this.specRestartBtnEl.classList.toggle('hidden', match.isOnlineMatch);
       this.specMenuBtnEl.textContent = match.isOnlineMatch
@@ -1683,6 +1703,7 @@ export class UIManager {
       const pVal = Number(pixInp.value);
       const pixelScale: 1 | 2 | 3 = pVal === 2 ? 2 : pVal === 3 ? 3 : 1;
       this.settings = {
+        language: this.settings.language,
         masterVolume: Number(volInp.value) / 100,
         mouseSensitivity: Number(sensInp.value) / 100,
         pixelScale,
@@ -1714,6 +1735,20 @@ export class UIManager {
     this.q('#qual-high').addEventListener('click', () => pushSettings('high'));
     this.q('#qual-low').addEventListener('click', () => pushSettings('low'));
 
+    // Language tabs
+    this.root.querySelectorAll<HTMLButtonElement>('.lang-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const code = btn.dataset.lang as Lang | undefined;
+        if (!code) return;
+        this.settings = { ...this.settings, language: code };
+        this.syncSettingsControls();
+        this.applyTranslations();
+        this.renderSelectionClass(this.currentSelectedClass, false);
+        this.renderMpClassButtons();
+        this.callbacks.onSettingsChanged(this.settings);
+      });
+    });
+
     this.q('#btn-settings-close').addEventListener('click', closeSettings);
     this.q('#btn-settings-x').addEventListener('click', closeSettings);
     this.settingsModalEl.addEventListener('click', (ev) => {
@@ -1734,14 +1769,14 @@ export class UIManager {
       const unlock = KNIGHT_UNLOCK_CONFIG[cid];
       const priceTag = owned
         ? ''
-        : `<span class="hub-hero-price">${unlock.price} монет</span>`;
+        : `<span class="hub-hero-price">${this.tl('hubHeroPrice', { price: unlock.price })}</span>`;
       return `
         <button class="hub-hero-chip cls-${cid} ${
         isAct ? 'active' : ''
-      } ${!owned ? 'locked' : ''}" data-cid="${cid}" title="${c.name}">
+      } ${!owned ? 'locked' : ''}" data-cid="${cid}" title="${classDisplayName(cid, this.settings.language)}">
           <img class="hub-hero-avatar" src="${iconUrl}" alt="" draggable="false" />
           <div class="hub-hero-meta">
-            <strong>${CLASS_SHORT_NAME[cid]}</strong>
+            <strong>${classDisplayName(cid, this.settings.language)}</strong>
             <span>${c.maxHp} HP</span>
             ${priceTag}
           </div>
@@ -1762,16 +1797,23 @@ export class UIManager {
 
   private updatePlayButtonSubtitle(): void {
     const modeLabel =
-      this.selectedMode === 'ffa5' ? '5 бойцов' : 'Дуэль 1 на 1';
-    const clsName = KNIGHT_CLASSES[this.currentSelectedClass].name;
+      this.selectedMode === 'ffa5'
+        ? this.tl('modeFfaTag')
+        : this.tl('modeDuelTag');
+    const clsName = classDisplayName(
+      this.currentSelectedClass,
+      this.settings.language
+    );
     const owned = isKnightUnlocked(this.profile, this.currentSelectedClass);
     const unlock = KNIGHT_UNLOCK_CONFIG[this.currentSelectedClass];
     const btn = this.q('#btn-menu-quick');
 
-    this.hubPlayTitleEl.textContent = owned ? 'В БОЙ!' : `Купить за ${unlock.price}`;
+    this.hubPlayTitleEl.textContent = owned
+      ? this.tl('playFight')
+      : this.tl('playBuy', { price: unlock.price });
     this.hubPlaySubEl.textContent = owned
       ? `${modeLabel} · ${clsName}`
-      : `${modeLabel} · ${clsName} (не куплен)`;
+      : `${this.tl('playBuy', { price: unlock.price })} · ${clsName}`;
     btn.classList.toggle('buy-state', !owned);
   }
 
@@ -1784,7 +1826,7 @@ export class UIManager {
           cid === this.currentSelectedClass ? 'active' : ''
         }" data-cid="${cid}" title="${c.name} (${c.maxHp} HP)">
           <img src="${iconUrl}" alt="" draggable="false" />
-          <span>${CLASS_SHORT_NAME[cid]}</span>
+          <span>${classDisplayName(cid, this.settings.language)}</span>
         </button>
       `;
     }).join('');
@@ -1910,7 +1952,7 @@ export class UIManager {
         }" data-cid="${cid}">
           <img class="class-tab-emblem" src="${iconUrl}" alt="" draggable="false" />
           <div class="class-tab-text">
-            <div class="class-tab-name">${CLASS_SHORT_NAME[cid]}</div>
+            <div class="class-tab-name">${classDisplayName(cid, this.settings.language)}</div>
             <div class="class-tab-code">${c.role}</div>
           </div>
         </button>
@@ -1937,27 +1979,27 @@ export class UIManager {
           <span class="dossier-role-pill">${cfg.role}</span>
           <span class="dossier-hp-pill">${cfg.maxHp} HP</span>
         </div>
-        <h3 class="dossier-class-title">${cfg.name}</h3>
+        <h3 class="dossier-class-title">${classDisplayName(classId, this.settings.language)}</h3>
         <p class="dossier-summary">${cfg.summary}</p>
       </div>
 
       <div class="stat-grid">
         <div class="stat-row">
-          <span class="stat-lbl">Здоровье</span>
+          <span class="stat-lbl" data-i18n="statHealth">Здоровье</span>
           <div class="stat-bar-bg"><div class="stat-bar-fill hp-tone" style="width:${bar(
             cfg.uiRatings.hp
           )}%"></div></div>
           <strong class="stat-num">${cfg.maxHp}</strong>
         </div>
         <div class="stat-row">
-          <span class="stat-lbl">Скорость</span>
+          <span class="stat-lbl" data-i18n="statSpeed">Скорость</span>
           <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
             cfg.uiRatings.speed
           )}%"></div></div>
           <strong class="stat-num">${cfg.moveSpeed.toFixed(1)} м/с</strong>
         </div>
         <div class="stat-row">
-          <span class="stat-lbl">Сила удара</span>
+          <span class="stat-lbl" data-i18n="statAttack">Сила удара</span>
           <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
             cfg.uiRatings.attack
           )}%"></div></div>
@@ -1966,7 +2008,7 @@ export class UIManager {
             .join('·')} / ${cfg.heavyAttack.damage}</strong>
         </div>
         <div class="stat-row">
-          <span class="stat-lbl">Защита</span>
+          <span class="stat-lbl" data-i18n="statDefense">Защита</span>
           <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
             cfg.uiRatings.defense
           )}%"></div></div>
@@ -1975,7 +2017,7 @@ export class UIManager {
           )}%</strong>
         </div>
         <div class="stat-row">
-          <span class="stat-lbl">Дальность</span>
+          <span class="stat-lbl" data-i18n="statReach">Дальность</span>
           <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
             cfg.uiRatings.reach
           )}%"></div></div>
@@ -1983,7 +2025,7 @@ export class UIManager {
         </div>
       </div>
 
-      <div class="bento-label" style="margin-bottom: 8px;">Уникальные навыки [1], [2] и [3]</div>
+      <div class="bento-label" style="margin-bottom: 8px;" data-i18n="uniqueSkills">Уникальные навыки [1], [2] и [3]</div>
       <div class="sel-abilities-grid">
         ${cfg.abilities
           .map(
@@ -2010,6 +2052,7 @@ export class UIManager {
     `;
 
     this.populateSkillSquares(this.selectionSkillBarEl, classId, false);
+    this.applyTranslations();
   }
 
   private syncModeButtons(): void {
@@ -2071,6 +2114,21 @@ export class UIManager {
           chip.dataset.arenaTheme === this.settings.arenaTheme
         );
       });
+
+    // Language controls
+    const langMeta = LANGS.find((l) => l.code === this.settings.language);
+    this.q('#lbl-lang').textContent = langMeta ? langMeta.name : this.settings.language;
+    this.root
+      .querySelectorAll<HTMLButtonElement>('.lang-btn')
+      .forEach((chip) => {
+        const active = chip.dataset.lang === this.settings.language;
+        chip.classList.toggle('active', active);
+        chip.setAttribute('aria-pressed', String(active));
+      });
+
+    // RTL direction for Arabic
+    document.documentElement.dir = isRtl(this.settings.language) ? 'rtl' : 'ltr';
+    document.documentElement.lang = this.settings.language;
   }
 
   private updateActionBarForFighter(
@@ -2410,39 +2468,43 @@ export class UIManager {
     const sub = this.q('#res-sub');
     const badge = this.q('#res-badge');
 
+    const placeLabel =
+      rewards?.place === 1
+        ? this.tl('resultsPlace1')
+        : rewards?.place === 2
+          ? this.tl('resultsPlace2')
+          : rewards?.place === 3
+            ? this.tl('resultsPlace3')
+            : this.tl('resultsPlaceOther');
+    const timeUpText = this.tl('resultsTimeUp');
+    const durationText = this.tl('resultsDuration', {
+      secs: Math.round(match.matchElapsed),
+    });
+    const activeRoomText =
+      match.isOnlineMatch && this.mpStatus === 'connected'
+        ? this.tl('resultsActiveRoom')
+        : '';
     // Inject coin payout row into results sub-text based on place
     if (rewards && rewards.coins > 0) {
       sub.textContent =
-        `Заработано монет: ${rewards.coins} (${
-          rewards.place === 1 ? 'победа' : rewards.place === 2 ? '2-е место' : rewards.place === 3 ? '3-е место' : 'место'
-        }: ${rewards.coins}). ` +
+        this.tl('resultsCoinsRow', { coins: rewards.coins, place: placeLabel }) +
         (match.finishReason === 'time_up'
-          ? 'Время раунда вышло — чемпион определён по запасу здоровья и урону.'
-          : `Длительность боя: ${Math.round(match.matchElapsed)} сек.${
-              match.isOnlineMatch && this.mpStatus === 'connected'
-                ? ' · Комната активна'
-                : ''
-            }`);
+          ? timeUpText
+          : durationText + activeRoomText);
     } else {
       sub.textContent =
-        match.finishReason === 'time_up'
-          ? 'Время раунда вышло — чемпион определён по запасу здоровья и урону.'
-          : `Длительность боя: ${Math.round(match.matchElapsed)} сек.${
-              match.isOnlineMatch && this.mpStatus === 'connected'
-                ? ' · Комната активна'
-                : ''
-            }`;
+        match.finishReason === 'time_up' ? timeUpText : durationText + activeRoomText;
     }
 
     if (playerWon) {
-      badge.textContent = 'Последний выживший';
-      headline.textContent = 'Победа на арене!';
+      badge.textContent = this.tl('lastSurvivor');
+      headline.textContent = this.tl('resVictory');
       headline.classList.add('victory-gold');
     } else {
-      badge.textContent = 'Матч завершён';
+      badge.textContent = this.tl('matchFinished');
       headline.textContent = winner
-        ? `Победитель: ${winner.name}`
-        : 'Ничья на арене';
+        ? this.tl('resWinner', { name: winner.name })
+        : this.tl('resDraw');
       headline.classList.remove('victory-gold');
     }
 
@@ -2451,7 +2513,7 @@ export class UIManager {
     this.showAd(true);
 
     if (match.isOnlineMatch && this.mpRoom) {
-      this.resMenuBtnEl.textContent = 'Покинуть комнату';
+      this.resMenuBtnEl.textContent = this.tl('mpLeave');
       if (isHost) {
         this.resClassBtnEl.classList.remove('hidden');
         this.resClassBtnEl.textContent = 'В комнату';
@@ -2461,16 +2523,16 @@ export class UIManager {
         this.resAgainBtnEl.innerHTML = `<span>Готов к реваншу</span>`;
       }
     } else {
-      this.resMenuBtnEl.textContent = 'В меню';
+      this.resMenuBtnEl.textContent = this.tl('backMenu');
       this.resClassBtnEl.classList.remove('hidden');
-      this.resClassBtnEl.textContent = 'Сменить героя';
-      this.resAgainBtnEl.innerHTML = `${ICONS.play}<span>Играть снова!</span>`;
+      this.resClassBtnEl.textContent = this.tl('changeHero');
+      this.resAgainBtnEl.innerHTML = `${ICONS.play}<span>${this.tl('playAgain')}</span>`;
     }
 
     const tbody = this.q('#res-tbody');
     tbody.innerHTML = standings
       .map((s) => {
-        const clsName = KNIGHT_CLASSES[s.classId].name;
+        const clsName = classDisplayName(s.classId, this.settings.language);
         const iconUrl = getSkillIconUrl(CLASS_EMBLEM_ICON[s.classId]);
         const rowCls = `${s.place === 1 ? 'winner-row' : ''} ${
           s.isHuman ? 'human-row' : ''
@@ -2557,6 +2619,22 @@ export class UIManager {
     this.hubCoinDisplayEl.textContent = String(this.profile.coins);
     this.q('#hub-main-coin-display').textContent = String(this.profile.coins);
     this.hideAd();
+  }
+
+  private applyTranslations(): void {
+    this.root.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
+      const key = el.dataset.i18n;
+      if (key) el.textContent = this.tl(key);
+    });
+    this.root.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach((el) => {
+      const key = el.dataset.i18nTitle;
+      if (key) el.title = this.tl(key);
+    });
+  }
+
+  /** Translate a key using current settings language. */
+  private tl(key: string, params?: Record<string, string | number>): string {
+    return t(key, this.settings.language, params);
   }
 
   private q(selector: string): HTMLElement {
