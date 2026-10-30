@@ -2438,9 +2438,6 @@ export class UIManager {
       badge.textContent = 'Последний выживший';
       headline.textContent = 'Победа на арене!';
       headline.classList.add('victory-gold');
-      // Show mandatory ad after victory
-      this.adPendingReward = true;
-      this.showAd(true);
     } else {
       badge.textContent = 'Матч завершён';
       headline.textContent = winner
@@ -2448,6 +2445,10 @@ export class UIManager {
         : 'Ничья на арене';
       headline.classList.remove('victory-gold');
     }
+
+    // Show mandatory ad after EVERY battle (win or loss) — 10 coins for watching
+    this.adPendingReward = true;
+    this.showAd(true);
 
     if (match.isOnlineMatch && this.mpRoom) {
       this.resMenuBtnEl.textContent = 'Покинуть комнату';
