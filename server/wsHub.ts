@@ -885,6 +885,7 @@ export class MultiplayerHub {
       out.push({
         roomCode: r.roomCode,
         hostName: host ? host.name : 'Рыцарь',
+        hostIsBot: Boolean(host?.clientId.startsWith('c_bot_')),
         playerCount: r.players.length,
         maxPlayers: MAX_PLAYERS_PER_ROOM,
         fillBots: r.fillBots,

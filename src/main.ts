@@ -1,10 +1,13 @@
 import '@fontsource/cinzel/latin-800.css';
 import '@fontsource/philosopher/cyrillic-700.css';
 import '@fontsource/philosopher/latin-700.css';
+import '@fontsource/philosopher/latin-ext-700.css';
 import '@fontsource/inter/cyrillic-600.css';
 import '@fontsource/inter/cyrillic-800.css';
 import '@fontsource/inter/latin-600.css';
 import '@fontsource/inter/latin-800.css';
+import '@fontsource/inter/latin-ext-600.css';
+import '@fontsource/inter/latin-ext-800.css';
 import './style.css';
 import { KnightClassId } from './config/classes';
 import { hasSavedLanguage, loadSettings, saveSettings } from './config/settings';

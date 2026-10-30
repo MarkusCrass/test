@@ -18,6 +18,8 @@ import {
   unlockKnight,
   PlayerProfile,
 } from '../config/playerProfile';
+import { botDisplayName } from '../config/botNames';
+import { abilityText, heroText } from '../config/heroLocales';
 import { AD_COIN_REWARD, KNIGHT_UNLOCK_CONFIG } from '../config/rewards';
 import {
   ARENA_THEMES,
@@ -26,7 +28,7 @@ import {
   getArenaThemeMeta,
   GraphicsQuality,
 } from '../config/settings';
-import { Fighter, FighterState } from '../core/Fighter';
+import { Fighter } from '../core/Fighter';
 import { MatchManager, MatchMode, MatchState } from '../core/MatchManager';
 import { NetConnectionStatus } from '../net/MultiplayerClient';
 import {
@@ -91,18 +93,6 @@ export interface UICallbacks {
 
 const MP_NAME_STORAGE_KEY = 'kls_mp_player_name_v1';
 
-const STATE_LABELS_RU: Record<FighterState, string> = {
-  Idle: 'Готов',
-  Moving: 'В движении',
-  Attacking: 'Комбо',
-  HeavyAttacking: 'Пробой!',
-  Blocking: 'Блок',
-  Dodging: 'Рывок',
-  HitReaction: 'Урон',
-  Stunned: 'Оглушён',
-  Dead: 'Пал',
-};
-
 const CLASS_EMBLEM_ICON: Record<KnightClassId, string> = {
   sword: 'sword_light.svg',
   dual: 'dual_light.svg',
@@ -151,7 +141,7 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function loadSavedPlayerName(): string {
+function loadSavedPlayerName(lang: Lang): string {
   try {
     const saved = localStorage.getItem(MP_NAME_STORAGE_KEY);
     if (saved && saved.trim().length >= 2) {
@@ -160,7 +150,7 @@ function loadSavedPlayerName(): string {
   } catch {
     // Ignore storage block
   }
-  return `Сэр Артур`;
+  return lang === 'ru' ? 'Сэр Артур' : lang === 'ar' ? 'السير آرثر' : 'Sir Arthur';
 }
 
 function savePlayerName(name: string): void {
@@ -291,11 +281,13 @@ export class UIManager {
   private lastPaused = false;
   private selectedMode: MatchMode = 'ffa5';
   private resultsRenderedKey = '';
+  private lastResults: { match: MatchManager; isHost: boolean; rewards: ReturnType<MatchManager['getMatchRewards']> } | null = null;
 
 
   // Multiplayer UI state
   private mpStatus: NetConnectionStatus = 'disconnected';
   private mpPingMs = 0;
+  private mpRooms: RoomSummary[] = [];
   private mpRoom: RoomLobbyState | null = null;
   private mpMyClientId: string | null = null;
   private mpAlertTimer: ReturnType<typeof setTimeout> | null = null;
@@ -310,7 +302,7 @@ export class UIManager {
     this.callbacks = callbacks;
     this.profile = loadProfile();
 
-    const initialName = escapeHtml(loadSavedPlayerName());
+    const initialName = escapeHtml(loadSavedPlayerName(this.settings.language));
 
     this.root.innerHTML = `
       <!-- PERSISTENT FLOATING TOP NAVIGATION DOCK -->
@@ -422,13 +414,13 @@ export class UIManager {
                   type="button"
                   class="arena-theme-chip"
                   data-arena-theme="${t.id}"
-                  title="${t.name} — ${t.subtitle}"
+                  title="${this.tl(`theme_${t.id}`)} — ${this.tl(`themeDesc_${t.id}`)}"
                 >
                   <span
                     class="arena-theme-dot"
                     style="background: linear-gradient(135deg, ${t.swatchPrimary}, ${t.swatchSecondary});"
                   ></span>
-                  <span>${t.shortName}</span>
+                  <span class="arena-theme-chip-name">${this.tl(`themeShort_${t.id}`)}</span>
                 </button>
               `
               ).join('')}
@@ -456,7 +448,7 @@ export class UIManager {
           <button id="btn-menu-quick" class="hub-play-cta">
             <span class="hub-play-icon">${ICONS.play}</span>
             <span class="hub-play-copy">
-              <strong id="hub-play-title" class="hub-play-title" data-i18n="playFight">В БОЙ!</strong>
+              <strong id="hub-play-title" class="hub-play-title">В БОЙ!</strong>
               <span id="hub-play-sub" class="hub-play-sub">5 бойцов · Рыцарь клинка</span>
             </span>
           </button>
@@ -489,7 +481,7 @@ export class UIManager {
           <div class="armory-launch-group">
             <div class="mode-toggle-row">
               <button id="mode-ffa5" class="mode-btn active" data-i18n="modeFfaTag">5 бойцов</button>
-              <button id="mode-duel" class="mode-btn">1 на 1</button>
+              <button id="mode-duel" class="mode-btn" data-i18n="modeDuelName">1 на 1</button>
             </div>
             <button id="btn-sel-start" class="hub-play-cta compact">
               <span class="hub-play-icon">${ICONS.play}</span>
@@ -510,7 +502,7 @@ export class UIManager {
                 <p class="mp-subheading" data-i18n="mpSubtitle">До 5 живых игроков в матче · Серверная физика 60 Гц</p>
               </div>
             </div>
-            <div id="mp-conn-pill" class="mp-conn-pill connecting" data-i18n="mpConnecting">Подключение...</div>
+            <div id="mp-conn-pill" class="mp-conn-pill connecting">${this.tl('mpConnecting')}</div>
           </div>
 
           <div id="mp-alert-banner" class="mp-alert-banner hidden"></div>
@@ -527,7 +519,7 @@ export class UIManager {
                     type="text"
                     maxlength="18"
                     value="${initialName}"
-                    placeholder="Введите имя..."
+                    placeholder="Введите имя..." data-i18n-placeholder="enterName"
                     class="mp-text-input"
                   />
                 </div>
@@ -573,7 +565,7 @@ export class UIManager {
                       id="mp-code-input"
                       type="text"
                       maxlength="6"
-                      placeholder="КОД"
+                      placeholder="КОД" data-i18n-placeholder="codePlaceholder"
                       class="mp-text-input mp-code-field"
                     />
                     <button id="btn-mp-join-code" class="btn btn-primary" data-i18n="mpJoin">Войти</button>
@@ -640,7 +632,7 @@ export class UIManager {
                 <span data-i18n="mpLeave">Покинуть комнату</span>
               </button>
               <div class="mp-room-cta-right">
-                <button id="btn-mp-ready" class="btn btn-accent-violet" data-i18n="mpReady">Готов к бою</button>
+                <button id="btn-mp-ready" class="btn btn-accent-violet">${this.tl('mpReady')}</button>
                 <button id="btn-mp-start" class="btn btn-primary btn-hero">
                   ${ICONS.play}
                   <span data-i18n="mpStart">Начать матч!</span>
@@ -661,13 +653,13 @@ export class UIManager {
             <div id="hud-timer" class="hud-timer">03:10</div>
           </div>
           <span class="hud-top-divider" aria-hidden="true"></span>
-          <div id="hud-alive-pill" class="hud-alive-pill">5 / 5 в живых</div>
+          <div id="hud-alive-pill" class="hud-alive-pill">${this.tl('aliveCount', { alive: 5, total: 5 })}</div>
           <span id="hud-net-sep" class="hud-top-divider hidden" aria-hidden="true"></span>
           <div id="hud-net-pill" class="hud-net-pill hidden" data-i18n="navOnline">Онлайн</div>
         </div>
 
         <div id="hud-pointer-prompt" class="pointer-prompt hidden">
-          Свободный прицел активен · Зажмите ПКМ/СКМ для вращения камеры 360° · [~] Экшен-камера
+          ${this.tl('aimHint')}
         </div>
 
         <div id="hud-countdown" class="countdown-banner hidden">3</div>
@@ -700,9 +692,9 @@ export class UIManager {
               <img id="hud-player-class-icon" class="vitals-class-emblem" src="${getSkillIconUrl(
                 'sword_light.svg'
               )}" alt="" draggable="false" />
-              <span id="hud-player-class">Рыцарь</span>
+              <span id="hud-player-class">${classDisplayName('sword', this.settings.language)}</span>
             </div>
-            <span id="hud-player-state" class="state-pill">Готов</span>
+            <span id="hud-player-state" class="state-pill">${this.tl('ready')}</span>
           </div>
           <div class="bar-container hp-bar-frame">
             <div id="hud-hp-fill" class="hp-fill" style="width: 100%"></div>
@@ -710,7 +702,7 @@ export class UIManager {
           </div>
           <div class="bar-container stam-bar-frame">
             <div id="hud-stam-fill" class="stamina-fill" style="width: 100%"></div>
-            <div id="hud-stam-text" class="bar-text">100 СТ</div>
+            <div id="hud-stam-text" class="bar-text">${this.tl('staminaValue', { value: 100 })}</div>
           </div>
           <div id="hud-active-buff" class="hud-buff-pill hidden"></div>
         </div>
@@ -719,7 +711,7 @@ export class UIManager {
         <div id="hud-actionbar" class="hud-actionbar pointer-auto">
           <div id="hud-actionbar-slots" class="skill-squares-row"></div>
           <div id="hud-actionbar-hint" class="hud-actionbar-hint">
-            Удерживайте [Tab] — курсор и описание навыков
+            ${this.tl('controlsHint')}
           </div>
         </div>
 
@@ -729,7 +721,7 @@ export class UIManager {
             ${ICONS.skull}
             <span data-i18n="spectating">Вы выбыли · Режим наблюдения</span>
           </div>
-          <div id="spectator-sub" class="spectator-sub">Камера следует за выжившими...</div>
+          <div id="spectator-sub" class="spectator-sub">${this.tl('decidingWinner')}</div>
           <div class="spectator-actions">
             <button id="btn-spec-prev" class="btn btn-sm" data-i18n="specPrevious">Пред. [Q]</button>
             <button id="btn-spec-next" class="btn btn-sm" data-i18n="specNext">След. [E]</button>
@@ -790,19 +782,19 @@ export class UIManager {
               <div class="ctrl-info"><strong data-i18n="controlMove">Перемещение</strong><span data-i18n="controlMoveDesc">Свободное движение + Shift для спринта</span></div>
             </div>
             <div class="ctrl-card">
-              <div class="ctrl-keys"><kbd>Мышь</kbd> + <kbd>Колесо</kbd></div>
+              <div class="ctrl-keys"><kbd data-i18n="mouse">Мышь</kbd> + <kbd data-i18n="wheel">Колесо</kbd></div>
               <div class="ctrl-info"><strong data-i18n="controlCamera">ММО-камера 360° и Зум</strong><span data-i18n="controlCameraDesc">Полное вращение вокруг героя, взгляд вверх/вниз и отдаление</span></div>
             </div>
             <div class="ctrl-card">
-              <div class="ctrl-keys"><kbd>СКМ</kbd> / <kbd>V</kbd> · <kbd>~</kbd></div>
+              <div class="ctrl-keys"><kbd data-i18n="middleMouse">СКМ</kbd> / <kbd>V</kbd> · <kbd>~</kbd></div>
               <div class="ctrl-info"><strong data-i18n="controlLook">Свободный обзор и Прицел</strong><span data-i18n="controlLookDesc">Обзор 360° на бегу (СКМ/V) · Свободный прицел по экрану (~)</span></div>
             </div>
             <div class="ctrl-card">
-              <div class="ctrl-keys"><kbd>ЛКМ</kbd> / <kbd>Удерж.</kbd></div>
+              <div class="ctrl-keys"><kbd data-i18n="leftMouse">ЛКМ</kbd> / <kbd data-i18n="hold">Удерж.</kbd></div>
               <div class="ctrl-info"><strong data-i18n="controlAttack">Комбо и Пробой</strong><span data-i18n="controlAttackDesc">Мгновенная серия ударов и заряженный пробой в точку прицела</span></div>
             </div>
             <div class="ctrl-card">
-              <div class="ctrl-keys"><kbd>ПКМ</kbd></div>
+              <div class="ctrl-keys"><kbd data-i18n="rightMouse">ПКМ</kbd></div>
               <div class="ctrl-info"><strong data-i18n="controlBlock">Блок и парирование</strong><span data-i18n="controlBlockDesc">Вовремя нажатый блок оглушает врага</span></div>
             </div>
             <div class="ctrl-card">
@@ -820,7 +812,7 @@ export class UIManager {
           </div>
 
           <div class="modal-bottom-row">
-            <span class="modal-hint-note">В бою удерживайте <strong>Tab</strong>, чтобы показать курсор, или нажмите <strong>Esc</strong> для паузы</span>
+            <span class="modal-hint-note" data-i18n="controlsHint">В бою удерживайте Tab, чтобы показать курсор, или нажмите Esc для паузы</span>
             <button id="btn-controls-close" class="btn btn-primary" data-i18n="ok">Понятно</button>
           </div>
         </div>
@@ -832,8 +824,8 @@ export class UIManager {
           <div class="results-header">
             <div class="results-trophy-orb">${ICONS.trophy}</div>
             <div>
-              <div id="res-badge" class="modal-pill-badge" data-i18n="resBadge">Итоги матча</div>
-              <h2 id="res-headline" class="modal-sheet-title results-headline">ПОБЕДА!</h2>
+              <div id="res-badge" class="modal-pill-badge">${this.tl('resBadge')}</div>
+              <h2 id="res-headline" class="modal-sheet-title results-headline">${this.tl('resVictory')}</h2>
               <div id="res-sub" class="results-sub"></div>
             </div>
           </div>
@@ -855,8 +847,8 @@ export class UIManager {
           </div>
 
           <div class="results-actions">
-            <button id="btn-res-menu" class="btn btn-ghost" data-i18n="backMenu">В меню</button>
-            <button id="btn-res-class" class="btn btn-accent-violet" data-i18n="changeHero">Сменить героя</button>
+            <button id="btn-res-menu" class="btn btn-ghost">${this.tl('backMenu')}</button>
+            <button id="btn-res-class" class="btn btn-accent-violet">${this.tl('changeHero')}</button>
             <button id="btn-res-again" class="btn btn-primary btn-hero">
               ${ICONS.play}
               <span data-i18n="playAgain">Играть снова!</span>
@@ -933,13 +925,13 @@ export class UIManager {
                   type="button"
                   class="arena-theme-chip"
                   data-arena-theme="${t.id}"
-                  title="${t.name} — ${t.subtitle}"
+                  title="${this.tl(`theme_${t.id}`)} — ${this.tl(`themeDesc_${t.id}`)}"
                 >
                   <span
                     class="arena-theme-dot"
                     style="background: linear-gradient(135deg, ${t.swatchPrimary}, ${t.swatchSecondary});"
                   ></span>
-                  <span>${t.shortName}</span>
+                  <span class="arena-theme-chip-name">${this.tl(`themeShort_${t.id}`)}</span>
                 </button>
               `
               ).join('')}
@@ -949,7 +941,7 @@ export class UIManager {
           <div class="setting-group setting-plaque">
             <div class="setting-label">
               <span data-i18n="settingsQuality">Качество графики</span>
-              <span id="lbl-qual" class="setting-val-pill" data-i18n="qualityUltra">Ультра</span>
+              <span id="lbl-qual" class="setting-val-pill">Ультра</span>
             </div>
             <div class="mode-toggle-row" style="grid-template-columns: 1fr 1fr 1fr;">
               <button id="qual-ultra" class="mode-btn active" data-i18n="qualityUltra">Ультра</button>
@@ -973,7 +965,7 @@ export class UIManager {
 
           <div class="setting-group setting-plaque">
             <div class="setting-label">
-              <span>Язык / Language / Dil / Idioma / اللغة</span>
+              <span data-i18n="navLanguage">Язык</span>
               <span id="lbl-lang" class="setting-val-pill">Русский</span>
             </div>
             <div id="lang-tabs" class="language-tabs" role="group" aria-label="Language">
@@ -1095,21 +1087,35 @@ export class UIManager {
     this.renderMpClassButtons();
     this.syncModeButtons();
     this.updatePublicRooms([]);
+    this.updateMultiplayerStatus(this.mpStatus, this.mpPingMs);
     this.syncSettingsControls();
     this.applyTranslations();
   }
 
   public updateSettingsExternal(next: GameSettings): void {
     this.settings = { ...next };
-    this.syncSettingsControls();
+    this.refreshLanguage();
+  }
+
+  private refreshLanguage(): void {
     this.applyTranslations();
+    this.syncSettingsControls();
     this.renderSelectionClass(this.currentSelectedClass, false);
     this.renderMpClassButtons();
+    this.updateMultiplayerStatus(this.mpStatus, this.mpPingMs);
+    this.updatePublicRooms(this.mpRooms);
+    if (this.mpRoom) this.updateMultiplayerRoom(this.mpRoom, this.mpMyClientId);
+    this.renderedActionBarClass = null;
+    if (this.lastRenderedState === 'MatchFinished' && this.lastResults) {
+      const { match, isHost, rewards } = this.lastResults;
+      this.renderResults(match, isHost, rewards, false);
+    }
+    this.lastRenderedState = null;
   }
 
   public getEnteredPlayerName(): string {
     const val = this.mpNameInputEl.value.trim();
-    const clean = val.length >= 2 ? val.slice(0, 18) : 'Сэр Артур';
+    const clean = val.length >= 2 ? val.slice(0, 18) : loadSavedPlayerName(this.settings.language);
     savePlayerName(clean);
     return clean;
   }
@@ -1130,13 +1136,13 @@ export class UIManager {
     if (status === 'connected') {
       this.mpConnPillEl.classList.add('online');
       this.mpConnPillEl.textContent =
-        pingMs > 0 ? `Онлайн · ${pingMs} мс` : `Онлайн`;
+        pingMs > 0 ? `${this.tl('mpOnline')} · ${pingMs} ms` : this.tl('mpOnline');
     } else if (status === 'connecting') {
       this.mpConnPillEl.classList.add('connecting');
-      this.mpConnPillEl.textContent = `Подключение...`;
+      this.mpConnPillEl.textContent = this.tl('mpConnecting');
     } else {
       this.mpConnPillEl.classList.add('offline');
-      this.mpConnPillEl.textContent = `Оффлайн`;
+      this.mpConnPillEl.textContent = this.tl('mpOffline');
     }
 
     if (errorText) {
@@ -1151,7 +1157,7 @@ export class UIManager {
     if (this.mpAlertTimer) {
       clearTimeout(this.mpAlertTimer);
     }
-    this.mpAlertEl.textContent = message;
+    this.mpAlertEl.textContent = this.translateNetworkMessage(message);
     this.mpAlertEl.classList.remove('hidden', 'tone-error', 'tone-info');
     this.mpAlertEl.classList.add(
       tone === 'info' ? 'tone-info' : 'tone-error'
@@ -1162,12 +1168,13 @@ export class UIManager {
   }
 
   public updatePublicRooms(rooms: RoomSummary[]): void {
+    this.mpRooms = rooms;
     if (rooms.length === 0) {
       this.mpRoomsListEl.innerHTML = `
         <div class="mp-empty-rooms">
-          <div class="mp-empty-title">Пока нет открытых комнат</div>
+          <div class="mp-empty-title">${this.tl('emptyRooms')}</div>
           <div class="mp-empty-sub">
-            Нажмите «Быстрый поиск боя» или создайте комнату — друзья смогут подключиться за секунду.
+            ${this.tl('emptyRoomsHint')}
           </div>
         </div>
       `;
@@ -1179,15 +1186,15 @@ export class UIManager {
         const canJoin = r.phase === 'lobby' && r.playerCount < r.maxPlayers;
         const statusBadge =
           r.phase === 'lobby'
-            ? `<span class="mp-room-badge open">Ожидание · ${r.playerCount}/${r.maxPlayers}</span>`
-            : `<span class="mp-room-badge busy">В бою · ${r.playerCount}/${r.maxPlayers}</span>`;
-        const botTag = r.fillBots ? '+Боты ИИ' : 'Только игроки';
+            ? `<span class="mp-room-badge open">${this.tl('waiting')} · ${r.playerCount}/${r.maxPlayers}</span>`
+            : `<span class="mp-room-badge busy">${this.tl('inBattle')} · ${r.playerCount}/${r.maxPlayers}</span>`;
+        const botTag = r.fillBots ? this.tl('botsPlus') : this.tl('playersOnly');
         return `
           <div class="mp-room-row">
             <div class="mp-room-row-info">
               <div class="mp-room-row-top">
                 <span class="mp-room-code-chip">${escapeHtml(r.roomCode)}</span>
-                <strong class="mp-room-host">${escapeHtml(r.hostName)}</strong>
+                <strong class="mp-room-host">${escapeHtml(r.hostIsBot ? botDisplayName(r.hostName, this.settings.language) : r.hostName)}</strong>
               </div>
               <div class="mp-room-row-meta">
                 ${statusBadge}
@@ -1198,9 +1205,9 @@ export class UIManager {
               canJoin
                 ? `<button class="btn btn-primary btn-sm mp-join-row-btn" data-code="${escapeHtml(
                     r.roomCode
-                  )}" data-i18n="mpJoin">Войти</button>`
+                  )}" >${this.tl('mpJoin')}</button>`
                 : `<span class="mp-room-locked">${
-                    r.phase === 'in_match' ? 'Идёт бой' : 'Заполнена'
+                    r.phase === 'in_match' ? this.tl('inBattle') : this.tl('roomFull')
                   }</span>`
             }
           </div>
@@ -1262,10 +1269,10 @@ export class UIManager {
         const iconUrl = getSkillIconUrl(CLASS_EMBLEM_ICON[p.classId]);
         const isMe = p.clientId === myClientId;
         const readyPill = p.isHost
-          ? `<span class="mp-slot-pill host">Лидер</span>`
+          ? `<span class="mp-slot-pill host">${this.tl('leader')}</span>`
           : p.ready
-          ? `<span class="mp-slot-pill ready">Готов</span>`
-          : `<span class="mp-slot-pill wait">Не готов</span>`;
+          ? `<span class="mp-slot-pill ready">${this.tl('ready')}</span>`
+          : `<span class="mp-slot-pill wait">${this.tl('notReady')}</span>`;
 
         slotsHtml.push(`
           <div class="mp-slot-card occupied cls-${p.classId} ${
@@ -1273,14 +1280,14 @@ export class UIManager {
         }">
             <div class="mp-slot-top">
               <span class="mp-slot-index">#${idx + 1}</span>
-              <span class="mp-slot-ping">${p.pingMs} мс</span>
+              <span class="mp-slot-ping">${p.pingMs} ms</span>
             </div>
             <img class="mp-slot-emblem" src="${iconUrl}" alt="" draggable="false" />
             <div class="mp-slot-body">
-              <strong class="mp-slot-name">${escapeHtml(p.name)}${
-          isMe ? ' (Вы)' : ''
+              <strong class="mp-slot-name">${escapeHtml(p.clientId.startsWith('c_bot_') ? botDisplayName(p.name, this.settings.language) : p.name)}${
+          isMe ? ` (${this.tl('you')})` : ''
         }</strong>
-              <div class="mp-slot-sub">${clsCfg.name} · ${clsCfg.maxHp} HP</div>
+              <div class="mp-slot-sub">${classDisplayName(p.classId, this.settings.language)} · ${clsCfg.maxHp} HP</div>
             </div>
             ${readyPill}
           </div>
@@ -1290,14 +1297,14 @@ export class UIManager {
           <div class="mp-slot-card bot-slot">
             <div class="mp-slot-top">
               <span class="mp-slot-index">#${idx + 1}</span>
-              <span class="mp-slot-tag-mini">ИИ</span>
+              <span class="mp-slot-tag-mini">${this.tl('ai')}</span>
             </div>
             <div class="mp-slot-bot-badge">${ICONS.bot}</div>
             <div class="mp-slot-body">
-              <span class="mp-slot-name muted">Бот арены</span>
-              <div class="mp-slot-sub">Уступит место игроку</div>
+              <span class="mp-slot-name muted">${this.tl('arenaBot')}</span>
+              <div class="mp-slot-sub">${this.tl('botReplaced')}</div>
             </div>
-            <span class="mp-slot-pill bot">Авто-бот</span>
+            <span class="mp-slot-pill bot">${this.tl('autoBot')}</span>
           </div>
         `);
       } else {
@@ -1305,14 +1312,14 @@ export class UIManager {
           <div class="mp-slot-card empty-slot">
             <div class="mp-slot-top">
               <span class="mp-slot-index">#${idx + 1}</span>
-              <span class="mp-slot-tag-mini">Свободно</span>
+              <span class="mp-slot-tag-mini">${this.tl('freeSlot')}</span>
             </div>
             <div class="mp-slot-bot-badge">${ICONS.user}</div>
             <div class="mp-slot-body">
-              <span class="mp-slot-name muted">Ожидание игрока</span>
-              <div class="mp-slot-sub">Код: ${escapeHtml(room.roomCode)}</div>
+              <span class="mp-slot-name muted">${this.tl('waitingPlayer')}</span>
+              <div class="mp-slot-sub">${this.tl('codeLabel', { code: escapeHtml(room.roomCode) })}</div>
             </div>
-            <span class="mp-slot-pill wait">Пусто</span>
+            <span class="mp-slot-pill wait">${this.tl('empty')}</span>
           </div>
         `);
       }
@@ -1331,8 +1338,8 @@ export class UIManager {
       this.mpReadyBtnEl.classList.remove('hidden');
       const readyNow = me ? me.ready : true;
       this.mpReadyBtnEl.textContent = readyNow
-        ? 'Готов (отменить)'
-        : 'Подтвердить готовность';
+        ? this.tl('cancelReady')
+        : this.tl('confirmReady');
     }
   }
 
@@ -1382,13 +1389,13 @@ export class UIManager {
       // Online-aware Pause & Spectator button labels
       this.pauseRestartBtnEl.classList.toggle('hidden', match.isOnlineMatch);
       this.pauseMenuBtnEl.innerHTML = match.isOnlineMatch
-        ? `${ICONS.door}<span>Покинуть сетевой бой</span>`
-        : `${ICONS.door}<span data-i18n="pauseMenu">Выйти в меню</span>`;
+        ? `${ICONS.door}<span>${this.tl('leaveBattle')}</span>`
+        : `${ICONS.door}<span>${this.tl('pauseMenu')}</span>`;
 
       this.specRestartBtnEl.classList.toggle('hidden', match.isOnlineMatch);
       this.specMenuBtnEl.textContent = match.isOnlineMatch
-        ? 'Покинуть комнату'
-        : 'В меню';
+        ? this.tl('mpLeave')
+        : this.tl('backMenu');
     }
 
     if (st === 'MatchFinished') {
@@ -1406,6 +1413,7 @@ export class UIManager {
           this.hubCoinDisplayEl.textContent = String(this.profile.coins);
           this.q('#hub-main-coin-display').textContent = String(this.profile.coins);
         }
+        this.lastResults = { match, isHost, rewards };
         this.renderResults(match, isHost, rewards);
       }
       return;
@@ -1552,7 +1560,7 @@ export class UIManager {
     this.q('#btn-mp-join-code').addEventListener('click', () => {
       const code = this.mpCodeInputEl.value.trim().toUpperCase();
       if (code.length < 3) {
-        this.showMultiplayerNotice('Введите 4-буквенный код комнаты.', 'error');
+        this.showMultiplayerNotice(this.tl('invalidCode'), 'error');
         return;
       }
       this.callbacks.onMpJoinRoom(
@@ -1594,7 +1602,7 @@ export class UIManager {
         }
       }
       this.showMultiplayerNotice(
-        `Код комнаты «${code}» скопирован в буфер обмена!`,
+        this.tl('mpNoticeCopied', { code }),
         'info'
       );
     });
@@ -1741,10 +1749,7 @@ export class UIManager {
         const code = btn.dataset.lang as Lang | undefined;
         if (!code) return;
         this.settings = { ...this.settings, language: code };
-        this.syncSettingsControls();
-        this.applyTranslations();
-        this.renderSelectionClass(this.currentSelectedClass, false);
-        this.renderMpClassButtons();
+        this.refreshLanguage();
         this.callbacks.onSettingsChanged(this.settings);
       });
     });
@@ -1824,7 +1829,7 @@ export class UIManager {
       return `
         <button class="mp-cls-btn cls-${cid} ${
           cid === this.currentSelectedClass ? 'active' : ''
-        }" data-cid="${cid}" title="${c.name} (${c.maxHp} HP)">
+        }" data-cid="${cid}" title="${classDisplayName(cid, this.settings.language)} (${c.maxHp} HP)">
           <img src="${iconUrl}" alt="" draggable="false" />
           <span>${classDisplayName(cid, this.settings.language)}</span>
         </button>
@@ -1854,7 +1859,7 @@ export class UIManager {
     classId: KnightClassId,
     interactiveClicks: boolean
   ): ActionBarSlotRefs[] {
-    const descriptors = buildClassSkillBar(classId);
+    const descriptors = buildClassSkillBar(classId, this.settings.language);
     container.innerHTML = '';
     const refs: ActionBarSlotRefs[] = [];
 
@@ -1873,12 +1878,12 @@ export class UIManager {
 
       const cdMeta =
         slot.cooldownSec !== null
-          ? `<span>Перезарядка: <strong>${slot.cooldownSec} сек</strong></span>`
-          : `<span><strong>Без отката</strong></span>`;
+          ? `<span>${this.tl('skillCooldown', { value: slot.cooldownSec })}</span>`
+          : `<span><strong>${this.tl('skillNoCooldown')}</strong></span>`;
       const stamMeta =
         slot.staminaCost > 0
-          ? `<span>Выносливость: <strong>${slot.staminaCost}</strong></span>`
-          : `<span>Выносливость: <strong>0</strong></span>`;
+          ? `<span>${this.tl('skillStamina', { value: slot.staminaCost })}</span>`
+          : `<span>${this.tl('skillStamina', { value: 0 })}</span>`;
       const badgesHtml = slot.badges
         .map((b) => `<span class="skill-tip-badge">${b}</span>`)
         .join('');
@@ -1953,7 +1958,7 @@ export class UIManager {
           <img class="class-tab-emblem" src="${iconUrl}" alt="" draggable="false" />
           <div class="class-tab-text">
             <div class="class-tab-name">${classDisplayName(cid, this.settings.language)}</div>
-            <div class="class-tab-code">${c.role}</div>
+            <div class="class-tab-code">${heroText(cid, 'role', this.settings.language, c.role)}</div>
           </div>
         </button>
       `;
@@ -1976,11 +1981,11 @@ export class UIManager {
     detailsEl.innerHTML = `
       <div class="dossier-hero-head">
         <div class="dossier-badges-row">
-          <span class="dossier-role-pill">${cfg.role}</span>
+          <span class="dossier-role-pill">${heroText(classId, 'role', this.settings.language, cfg.role)}</span>
           <span class="dossier-hp-pill">${cfg.maxHp} HP</span>
         </div>
         <h3 class="dossier-class-title">${classDisplayName(classId, this.settings.language)}</h3>
-        <p class="dossier-summary">${cfg.summary}</p>
+        <p class="dossier-summary">${heroText(classId, 'summary', this.settings.language, cfg.summary)}</p>
       </div>
 
       <div class="stat-grid">
@@ -1996,7 +2001,7 @@ export class UIManager {
           <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
             cfg.uiRatings.speed
           )}%"></div></div>
-          <strong class="stat-num">${cfg.moveSpeed.toFixed(1)} м/с</strong>
+          <strong class="stat-num">${this.tl('metersSec', { value: cfg.moveSpeed.toFixed(1) })}</strong>
         </div>
         <div class="stat-row">
           <span class="stat-lbl" data-i18n="statAttack">Сила удара</span>
@@ -2021,7 +2026,7 @@ export class UIManager {
           <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${bar(
             cfg.uiRatings.reach
           )}%"></div></div>
-          <strong class="stat-num">${cfg.heavyAttack.range.toFixed(1)} м</strong>
+          <strong class="stat-num">${this.tl('meters', { value: cfg.heavyAttack.range.toFixed(1) })}</strong>
         </div>
       </div>
 
@@ -2033,16 +2038,14 @@ export class UIManager {
           <div class="sel-ability-card">
             <img class="sel-ability-icon-img" src="${getSkillIconUrl(
               `${ab.id}.svg`
-            )}" alt="${ab.name}" draggable="false" />
+            )}" alt="${abilityText(ab.id, 'name', this.settings.language, ab.name)}" draggable="false" />
             <div class="sel-ability-body">
               <div class="sel-ability-head">
                 <span class="sel-ability-key">${ab.slot}</span>
-                <span class="sel-ability-name">${ab.name}</span>
-                <span class="sel-ability-meta">${ab.cooldown}с · ${
-              ab.staminaCost
-            } СТ</span>
+                <span class="sel-ability-name">${abilityText(ab.id, 'name', this.settings.language, ab.name)}</span>
+                <span class="sel-ability-meta">${this.tl('abilityMeta', { cooldown: ab.cooldown, stamina: ab.staminaCost })}</span>
               </div>
-              <div class="sel-ability-desc">${ab.description}</div>
+              <div class="sel-ability-desc">${abilityText(ab.id, 'description', this.settings.language, ab.description)}</div>
             </div>
           </div>
         `
@@ -2053,6 +2056,7 @@ export class UIManager {
 
     this.populateSkillSquares(this.selectionSkillBarEl, classId, false);
     this.applyTranslations();
+    this.updatePlayButtonSubtitle();
   }
 
   private syncModeButtons(): void {
@@ -2084,10 +2088,10 @@ export class UIManager {
     );
     this.q('#lbl-pix').textContent =
       this.settings.pixelScale === 1
-        ? 'Чёткий HD 3D (1x)'
+        ? this.tl('pixel1')
         : this.settings.pixelScale === 2
-        ? 'Ретро 3D с контуром (2x)'
-        : 'Пиксель-арт 3D (3x)';
+        ? this.tl('pixel2')
+        : this.tl('pixel3');
 
     const q = this.settings.graphicsQuality;
     this.q('#qual-ultra').classList.toggle('active', q === 'ultra');
@@ -2095,17 +2099,23 @@ export class UIManager {
     this.q('#qual-low').classList.toggle('active', q === 'low');
     this.q('#lbl-qual').textContent =
       q === 'ultra'
-        ? 'Ультра (HDR + Тени 2K)'
+        ? this.tl('qualityUltraDesc')
         : q === 'high'
-        ? 'Высокое (HDR + Тени)'
-        : 'Быстрое';
+        ? this.tl('qualityHighDesc')
+        : this.tl('qualityLow');
 
     (this.q('#inp-debug') as HTMLInputElement).checked =
       this.settings.debugHitboxes;
 
     const themeMeta = getArenaThemeMeta(this.settings.arenaTheme);
-    this.q('#lbl-arena-theme').textContent = themeMeta.name;
-    this.q('#hub-arena-theme-label').textContent = themeMeta.name;
+    this.q('#lbl-arena-theme').textContent = this.tl(`theme_${themeMeta.id}`);
+    this.q('#hub-arena-theme-label').textContent = this.tl(`theme_${themeMeta.id}`);
+    this.root.querySelectorAll<HTMLButtonElement>('[data-arena-theme]').forEach((chip) => {
+      const id = chip.dataset.arenaTheme;
+      if (id) chip.title = `${this.tl(`theme_${id}`)} — ${this.tl(`themeDesc_${id}`)}`;
+      const name = chip.querySelector('.arena-theme-chip-name');
+      if (id && name) name.textContent = this.tl(`themeShort_${id}`);
+    });
     this.root
       .querySelectorAll<HTMLButtonElement>('[data-arena-theme]')
       .forEach((chip) => {
@@ -2151,8 +2161,8 @@ export class UIManager {
     }
 
     this.actionBarHintEl.textContent = pointerLocked
-      ? 'Колесо мыши — зум · [СКМ / V] свободный обзор · [~] свободный прицел · [Tab] навыки'
-      : 'Зажмите ПКМ/СКМ для вращения камеры 360° · [~] экшен-камера · Наведите на навык';
+      ? this.tl('actionHintLocked')
+      : this.tl('actionHintFree');
 
     for (const ref of this.actionBarRefs) {
       const { descriptor, rootEl, cdVeilEl, cdNumEl } = ref;
@@ -2243,21 +2253,21 @@ export class UIManager {
     const mm = String(Math.floor(secs / 60)).padStart(2, '0');
     const ss = String(secs % 60).padStart(2, '0');
     this.timerEl.textContent = match.isFinalPhase
-      ? `Финал · ${mm}:${ss}`
+      ? `${this.tl('finalPhase')} · ${mm}:${ss}`
       : `${mm}:${ss}`;
     this.timerEl.classList.toggle('final-phase', match.isFinalPhase);
 
     const aliveCount = match.getLivingFighters().length;
-    this.alivePillEl.textContent = `${aliveCount} / ${match.fighters.length} в живых`;
+    this.alivePillEl.textContent = this.tl('aliveCount', { alive: aliveCount, total: match.fighters.length });
 
     if (match.isOnlineMatch) {
       this.netHudSepEl.classList.remove('hidden');
       this.netHudPillEl.classList.remove('hidden');
-      const code = this.mpRoom ? this.mpRoom.roomCode : 'Онлайн';
+      const code = this.mpRoom ? this.mpRoom.roomCode : this.tl('mpOnline');
       this.netHudPillEl.textContent =
         this.mpPingMs > 0
-          ? `Зал ${code} · ${this.mpPingMs} мс`
-          : `Зал ${code}`;
+          ? this.tl('roomPing', { code, ping: this.mpPingMs })
+          : this.tl('roomLabel', { code });
     } else {
       this.netHudSepEl.classList.add('hidden');
       this.netHudPillEl.classList.add('hidden');
@@ -2267,7 +2277,7 @@ export class UIManager {
     if (match.state === 'Countdown') {
       this.countdownBannerEl.classList.remove('hidden');
       const num = Math.ceil(match.countdownTimer);
-      this.countdownBannerEl.textContent = num > 0 ? String(num) : 'В БОЙ!';
+      this.countdownBannerEl.textContent = num > 0 ? String(num) : this.tl('playFight');
     } else {
       this.countdownBannerEl.classList.add('hidden');
     }
@@ -2290,7 +2300,7 @@ export class UIManager {
       const pct = Math.max(1, Math.round(reticleState.targetHpRatio * 100));
       this.reticleRingEl.classList.add('locked-enemy');
       this.reticleTargetEl.classList.remove('hidden');
-      this.reticleTargetEl.textContent = `${reticleState.targetName} · ${pct}%`;
+      this.reticleTargetEl.textContent = `${this.fighterName(match, reticleState.targetName)} · ${pct}%`;
     } else {
       this.reticleRingEl.classList.remove('locked-enemy');
       this.reticleTargetEl.classList.add('hidden');
@@ -2301,12 +2311,12 @@ export class UIManager {
     } else if (reticleState?.freeLookActive) {
       this.pointerPromptEl.classList.remove('hidden');
       this.pointerPromptEl.textContent =
-        'Свободный ММО-обзор 360° активен ([V] или отпустите СКМ для возврата)';
+        this.tl('freeLookHint');
     } else if (!pointerLocked) {
       this.pointerPromptEl.classList.remove('hidden');
       this.pointerPromptEl.textContent = reticleState?.freeCursorAim
-        ? 'Свободный прицел ММО · Зажмите ПКМ/СКМ для вращения камеры 360° · [~] Экшен-камера'
-        : 'Наводите прицел везде · Зажмите ПКМ/СКМ для камеры 360° или кликните ЛКМ · [~] Режим прицела';
+        ? this.tl('aimHint')
+        : this.tl('pointerHint');
     } else {
       this.pointerPromptEl.classList.add('hidden');
     }
@@ -2322,10 +2332,10 @@ export class UIManager {
         } ${f.isAlive ? '' : 'dead'}">
             <div class="roster-row-top">
               <span class="roster-name"><span class="roster-dot"></span>${escapeHtml(
-                f.displayName
-              )}${isMe ? ' (Вы)' : ''}</span>
+                this.fighterName(match, f.displayName)
+              )}${isMe ? ` (${this.tl('you')})` : ''}</span>
               <span class="roster-hp-tag">${
-                f.isAlive ? `${Math.ceil(f.hp)}` : 'Выбыл'
+                f.isAlive ? `${Math.ceil(f.hp)}` : this.tl('eliminated')
               }</span>
             </div>
             <div class="roster-mini-hp">
@@ -2342,13 +2352,13 @@ export class UIManager {
       .map((kf) =>
         kf.killerName
           ? `<div class="kill-feed-item"><strong>${escapeHtml(
-              kf.killerName
+              this.fighterName(match, kf.killerName)
             )}</strong> <span class="kf-sword">${
               ICONS.blades
-            }</span> <strong>${escapeHtml(kf.victimName)}</strong></div>`
+            }</span> <strong>${escapeHtml(this.fighterName(match, kf.victimName))}</strong></div>`
           : `<div class="kill-feed-item"><strong>${escapeHtml(
-              kf.victimName
-            )}</strong> выбыл</div>`
+              this.fighterName(match, kf.victimName)
+            )}</strong> ${this.tl('eliminated')}</div>`
       )
       .join('');
 
@@ -2360,8 +2370,8 @@ export class UIManager {
       this.vitalsBoxEl.classList.add('hidden');
       this.spectatorBarEl.classList.remove('hidden');
       this.spectatorSubEl.textContent = observed
-        ? `Камера: ${observed.displayName} (${KNIGHT_CLASSES[observed.classId].name}) · Осталось: ${aliveCount}`
-        : 'Определение победителя...';
+        ? this.tl('spectatorCamera', { name: this.fighterName(match, observed.displayName), hero: classDisplayName(observed.classId, this.settings.language), count: aliveCount })
+        : this.tl('decidingWinner');
       this.chargeMeterEl.classList.add('hidden');
       this.updateActionBarForFighter(observed, false);
     } else if (player) {
@@ -2375,8 +2385,8 @@ export class UIManager {
         );
       }
 
-      this.playerClassLabelEl.textContent = KNIGHT_CLASSES[player.classId].name;
-      this.playerStatePillEl.textContent = STATE_LABELS_RU[player.state];
+      this.playerClassLabelEl.textContent = classDisplayName(player.classId, this.settings.language);
+      this.playerStatePillEl.textContent = this.tl(`state${player.state}`);
 
       const hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
       this.hpFillEl.style.width = `${hpPct}%`;
@@ -2384,17 +2394,17 @@ export class UIManager {
 
       const stPct = Math.max(0, (player.stamina / player.maxStamina) * 100);
       this.stamFillEl.style.width = `${stPct}%`;
-      this.stamTextEl.textContent = `${Math.floor(player.stamina)} СТ`;
+      this.stamTextEl.textContent = this.tl('staminaValue', { value: Math.floor(player.stamina) });
 
       if (player.damageAuraTimer > 0) {
         this.activeBuffEl.classList.remove('hidden');
-        this.activeBuffEl.textContent = `Обет стали: +25% урон (${player.damageAuraTimer.toFixed(1)}с)`;
+        this.activeBuffEl.textContent = this.tl('buffDamage', { time: player.damageAuraTimer.toFixed(1) });
       } else if (player.hasteTimer > 0) {
         this.activeBuffEl.classList.remove('hidden');
-        this.activeBuffEl.textContent = `Шаг теней: +25% скорость (${player.hasteTimer.toFixed(1)}с)`;
+        this.activeBuffEl.textContent = this.tl('buffSpeed', { time: player.hasteTimer.toFixed(1) });
       } else if (player.ironBastionTimer > 0) {
         this.activeBuffEl.classList.remove('hidden');
-        this.activeBuffEl.textContent = `Железный бастион: -35% урон (${player.ironBastionTimer.toFixed(1)}с)`;
+        this.activeBuffEl.textContent = this.tl('buffDefense', { time: player.ironBastionTimer.toFixed(1) });
       } else {
         this.activeBuffEl.classList.add('hidden');
       }
@@ -2434,7 +2444,7 @@ export class UIManager {
       el.style.left = `${lbl.screenX}px`;
       el.style.top = `${lbl.screenY}px`;
 
-      (el.children[1] as HTMLElement).textContent = lbl.name;
+      (el.children[1] as HTMLElement).textContent = this.fighterName(match, lbl.name);
       const fill = el.children[2].firstElementChild as HTMLElement;
       fill.style.width = `${Math.max(0, Math.round((lbl.hp / lbl.maxHp) * 100))}%`;
 
@@ -2458,7 +2468,8 @@ export class UIManager {
   private renderResults(
     match: MatchManager,
     isHost: boolean,
-    rewards?: { coins: number; breakdown: { place: number }; place: number } | null
+    rewards?: { coins: number; breakdown: { place: number }; place: number } | null,
+    showAd = true
   ): void {
     const standings = match.getStandings();
     const winner = standings[0];
@@ -2503,24 +2514,26 @@ export class UIManager {
     } else {
       badge.textContent = this.tl('matchFinished');
       headline.textContent = winner
-        ? this.tl('resWinner', { name: winner.name })
+        ? this.tl('resWinner', { name: this.fighterName(match, winner.name) })
         : this.tl('resDraw');
       headline.classList.remove('victory-gold');
     }
 
     // Show mandatory ad after EVERY battle (win or loss) — 10 coins for watching
-    this.adPendingReward = true;
-    this.showAd(true);
+    if (showAd) {
+      this.adPendingReward = true;
+      this.showAd(true);
+    }
 
     if (match.isOnlineMatch && this.mpRoom) {
       this.resMenuBtnEl.textContent = this.tl('mpLeave');
       if (isHost) {
         this.resClassBtnEl.classList.remove('hidden');
-        this.resClassBtnEl.textContent = 'В комнату';
-        this.resAgainBtnEl.innerHTML = `${ICONS.play}<span>Новый раунд!</span>`;
+        this.resClassBtnEl.textContent = this.tl('roomReturn');
+        this.resAgainBtnEl.innerHTML = `${ICONS.play}<span>${this.tl('newRound')}</span>`;
       } else {
         this.resClassBtnEl.classList.add('hidden');
-        this.resAgainBtnEl.innerHTML = `<span>Готов к реваншу</span>`;
+        this.resAgainBtnEl.innerHTML = `<span>${this.tl('rematchReady')}</span>`;
       }
     } else {
       this.resMenuBtnEl.textContent = this.tl('backMenu');
@@ -2539,12 +2552,12 @@ export class UIManager {
         }`;
         const placeBadge = `#${s.place}`;
         const statusPill = s.isAlive
-          ? `<span class="res-status alive">Жив · ${s.hp} HP</span>`
-          : `<span class="res-status fallen">Выбыл</span>`;
+          ? `<span class="res-status alive">${this.tl('aliveHp', { hp: s.hp })}</span>`
+          : `<span class="res-status fallen">${this.tl('eliminated')}</span>`;
         return `
           <tr class="${rowCls}">
             <td class="res-place">${placeBadge}</td>
-            <td class="res-fighter">${escapeHtml(s.name)}</td>
+            <td class="res-fighter">${escapeHtml(this.fighterName(match, s.name))}</td>
             <td>
               <span class="res-class-cell">
                 <img src="${iconUrl}" alt="" class="res-class-icon" draggable="false" />
@@ -2621,10 +2634,42 @@ export class UIManager {
     this.hideAd();
   }
 
+  private fighterName(match: MatchManager, name: string): string {
+    const fighter = match.fighters.find((f) => f.displayName === name);
+    if (!fighter) return name;
+    if (!match.isOnlineMatch && fighter.id === match.localPlayerId && name === 'Вы (Рыцарь)') return this.tl('you');
+    return fighter.isHuman && !fighter.id.startsWith('bot_') ? name : botDisplayName(name, this.settings.language);
+  }
+
+  private translateNetworkMessage(message: string): string {
+    if (this.settings.language === 'ru') return message;
+    const exact: Record<string, string> = {
+      'Бой в этой комнате уже начался. Дождитесь завершения раунда.': 'netMatchStarted',
+      'Только глава комнаты может начать поединок.': 'netHostOnly',
+      'Нужно минимум 2 игрока (или включите «Дополнить ботами до 5»).': 'netNeedPlayers',
+      'Сессия истекла. Нажмите «Обновить» для переподключения.': 'netExpired',
+      'Сервер хостинга временно перегружен. Попробуйте через пару секунд.': 'netBusy',
+      'Потеряна связь с сервером арены.': 'netLost',
+      'Соединение с сервером прервано.': 'netDisconnected',
+    };
+    if (exact[message]) return this.tl(exact[message]);
+    const missing = message.match(/^Комната «(.+)» не найдена\.$/);
+    if (missing) return this.tl('netRoomMissing', { code: missing[1] });
+    const full = message.match(/^Комната заполнена \(([^)]+)\)\.$/);
+    if (full) return this.tl('netRoomFull', { count: full[1] });
+    if (message.startsWith('Не удалось подключиться к серверу арены')) return this.tl('netCannotConnect');
+    if (/ошибка сети|сервер вернул HTML|не найден api\/mp\.php|HTTP \d+ от api\/mp\.php/i.test(message)) return this.tl('netError');
+    return message;
+  }
+
   private applyTranslations(): void {
     this.root.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
       const key = el.dataset.i18n;
       if (key) el.textContent = this.tl(key);
+    });
+    this.root.querySelectorAll<HTMLInputElement>('[data-i18n-placeholder]').forEach((el) => {
+      const key = el.dataset.i18nPlaceholder;
+      if (key) el.placeholder = this.tl(key);
     });
     this.root.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach((el) => {
       const key = el.dataset.i18nTitle;

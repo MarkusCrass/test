@@ -1,3 +1,6 @@
+import { t, type Lang } from '../config/locales';
+import { coreSkillText } from '../config/coreSkillLocales';
+import { abilityText } from '../config/heroLocales';
 import { KNIGHT_CLASSES, KnightClassId } from '../config/classes';
 
 export type SkillSlotKey =
@@ -105,7 +108,8 @@ export function getSkillIconUrl(iconFile: string): string {
  * [ЛКМ, ТЯЖ, ПКМ] + [1, 2, 3] + [Alt].
  */
 export function buildClassSkillBar(
-  classId: KnightClassId
+  classId: KnightClassId,
+  lang: Lang = 'ru'
 ): SkillSlotDescriptor[] {
   const cfg = KNIGHT_CLASSES[classId];
   const comboDamages = cfg.lightCombo.map((c) => c.damage).join(' → ');
@@ -183,7 +187,7 @@ export function buildClassSkillBar(
   const defFile = DEFENSE_ICON_BY_CLASS[classId];
   const dodgeFile = `${classId}_dodge.svg`;
 
-  return [
+  const slots: SkillSlotDescriptor[] = [
     {
       slotKey: 'light',
       hotkey: 'ЛКМ',
@@ -279,4 +283,32 @@ export function buildClassSkillBar(
       description: dodge.description,
     },
   ];
+  if (lang === 'ru') return slots;
+  const tr = (key: string, params?: Record<string, string | number>) => t(key, lang, params);
+  const damage = (value: string | number) => tr('skillDamage', { value });
+  const range = (value: number) => tr('skillRange', { value: value.toFixed(1) });
+  const abilityBadges = (ab: typeof ab1): string[] => {
+    const value = ab.multiHitTicks && ab.multiHitTicks > 1
+      ? `${ab.multiHitTicks}×${ab.attackProfile.damage}`
+      : ab.spawnsProjectile && ab.projectileDamage ? ab.projectileDamage : ab.attackProfile.damage;
+    const badges = [damage(value)];
+    if (!(ab.multiHitTicks && ab.multiHitTicks > 1))
+      badges.push(range(ab.spawnsProjectile && ab.projectileDamage ? (ab.projectileRange ?? 15.5) : ab.attackProfile.range));
+    if (ab.healAmount) badges.push(tr('skillHeal', { value: ab.healAmount }));
+    if (ab.lifestealOnHit) badges.push(tr('skillLeech', { value: ab.lifestealOnHit }));
+    if (!ab.attackProfile.blockable) badges.push(tr('skillBreak'));
+    if (ab.appliesFullStun || (ab.projectileStun && ab.projectileStun >= 0.5))
+      badges.push(tr('skillStun', { value: (ab.projectileStun ?? ab.attackProfile.stunDurationOnHit).toFixed(2) }));
+    else if (!ab.attackProfile.interruptible) badges.push(tr('skillArmor'));
+    return badges;
+  };
+  slots[0] = { ...slots[0], hotkey: tr('leftMouse'), title: coreSkillText(classId, 'light', 'name', lang), category: tr('skillComboCat', { count: cfg.lightCombo.length }), description: coreSkillText(classId, 'light', 'description', lang), badges: [damage(comboDamages), range(firstLight.range)] };
+  slots[1] = { ...slots[1], hotkey: tr('skillHeavy'), title: coreSkillText(classId, 'heavy', 'name', lang), category: tr('skillHeavyCat'), description: coreSkillText(classId, 'heavy', 'description', lang), badges: [damage(heavy.damage), range(heavy.range), ...(!heavy.blockable ? [tr('skillBreak')] : []), ...(!heavy.interruptible ? [tr('skillArmor')] : [])] };
+  slots[2] = { ...slots[2], hotkey: tr('rightMouse'), title: coreSkillText(classId, 'defense', 'name', lang), category: tr('skillDefenseCat'), description: coreSkillText(classId, 'defense', 'description', lang), badges: [tr('skillGuard', { value: Math.round(def.damageReduction * 100) }), tr('skillAngle', { value: def.blockAngleDeg }), ...(def.parryStunDuration > 0 ? [tr('skillStun', { value: def.parryStunDuration.toFixed(2) })] : []), ...(def.deflectPushback > 0 ? [tr('skillPush')] : [])] };
+  for (let i = 0; i < 3; i++) {
+    const ab = cfg.abilities[i];
+    slots[3 + i] = { ...slots[3 + i], title: abilityText(ab.id, 'name', lang, ab.name), description: abilityText(ab.id, 'description', lang, ab.description), category: tr('skillAbilityCat', { key: i + 1 }), badges: abilityBadges(ab) };
+  }
+  slots[6] = { ...slots[6], title: coreSkillText(classId, 'dodge', 'name', lang), category: tr('skillDodgeCat'), description: coreSkillText(classId, 'dodge', 'description', lang), badges: [...(dodge.iframesDuration > 0 ? [tr('skillInvuln', { value: dodge.iframesDuration.toFixed(2) })] : []), ...(dodge.shoveDamage > 0 ? [damage(dodge.shoveDamage), tr('skillInterrupt')] : [])] };
+  return slots;
 }

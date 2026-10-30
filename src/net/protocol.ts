@@ -31,6 +31,7 @@ export interface RoomLobbyState {
 export interface RoomSummary {
   roomCode: string;
   hostName: string;
+  hostIsBot?: boolean;
   playerCount: number;
   maxPlayers: number;
   fillBots: boolean;

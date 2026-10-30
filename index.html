@@ -94,7 +94,7 @@
     <div id="game-canvas-root"></div>
     <div id="ui-root">
       <div id="boot-splash">
-        <div class="boot-badge"><span class="boot-dot"></span>3D Арена на выживание</div>
+        <div class="boot-badge"><span class="boot-dot"></span><span id="boot-badge-text">3D Арена на выживание</span></div>
         <h1 class="boot-title">Knights: Last Standing</h1>
         <div class="boot-bar"><div class="boot-bar-fill"></div></div>
         <div id="boot-status" class="boot-status">Запуск арены...</div>
@@ -102,12 +102,31 @@
     </div>
     <script>
       (function () {
+        var bootTexts = {
+          ru: ['3D Арена на выживание', 'Запуск арены...', 'Ошибка запуска: ', 'Не загрузился ', 'Открыт статический предпросмотр. Откройте предпросмотр сервера.', 'Загрузка модулей игры...'],
+          en: ['3D survival arena', 'Starting the arena...', 'Startup error: ', 'Failed to load ', 'Static preview detected. Open the server preview.', 'Loading game modules...'],
+          tr: ['3D hayatta kalma arenası', 'Arena başlatılıyor...', 'Başlatma hatası: ', 'Yüklenemedi: ', 'Statik önizleme açıldı. Sunucu önizlemesini açın.', 'Oyun modülleri yükleniyor...'],
+          es: ['Arena de supervivencia 3D', 'Iniciando la arena...', 'Error de inicio: ', 'No se pudo cargar ', 'Vista estática detectada. Abre la vista del servidor.', 'Cargando módulos del juego...'],
+          ar: ['ساحة بقاء ثلاثية الأبعاد', 'جارٍ تشغيل الساحة...', 'خطأ في بدء التشغيل: ', 'تعذر تحميل ', 'تم فتح معاينة ثابتة. افتح معاينة الخادم.', 'جارٍ تحميل وحدات اللعبة...']
+        };
+        var language = (navigator.language || 'ru').toLowerCase().split(/[-_]/)[0];
+        try {
+          var saved = JSON.parse(localStorage.getItem('knights_last_standing_settings_v2') || '{}');
+          if (bootTexts[saved.language]) language = saved.language;
+        } catch (_) {}
+        var texts = bootTexts[language] || bootTexts.ru;
+        document.documentElement.lang = bootTexts[language] ? language : 'ru';
+        document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+        document.getElementById('boot-badge-text').textContent = texts[0];
+        document.getElementById('boot-status').textContent = texts[1];
+        var bootFailed = false;
         window.__knightsBooted = false;
         window.__reportBootIssue = function (msg) {
+          bootFailed = true;
           var el = document.getElementById('boot-status');
           if (el) {
             el.style.color = '#fca5a5';
-            el.textContent = 'Ошибка запуска: ' + msg;
+            el.textContent = texts[2] + msg;
           }
           try {
             fetch('/api/client-error', {
@@ -122,7 +141,7 @@
           if (window.__knightsBooted) return;
           var t = e.target;
           if (t && t !== window && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
-            window.__reportBootIssue('Не загрузился ' + (t.src || t.href || t.tagName));
+            window.__reportBootIssue(texts[3] + (t.src || t.href || t.tagName));
             return;
           }
           if (e.message) {
@@ -139,12 +158,12 @@
         setTimeout(function () {
           if (!window.__knightsBooted) {
             var el = document.getElementById('boot-status');
-            if (el && el.textContent.indexOf('Ошибка') === -1) {
+            if (el && !bootFailed) {
               if (location.protocol === 'about:' || location.protocol === 'blob:' || location.protocol === 'file:') {
                 el.style.color = '#fde68a';
-                el.textContent = 'Открыт статический предпросмотр файла. Переключитесь на вкладку превью сервера «Website» (порт 5173).';
+                el.textContent = texts[4];
               } else {
-                el.textContent = 'Загрузка модулей игры (' + location.host + ')...';
+                el.textContent = texts[5];
               }
             }
           }

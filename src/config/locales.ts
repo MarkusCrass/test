@@ -1,3 +1,4 @@
+import { UI_LOCALES } from './uiLocales';
 import type { KnightClassId } from './classes';
 
 export type Lang = 'ru' | 'en' | 'tr' | 'es' | 'ar';
@@ -20,6 +21,7 @@ export const DEFAULT_LANG: Lang = 'ru';
 
 /** All UI strings keyed by id, translated per language. */
 export const LOCALES: Record<string, Record<Lang, string>> = {
+  ...UI_LOCALES,
   rotateHint: { ru: "Потяните мышью для обзора 360°", en: "Drag to rotate 360°", tr: "360° döndürmek için sürükleyin", es: "Arrastra para girar 360°", ar: "اسحب للتدوير 360°" },
   backArena: { ru: "Назад в Арену", en: "Back to arena", tr: "Arenaya dön", es: "Volver a la arena", ar: "العودة إلى الساحة" },
   fightNow: { ru: "Сразу начать дуэль", en: "Start duel now", tr: "Düelloyu başlat", es: "Iniciar duelo", ar: "ابدأ المبارزة" },
@@ -112,7 +114,7 @@ export const LOCALES: Record<string, Record<Lang, string>> = {
   modeFfaDesc: { ru: 'Каждый сам за себя на двухуровневом мосту цитадели', en: 'Every fighter for themselves on the citadel bridge', tr: 'Her savaşçı kendi için, kale köprüsünde', es: 'Cada luchador por sí mismo en el puente de la ciudadela', ar: 'كل مقاتل من أجل نفسه على جسر القلعة' },
   modeDuelName: { ru: 'Дуэль 1 на 1', en: 'Duel 1v1', tr: '1v1 Düello', es: 'Duelo 1 contra 1', ar: 'مبارزة 1 ضد 1' },
   modeDuelTag: { ru: 'Тренировка', en: 'Training', tr: 'Antrenman', es: 'Entrenamiento', ar: 'تدريب' },
-  modeDuelDesc: { ru: 'Чистая дуэль против ИИ для отработки парирований', en: 'Pure duel against AI to practice parries', tr: 'Parajları antren etmek için yapay zeka ile mücadele', es: 'Duelo puro contra IA para practicar paradas', ar: 'مبارزة خالصة ضد الذكاء الاصطناعي للتدرب على الارتداد' },
+  modeDuelDesc: { ru: 'Чистая дуэль против ИИ для отработки парирований', en: 'Pure duel against AI to practice parries', tr: 'Savuşturma çalışmak için yapay zekâya karşı düello', es: 'Duelo puro contra IA para practicar paradas', ar: 'مبارزة خالصة ضد الذكاء الاصطناعي للتدرب على التصدي' },
   modeOnlineName: { ru: 'Сетевая игра', en: 'Online Play', tr: 'Çevrimiçi Oyun', es: 'Juego en línea', ar: 'لعب جماعي' },
   modeOnlineTag: { ru: 'До 5 игроков', en: 'Up to 5 players', tr: 'En fazla 5 oyuncu', es: 'Hasta 5 jugadores', ar: 'حتى 5 لاعبين' },
   modeOnlineDesc: { ru: 'Быстрый поиск матча, список залов и вход по коду друга', en: 'Quick matchmaking, room list and friend code entry', tr: 'Hızlı eşleşme, oda listesi ve arkadaş kodu girişi', es: 'Búsqueda rápida, lista de salas y entrada con código de amigo', ar: 'البحث السريع عن مباراة، قائمة الغرف ودخول رمز الصديق' },
@@ -137,7 +139,7 @@ export const LOCALES: Record<string, Record<Lang, string>> = {
   resPlace2: { ru: '2-е место', en: '2nd place', tr: '2. sıra', es: '2.º puesto', ar: 'المركز الثاني' },
   resPlace3: { ru: '3-е место', en: '3rd place', tr: '3. sıra', es: '3.er puesto', ar: 'المركز الثالث' },
   resPlaceOther: { ru: 'место', en: 'place', tr: 'sıra', es: 'puesto', ar: 'المركز' },
-  resultsCoinsRow: { ru: 'Заработано монет: {coins} ({place}): {coins}. ', en: 'Coins earned: {coins} ({place}): {coins}. ', tr: 'Kazanılan para: {coins} ({place}): {coins}. ', es: 'Monedas ganadas: {coins} ({place}): {coins}. ', ar: 'تم كسب العملات: {coins} ({place}): {coins}. ' },
+  resultsCoinsRow: { ru: 'Заработано монет: {coins} ({place}). ', en: 'Coins earned: {coins} ({place}). ', tr: 'Kazanılan para: {coins} ({place}). ', es: 'Monedas ganadas: {coins} ({place}). ', ar: 'تم كسب العملات: {coins} ({place}). ' },
   resultsPlace1: { ru: 'победа', en: 'victory', tr: 'galibiyet', es: 'victoria', ar: 'انتصار' },
   resultsPlace2: { ru: '2-е место', en: '2nd place', tr: '2. yer', es: '2.º puesto', ar: 'المركز الثاني' },
   resultsPlace3: { ru: '3-е место', en: '3rd place', tr: '3. yer', es: '3.er puesto', ar: 'المركز الثالث' },
@@ -155,7 +157,7 @@ export const LOCALES: Record<string, Record<Lang, string>> = {
 
   // ===== Settings =====
   settingsTitle: { ru: 'Настройки игры', en: 'Game Settings', tr: 'Oyun Ayarları', es: 'Configuración del juego', ar: 'إعدادات اللعبة' },
-  settingsVol: { ru: 'Громкость звука', en: 'Sound volume', tr: 'Ses gücü', es: 'Volumen de sonido', ar: 'مستوى الصوت' },
+  settingsVol: { ru: 'Громкость звука', en: 'Sound volume', tr: 'Ses seviyesi', es: 'Volumen de sonido', ar: 'مستوى الصوت' },
   settingsSens: { ru: 'Чувствительность мыши', en: 'Mouse sensitivity', tr: 'Fare hassasiyeti', es: 'Sensibilidad del ratón', ar: 'حساسية الماوس' },
   settingsTheme: { ru: 'Покрытие арены', en: 'Arena surface', tr: 'Arena zemini', es: 'Superficie de arena', ar: 'سطح الساحة' },
   settingsQuality: { ru: 'Качество графики', en: 'Graphics quality', tr: 'Grafik kalitesi', es: 'Calidad gráfica', ar: 'جودة الرسومات' },
@@ -196,10 +198,10 @@ export const LOCALES: Record<string, Record<Lang, string>> = {
   shopStatusOwned: { ru: 'Владение', en: 'Owned', tr: 'Sahip', es: 'Poseído', ar: 'مملوك' },
   shopStatusActive: { ru: 'Активен', en: 'Active', tr: 'Etkin', es: 'Activo', ar: 'نشط' },
   shopStatusLocked: { ru: 'Заблокирован', en: 'Locked', tr: 'Kilitli', es: 'Bloqueado', ar: 'مقفل' },
-  shopBtnEquip: { ru: 'Экипировать', en: 'Equip', tr: 'Eşya giy', es: 'Equipar', ar: 'تجهيز' },
+  shopBtnEquip: { ru: 'Экипировать', en: 'Equip', tr: 'Kuşan', es: 'Equipar', ar: 'تجهيز' },
   shopBtnBuy: { ru: 'Купить за {price}', en: 'Buy for {price}', tr: '{price} için satın al', es: 'Comprar por {price}', ar: 'اشترِ بـ {price}' },
   shopBtnFree: { ru: 'Забрать бесплатно', en: 'Get free', tr: 'Ücretsiz alın', es: 'Obtener gratis', ar: 'احصل مجاناً' },
-  shopBtnActive: { ru: 'Уже экипирован', en: 'Already equipped', tr: 'Zaten eşliyor', es: 'Ya equipado', ar: 'مجهز بالفعل' },
+  shopBtnActive: { ru: 'Уже экипирован', en: 'Already equipped', tr: 'Zaten kuşanıldı', es: 'Ya equipado', ar: 'مجهز بالفعل' },
   shopBtnNoCoins: { ru: 'Не хватает монет', en: 'Not enough coins', tr: 'Yeterli altın yok', es: 'No hay suficientes monedas', ar: 'لا توجد عملات كافية' },
   shopStatsHp: { ru: 'HP:', en: 'HP:', tr: 'HP:', es: 'HP:', ar: 'نقاط الصحة:' },
   shopStatsSpeed: { ru: 'Скорость:', en: 'Speed:', tr: 'Hız:', es: 'Velocidad:', ar: 'السرعة:' },
@@ -209,11 +211,11 @@ export const LOCALES: Record<string, Record<Lang, string>> = {
   clsSword: { ru: 'Мечник', en: 'Sword Knight', tr: 'Kılıç Şövalyesi', es: 'Caballero de Espada', ar: 'فارس السيف' },
   clsDual: { ru: 'Дуэлянт', en: 'Dual Blades', tr: 'Çift Kılıç', es: 'Espadas Gemelas', ar: 'سيفان' },
   clsSpear: { ru: 'Копейщик', en: 'Spearman', tr: 'Mızrakçı', es: 'Lancero', ar: 'حامل الرمح' },
-  clsHammer: { ru: 'Бастион', en: 'Hammer Guardian', tr: 'Çekiç Savuncusu', es: 'Guardián de Martillo', ar: 'حامل المطرقة' },
+  clsHammer: { ru: 'Бастион', en: 'Hammer Guardian', tr: 'Çekiç Muhafızı', es: 'Guardián de Martillo', ar: 'حامل المطرقة' },
   clsBarbarian: { ru: 'Варвар', en: 'Barbarian', tr: 'Barbar', es: 'Bárbaro', ar: 'البربري' },
   clsDuelist: { ru: 'Фехтовальщик', en: 'Duelist', tr: 'Duellist', es: 'Duelista', ar: 'المبارز' },
   clsSkKnight: { ru: 'Страж склепа', en: 'Crypt Knight', tr: 'Mahzen Şövalyesi', es: 'Caballero de la Cripta', ar: 'فارس القبر' },
-  clsSkReaper: { ru: 'Жнец костей', en: 'Bone Reaper', tr: 'Kemik Azraili', es: 'Segador de Huesos', ar: 'حصد العظام' },
+  clsSkReaper: { ru: 'Жнец костей', en: 'Bone Reaper', tr: 'Kemik Azraili', es: 'Segador de Huesos', ar: 'حاصد العظام' },
   clsSkBerserker: { ru: 'Гладиатор', en: 'Gladiator', tr: 'Gladyatör', es: 'Gladiador', ar: 'المصارع' },
 };
 
