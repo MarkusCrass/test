@@ -1,0 +1,152 @@
+KNIGHTS: LAST STANDING — Audio Assets & CC0 Public Domain Attribution
+======================================================================
+
+All sound effect files in public/audio/sfx/ are derived exclusively from
+Creative Commons CC0 1.0 Universal (Public Domain) recordings:
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+Mastered one-shot cuts sourced via hoffspot/conquest (Apache-2.0, 100% CC0 audio sources).
+
+File-by-file mapping:
+- sfx/swing_sword_1.mp3 (2496 B) <- Sabre Swing (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/swing_sword_2.mp3 (2688 B) <- Sabre Swing (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/swing_sword_3.mp3 (3456 B) <- Sabre Swing (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/swing_sword_4.mp3 (3264 B) <- Sabre Swing (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/swing_hammer_1.mp3 (3072 B) <- Sabre Swing (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/swing_hammer_2.mp3 (3072 B) <- Sabre Swing (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/swing_hammer_3.mp3 (2880 B) <- Sabre Swing (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/swing_hammer_4.mp3 (3072 B) <- Sabre Swing (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/swing_polearm_1.mp3 (1536 B) <- Swinging staff whoosh (strong) 01.wav (Nightflame)
+- sfx/swing_polearm_2.mp3 (1728 B) <- Swinging staff whoosh (strong) 03.wav (Nightflame)
+- sfx/swing_polearm_3.mp3 (1344 B) <- Swinging staff whoosh (strong) 04.wav (Nightflame)
+- sfx/swing_polearm_4.mp3 (1728 B) <- Swinging staff whoosh (strong) 07.wav (Nightflame)
+- sfx/dodge_whoosh_1.mp3 (1536 B) <- Hits & Fight - Dodge (Vrymaa)
+- sfx/dodge_whoosh_2.mp3 (1344 B) <- Hits & Fight - Dodge (Vrymaa)
+- sfx/dodge_whoosh_3.mp3 (1344 B) <- Hits & Fight - Dodge (Vrymaa)
+- sfx/cloth_1.mp3 (4224 B) <- Foley_Cloth_Movement_Jacket_96khz.wav (Nox_Sound)
+- sfx/cloth_2.mp3 (4224 B) <- Foley_Cloth_Movement_Jacket_96khz.wav (Nox_Sound)
+- sfx/cloth_3.mp3 (4224 B) <- Foley_Cloth_Movement_Jacket_96khz.wav (Nox_Sound)
+- sfx/hit_slash_1.mp3 (3264 B) <- Wet Towel on Body Slap/Hit (Source Material) (qubodup)
+- sfx/hit_slash_2.mp3 (3456 B) <- Wet Towel on Body Slap/Hit (Source Material) (qubodup)
+- sfx/hit_slash_3.mp3 (3456 B) <- Wet Towel on Body Slap/Hit (Source Material) (qubodup)
+- sfx/hit_slash_4.mp3 (3456 B) <- Wet Towel on Body Slap/Hit (Source Material) (qubodup)
+- sfx/hit_crush_1.mp3 (2304 B) <- Face Punch, Body Impact, 4x (Kinoton)
+- sfx/hit_crush_2.mp3 (2496 B) <- Face Punch, Body Impact, 4x (Kinoton)
+- sfx/hit_crush_3.mp3 (2496 B) <- Face Punch, Body Impact, 4x (Kinoton)
+- sfx/hit_crush_4.mp3 (2496 B) <- Face Punch, Body Impact, 4x (Kinoton)
+- sfx/hit_pierce_1.mp3 (1152 B) <- ARROW_TARGET_IMPACT_SINGLE_ARCHERY_04.wav (JoeDinesSound)
+- sfx/hit_pierce_2.mp3 (1536 B) <- ARROW_TARGET_IMPACT_SINGLE_ARCHERY_01.wav (JoeDinesSound)
+- sfx/hit_pierce_3.mp3 (1344 B) <- ARROW_TARGET_IMPACT_SINGLE_ARCHERY_06.wav (JoeDinesSound)
+- sfx/hit_pierce_4.mp3 (1344 B) <- ARROW_TARGET_IMPACT_SINGLE_ARCHERY_05.wav (JoeDinesSound)
+- sfx/hit_plate_1.mp3 (2496 B) <- impactPlate_light_000 (Kenney (kenney.nl))
+- sfx/hit_plate_2.mp3 (2880 B) <- impactPlate_light_001 (Kenney (kenney.nl))
+- sfx/hit_plate_3.mp3 (2304 B) <- impactPlate_light_002 (Kenney (kenney.nl))
+- sfx/hit_plate_4.mp3 (2688 B) <- impactPlate_light_003 (Kenney (kenney.nl))
+- sfx/hit_mail_1.mp3 (1152 B) <- Bag of chainmail chunks (kermite607)
+- sfx/hit_mail_2.mp3 (2496 B) <- Bag of chainmail chunks (kermite607)
+- sfx/hit_mail_3.mp3 (1728 B) <- Bag of chainmail chunks (kermite607)
+- sfx/block_1.mp3 (2112 B) <- Seax Spear Blade on Haft (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/block_2.mp3 (1920 B) <- Seax Spear Blade on Haft (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/block_3.mp3 (2112 B) <- Seax Spear Blade on Haft (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/block_4.mp3 (2112 B) <- Seax Spear Blade on Haft (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/shield_thud_1.mp3 (2688 B) <- quiver-leather-squeeze-13 (Jan Schupke ('Vehicle', vehiclemusic.eu)), impactPlank_medium_000 (Kenney (kenney.nl))
+- sfx/shield_thud_2.mp3 (2688 B) <- quiver-leather-squeeze-05 (Jan Schupke ('Vehicle', vehiclemusic.eu)), impactPlank_medium_002 (Kenney (kenney.nl))
+- sfx/shield_thud_3.mp3 (3072 B) <- quiver-leather-squeeze-15 (Jan Schupke ('Vehicle', vehiclemusic.eu)), impactPlank_medium_004 (Kenney (kenney.nl))
+- sfx/parry_clash_1.mp3 (2112 B) <- Sabre Norse Sword Blade on Blade (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/parry_clash_2.mp3 (2112 B) <- Sabre Norse Sword Blade on Blade (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/parry_clash_3.mp3 (2112 B) <- Sabre Norse Sword Blade on Blade (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/parry_clash_4.mp3 (2112 B) <- Sabre Norse Sword Blade on Blade (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/anvil_1.mp3 (9984 B) <- Idiophones/Struck Idiophones/Anvil/Anvil_Hit1_v3_rr1_Mid.wav (Versilian Studios (Sam Gossner))
+- sfx/anvil_2.mp3 (9984 B) <- Idiophones/Struck Idiophones/Anvil/Anvil_Hit2_v3_rr1_Mid.wav (Versilian Studios (Sam Gossner))
+- sfx/anvil_3.mp3 (9216 B) <- Idiophones/Struck Idiophones/Anvil/Anvil_Hit3_v3_rr1_Mid.wav (Versilian Studios (Sam Gossner))
+- sfx/step_stone_1.mp3 (2688 B) <- Footsteps_Mountain_Boots_Rock_Walk_Sequence_Mono.wav (Nox_Sound)
+- sfx/step_stone_2.mp3 (2880 B) <- Footsteps_Mountain_Boots_Rock_Walk_Sequence_Mono.wav (Nox_Sound)
+- sfx/step_stone_3.mp3 (2880 B) <- Footsteps_Mountain_Boots_Rock_Walk_Sequence_Mono.wav (Nox_Sound)
+- sfx/step_stone_4.mp3 (3456 B) <- Footsteps_Mountain_Boots_Rock_Walk_Sequence_Mono.wav (Nox_Sound)
+- sfx/step_wood_1.mp3 (3072 B) <- Footsteps_Wood_Walk_Mono.wav (Nox_Sound)
+- sfx/step_wood_2.mp3 (2688 B) <- Footsteps_Wood_Walk_Mono.wav (Nox_Sound)
+- sfx/step_wood_3.mp3 (2688 B) <- Footsteps_Wood_Walk_Mono.wav (Nox_Sound)
+- sfx/step_wood_4.mp3 (2688 B) <- Footsteps_Wood_Walk_Mono.wav (Nox_Sound)
+- sfx/plate_clank_1.mp3 (1920 B) <- knight-walking-on-hard-ground.wav (fabian13cz)
+- sfx/plate_clank_2.mp3 (960 B) <- knight-walking-on-hard-ground.wav (fabian13cz)
+- sfx/plate_clank_3.mp3 (1152 B) <- knight-walking-on-hard-ground.wav (fabian13cz)
+- sfx/plate_clank_4.mp3 (1152 B) <- knight-walking-on-hard-ground.wav (fabian13cz)
+- sfx/fall_armoured_1.mp3 (4992 B) <- Run & Fall - Wooden surface (Vrymaa), Bag of chainmail chunks (kermite607)
+- sfx/fall_armoured_2.mp3 (4992 B) <- Run & Fall - Wooden surface (Vrymaa), Bag of chainmail chunks (kermite607)
+- sfx/fall_armoured_3.mp3 (6720 B) <- Run & Fall - Wooden surface (Vrymaa), Bag of chainmail chunks (kermite607)
+- sfx/drop_weapon_1.mp3 (5952 B) <- Throwing weapon - Metal impact (Vrymaa)
+- sfx/drop_weapon_2.mp3 (4800 B) <- Throwing weapon - Metal impact (Vrymaa)
+- sfx/drop_weapon_3.mp3 (6528 B) <- Throwing weapon - Metal impact (Vrymaa)
+- sfx/quake_1.mp3 (12288 B) <- RockFall1b.wav (AlanCat), rockfall2a.wav (AlanCat), Foley_Rocks_Stones_Impacts_Mono.wav (Nox_Sound), Thunder Clap (DaniloSFX)
+- sfx/quake_2.mp3 (12288 B) <- RockFall1b.wav (AlanCat), rockfall2a.wav (AlanCat), Foley_Rocks_Stones_Impacts_Mono.wav (Nox_Sound)
+- sfx/slam_1.mp3 (8640 B) <- RockFall1b.wav (AlanCat), Foley_Rocks_Stones_Impacts_Mono.wav (Nox_Sound)
+- sfx/slam_2.mp3 (8640 B) <- RockFall1b.wav (AlanCat), Foley_Rocks_Stones_Impacts_Mono.wav (Nox_Sound)
+- sfx/slam_3.mp3 (8640 B) <- RockFall1b.wav (AlanCat), rockfall2a.wav (AlanCat), Foley_Rocks_Stones_Impacts_Mono.wav (Nox_Sound)
+- sfx/warcry_buff_1.mp3 (7488 B) <- Idiophones/Struck Idiophones/Mark Trees/Legacy/windchimes_fastAsc1.wav (Versilian Studios LLC (Versilian Community Sample Library, VCSL)), Idiophones/Struck Idiophones/Triangles/Triangle1_Roll_rr1_Mid.wav (Versilian Studios LLC (Versilian Community Sample Library, VCSL)), Idiophones/Struck Idiophones/Glockenspiel/glock_soft_C7_03.wav (Versilian Studios LLC (Versilian Community Sample Library, VCSL))
+- sfx/warcry_buff_2.mp3 (7488 B) <- Idiophones/Struck Idiophones/Mark Trees/Legacy/windchimes_asc1.wav (Versilian Studios LLC (Versilian Community Sample Library, VCSL)), Idiophones/Struck Idiophones/Triangles/Triangle1_Roll_rr1_Mid.wav (Versilian Studios LLC (Versilian Community Sample Library, VCSL)), Idiophones/Struck Idiophones/Glockenspiel/glock_soft_G6_01.wav (Versilian Studios LLC (Versilian Community Sample Library, VCSL))
+- sfx/warcry_buff_3.mp3 (7296 B) <- Idiophones/Struck Idiophones/Mark Trees/Legacy/windchimes_fastAsc1.wav (Versilian Studios LLC (Versilian Community Sample Library, VCSL)), Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_cresc_1.5s.wav (Versilian Studios LLC (Versilian Community Sample Library, VCSL)), Idiophones/Struck Idiophones/Glockenspiel/glock_soft_C6_01.wav (Versilian Studios LLC (Versilian Community Sample Library, VCSL))
+- sfx/warcry_voice_1.mp3 (3072 B) <- Male Fight Grunts (ale-batec)
+- sfx/warcry_voice_2.mp3 (2304 B) <- Male Fight Grunts (ale-batec)
+- sfx/warcry_voice_3.mp3 (2496 B) <- Male Fight Grunts (ale-batec)
+- sfx/dagger_throw_1.mp3 (960 B) <- English Longbow Shoot (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/dagger_throw_2.mp3 (1152 B) <- English Longbow Shoot (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/dagger_throw_3.mp3 (1152 B) <- English Longbow Shoot (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/unsheathe_1.mp3 (3264 B) <- Seax Draw Fast (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/unsheathe_2.mp3 (3456 B) <- Seax Draw Fast (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/unsheathe_3.mp3 (3264 B) <- Seax Draw Fast (Ben Jaszczak & Brian Nelson (Still North Media))
+- sfx/bell_1.mp3 (17280 B) <- Ambiance_Bell_Church_x2_Stereo.wav (Nox_Sound)
+- sfx/ui_click_1.mp3 (1152 B) <- Wood box - accesories (Vrymaa)
+- sfx/ui_click_2.mp3 (1344 B) <- Wood box - accesories (Vrymaa)
+- sfx/ui_click_3.mp3 (1536 B) <- Wood box - accesories (Vrymaa)
+
+Upstream CC0 1.0 Public Domain Sources:
+- [CC0] "Footsteps_Wood_Walk_Mono.wav" by Nox_Sound — https://freesound.org/s/543685/
+- [CC0] "Footsteps_Mountain_Boots_Rock_Walk_Sequence_Mono.wav" by Nox_Sound — https://freesound.org/s/558472/
+- [CC0] "Bag of chainmail chunks" by kermite607 — https://freesound.org/people/kermite607/sounds/361798/
+- [CC0] "RockFall1b.wav" by AlanCat — https://freesound.org/people/AlanCat/sounds/381645/
+- [CC0] "rockfall2a.wav" by AlanCat — https://freesound.org/people/AlanCat/sounds/389303/
+- [CC0] "Swinging staff whoosh (strong) 01.wav" by Nightflame — https://freesound.org/people/Nightflame/sounds/422506/
+- [CC0] "Swinging staff whoosh (strong) 07.wav" by Nightflame — https://freesound.org/people/Nightflame/sounds/422507/
+- [CC0] "Swinging staff whoosh (strong) 03.wav" by Nightflame — https://freesound.org/people/Nightflame/sounds/422508/
+- [CC0] "Swinging staff whoosh (strong) 04.wav" by Nightflame — https://freesound.org/people/Nightflame/sounds/422513/
+- [CC0] "Face Punch, Body Impact, 4x" by Kinoton — https://freesound.org/people/Kinoton/sounds/503277/
+- [CC0] "Male Fight Grunts" by ale-batec — https://freesound.org/people/ale-batec/sounds/511023/
+- [CC0] "knight-walking-on-hard-ground.wav" by fabian13cz — https://freesound.org/people/fabian13cz/sounds/511503/
+- [CC0] "ARROW_TARGET_IMPACT_SINGLE_ARCHERY_04.wav" by JoeDinesSound — https://freesound.org/people/JoeDinesSound/sounds/534943/
+- [CC0] "ARROW_TARGET_IMPACT_SINGLE_ARCHERY_01.wav" by JoeDinesSound — https://freesound.org/people/JoeDinesSound/sounds/534946/
+- [CC0] "ARROW_TARGET_IMPACT_SINGLE_ARCHERY_06.wav" by JoeDinesSound — https://freesound.org/people/JoeDinesSound/sounds/534947/
+- [CC0] "ARROW_TARGET_IMPACT_SINGLE_ARCHERY_05.wav" by JoeDinesSound — https://freesound.org/people/JoeDinesSound/sounds/534948/
+- [CC0] "Foley_Cloth_Movement_Jacket_96khz.wav" by Nox_Sound — https://freesound.org/people/Nox_Sound/sounds/555307/
+- [CC0] "Ambiance_Bell_Church_x2_Stereo.wav" by Nox_Sound — https://freesound.org/people/Nox_Sound/sounds/563885/
+- [CC0] "Foley_Rocks_Stones_Impacts_Mono.wav" by Nox_Sound — https://freesound.org/people/Nox_Sound/sounds/567701/
+- [CC0] "Thunder Clap" by DaniloSFX — https://freesound.org/people/DaniloSFX/sounds/672776/
+- [CC0] "Wood box - accesories" by Vrymaa — https://freesound.org/people/Vrymaa/sounds/734645/
+- [CC0] "Wet Towel on Body Slap/Hit (Source Material)" by qubodup — https://freesound.org/people/qubodup/sounds/74476/
+- [CC0] "Hits & Fight - Dodge" by Vrymaa — https://freesound.org/people/Vrymaa/sounds/753428/
+- [CC0] "Throwing weapon - Metal impact" by Vrymaa — https://freesound.org/people/Vrymaa/sounds/794215/
+- [CC0] "Run & Fall - Wooden surface" by Vrymaa — https://freesound.org/people/Vrymaa/sounds/810885/
+- [CC0] "impactPlank_medium_000" by Kenney (kenney.nl) — https://kenney.nl/assets/impact-sounds
+- [CC0] "impactPlank_medium_002" by Kenney (kenney.nl) — https://kenney.nl/assets/impact-sounds
+- [CC0] "impactPlank_medium_004" by Kenney (kenney.nl) — https://kenney.nl/assets/impact-sounds
+- [CC0] "impactPlate_light_000" by Kenney (kenney.nl) — https://kenney.nl/assets/impact-sounds
+- [CC0] "impactPlate_light_001" by Kenney (kenney.nl) — https://kenney.nl/assets/impact-sounds
+- [CC0] "impactPlate_light_002" by Kenney (kenney.nl) — https://kenney.nl/assets/impact-sounds
+- [CC0] "impactPlate_light_003" by Kenney (kenney.nl) — https://kenney.nl/assets/impact-sounds
+- [CC0] "quiver-leather-squeeze-05" by Jan Schupke ('Vehicle', vehiclemusic.eu) — https://opengameart.org/content/fantasy-weapons-and-apparel-sfx-library
+- [CC0] "quiver-leather-squeeze-13" by Jan Schupke ('Vehicle', vehiclemusic.eu) — https://opengameart.org/content/fantasy-weapons-and-apparel-sfx-library
+- [CC0] "quiver-leather-squeeze-15" by Jan Schupke ('Vehicle', vehiclemusic.eu) — https://opengameart.org/content/fantasy-weapons-and-apparel-sfx-library
+- [CC0] "English Longbow Shoot" by Ben Jaszczak & Brian Nelson (Still North Media) — https://opengameart.org/content/medieval-sound-effects-weapon-textures
+- [CC0] "Sabre Norse Sword Blade on Blade" by Ben Jaszczak & Brian Nelson (Still North Media) — https://opengameart.org/content/medieval-sound-effects-weapon-impacts
+- [CC0] "Sabre Swing" by Ben Jaszczak & Brian Nelson (Still North Media) — https://opengameart.org/content/medieval-sound-effects-weapon-textures
+- [CC0] "Seax Draw Fast" by Ben Jaszczak & Brian Nelson (Still North Media) — https://opengameart.org/content/medieval-sound-effects-weapon-textures
+- [CC0] "Seax Spear Blade on Haft" by Ben Jaszczak & Brian Nelson (Still North Media) — https://opengameart.org/content/medieval-sound-effects-weapon-impacts
+- [CC0] "Idiophones/Struck Idiophones/Anvil/Anvil_Hit1_v3_rr1_Mid.wav" by Versilian Studios (Sam Gossner) — https://github.com/sgossner/VCSL/tree/master/Idiophones/Struck%20Idiophones/Anvil
+- [CC0] "Idiophones/Struck Idiophones/Anvil/Anvil_Hit2_v3_rr1_Mid.wav" by Versilian Studios (Sam Gossner) — https://github.com/sgossner/VCSL/tree/master/Idiophones/Struck%20Idiophones/Anvil
+- [CC0] "Idiophones/Struck Idiophones/Anvil/Anvil_Hit3_v3_rr1_Mid.wav" by Versilian Studios (Sam Gossner) — https://github.com/sgossner/VCSL/tree/master/Idiophones/Struck%20Idiophones/Anvil
+- [CC0] "Idiophones/Struck Idiophones/Glockenspiel/glock_soft_C6_01.wav" by Versilian Studios LLC (Versilian Community Sample Library, VCSL) — https://github.com/sgossner/VCSL
+- [CC0] "Idiophones/Struck Idiophones/Glockenspiel/glock_soft_C7_03.wav" by Versilian Studios LLC (Versilian Community Sample Library, VCSL) — https://github.com/sgossner/VCSL
+- [CC0] "Idiophones/Struck Idiophones/Glockenspiel/glock_soft_G6_01.wav" by Versilian Studios LLC (Versilian Community Sample Library, VCSL) — https://github.com/sgossner/VCSL
+- [CC0] "Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_cresc_1.5s.wav" by Versilian Studios LLC (Versilian Community Sample Library, VCSL) — https://github.com/sgossner/VCSL
+- [CC0] "Idiophones/Struck Idiophones/Triangles/Triangle1_Roll_rr1_Mid.wav" by Versilian Studios LLC (Versilian Community Sample Library, VCSL) — https://github.com/sgossner/VCSL
+- [CC0] "Idiophones/Struck Idiophones/Mark Trees/Legacy/windchimes_asc1.wav" by Versilian Studios LLC (Versilian Community Sample Library, VCSL) — https://github.com/sgossner/VCSL
+- [CC0] "Idiophones/Struck Idiophones/Mark Trees/Legacy/windchimes_fastAsc1.wav" by Versilian Studios LLC (Versilian Community Sample Library, VCSL) — https://github.com/sgossner/VCSL

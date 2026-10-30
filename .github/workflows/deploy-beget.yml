@@ -1,0 +1,105 @@
+name: Build & Deploy to Beget (igra.ezekie6n.beget.tech)
+
+on:
+  push:
+    branches:
+      - main
+      - 'arena/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Validate PHP multiplayer relay & full 2-player room smoke test
+        run: |
+          php -l public/api/mp.php
+          php -l public/deploy.php
+          php -l scripts/beget-deploy-stub.php
+          php -r '$_GET["action"]="health"; $_SERVER["REQUEST_METHOD"]="GET"; include "public/api/mp.php";' | grep -q '"ok":true'
+          HOST_JSON=$(php -r '$_GET["action"]="connect"; $_SERVER["REQUEST_METHOD"]="POST"; include "public/api/mp.php";')
+          echo "$HOST_JSON" | grep -q '"relayMode":"host_sim"'
+          GUEST_JSON=$(php -r '$_GET["action"]="connect"; $_SERVER["REQUEST_METHOD"]="POST"; include "public/api/mp.php";')
+          echo "$GUEST_JSON" | grep -q '"c_2"'
+          CREATE_OUT=$(php -r '$_GET["action"]="sync"; $_SERVER["REQUEST_METHOD"]="POST"; $_POST["payload"]="{\"clientId\":\"c_1\",\"messages\":[{\"type\":\"create_room\",\"playerName\":\"Host\",\"classId\":\"barbarian\",\"isPublic\":true,\"fillBots\":true}]}"; include "public/api/mp.php";')
+          echo "$CREATE_OUT" | grep -q '"classId":"barbarian"'
+          rm -rf public/api/_runtime public/api/.mp_state.json
+
+      - name: Install dependencies, test & build production bundle
+        run: |
+          npm ci
+          npm test
+          npm run build
+          test -f dist/index.html
+          test -f dist/.htaccess
+          test -f dist/api/mp.php
+
+      - name: Package Beget public_html archives (.zip, .tar.gz & 1-click deploy.php)
+        run: |
+          (cd dist && zip -rq ../knights-beget-public_html.zip . .htaccess)
+          (cd dist && tar -czf ../knights-beget-public_html.tar.gz .)
+          cp scripts/beget-deploy-stub.php deploy.php
+          ls -lh knights-beget-public_html.zip knights-beget-public_html.tar.gz deploy.php
+
+      - name: Publish public Beget release (beget-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view beget-latest >/dev/null 2>&1; then
+            gh release upload beget-latest knights-beget-public_html.zip knights-beget-public_html.tar.gz deploy.php --clobber
+          else
+            gh release create beget-latest knights-beget-public_html.zip knights-beget-public_html.tar.gz deploy.php \
+              --target "${{ github.sha }}" \
+              --title "KNIGHTS: LAST STANDING — Сборка для igra.ezekie6n.beget.tech" \
+              --notes "Готовая сборка для \`igra.ezekie6n.beget.tech/public_html\` на хостинге Beget (включает 3D-арену, рыцарей, звуки, иконки, \`.htaccess\`, \`api/mp.php\` и автоустановщик \`deploy.php\`)."
+          fi
+
+      - name: Upload ready-to-host Beget archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: knights-beget-public_html
+          path: dist/
+          include-hidden-files: true
+
+      - name: Deploy dist/ to igra.ezekie6n.beget.tech via Beget FTP
+        env:
+          BEGET_HOST: ${{ secrets.BEGET_HOST || 'ezekie6n.beget.tech' }}
+          BEGET_USER: ${{ secrets.BEGET_USER || 'ezekie6n' }}
+          BEGET_PASSWORD: ${{ secrets.BEGET_PASSWORD }}
+          BEGET_DIR_OVERRIDE: ${{ secrets.BEGET_SERVER_DIR }}
+        run: |
+          if [ -z "$BEGET_PASSWORD" ]; then
+            echo "### ℹ️ Автодеплой на igra.ezekie6n.beget.tech ожидает секрет BEGET_PASSWORD" >> "$GITHUB_STEP_SUMMARY"
+            echo "Добавьте секрет \`BEGET_PASSWORD\` (пароль от аккаунта/FTP Beget \`ezekie6n\`) в Settings → Secrets and variables → Actions, чтобы каждый push автоматически заливал игру в \`/igra.ezekie6n.beget.tech/public_html\` (http://igra.ezekie6n.beget.tech/)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+          TARGET_DIR="${BEGET_DIR_OVERRIDE:-/igra.ezekie6n.beget.tech/public_html}"
+
+          lftp -u "$BEGET_USER","$BEGET_PASSWORD" "$BEGET_HOST" <<EOF
+          set ssl:verify-certificate no
+          set net:max-retries 3
+          set net:timeout 25
+          set ftp:passive-mode true
+
+          mkdir -pf "$TARGET_DIR"
+          cd "$TARGET_DIR"
+          rm -f index.php
+
+          mirror --reverse --delete --verbose --parallel=6 --exclude-glob api/_runtime/** --exclude-glob api/_runtime dist/ ./
+          bye
+          EOF

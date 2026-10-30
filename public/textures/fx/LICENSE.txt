@@ -1,0 +1,22 @@
+Open-Source Volumetric Fire Shaders & LUT Textures — MIT & CC0 1.0
+==================================================================
+
+1. THREE.Fire (`three_fire_lut.png` & Simplex-Turbulence Volumetric LUT Lookup)
+   Upstream Repositories:
+   - https://github.com/typeWolffo/THREE.Fire (MIT License, Copyright (c) typeWolffo)
+   - https://github.com/mattatz/THREE.Fire (MIT License, Copyright (c) mattatz)
+   - Ashima WebGL Simplex Noise (MIT License, Copyright (c) Ian McEwan, Ashima Arts)
+   Based on: "Real-Time Procedural Volumetric Fire" (Fuller et al., ACM I3D 2007)
+
+2. Raymarched Volumetric Flame (`ArenaFireSystem.ts` Ridged Domain-Warped FBM,
+   Buoyancy Advection, Blackbody Temperature Ramp, Illuminated Smoke & GPU Embers)
+   Upstream Repository:
+   - https://github.com/rethinkos-playground/flame (MIT License)
+
+3. VolumetricFire (`volumetric_firetex.png`, `volumetric_smoke.png`)
+   Upstream Repository:
+   - https://github.com/yomotsu/VolumetricFire (MIT License, Copyright (c) Akihiro Oyamada)
+
+4. Kenney Particle Pack (`flame_01.png`, `flame_04.png`, `fire_01.png`, `circle_05.png`)
+   Author: Kenney (https://kenney.nl/assets/particle-pack)
+   License: CC0 1.0 Universal (Public Domain)

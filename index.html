@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KNIGHTS: LAST STANDING — 3D Arena Fighter</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #090d16;
+        color: #f8fafc;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        overflow: hidden;
+      }
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(circle at 35% 30%, rgba(37, 99, 235, 0.22) 0%, transparent 52%),
+          radial-gradient(circle at 65% 65%, rgba(14, 165, 233, 0.16) 0%, transparent 52%),
+          #090d16;
+        text-align: center;
+        padding: 24px;
+      }
+      .boot-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #e2e8f0;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        margin-bottom: 16px;
+      }
+      .boot-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #38bdf8;
+        box-shadow: 0 0 10px #38bdf8;
+      }
+      .boot-title {
+        font-size: clamp(28px, 4.2vw, 44px);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #ffffff;
+        margin: 0 0 20px;
+      }
+      .boot-bar {
+        width: min(240px, 68vw);
+        height: 5px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+      }
+      .boot-bar-fill {
+        width: 45%;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #0ea5e9, #2563eb, #38bdf8);
+        animation: bootPulse 1s ease-in-out infinite alternate;
+      }
+      .boot-status {
+        margin-top: 14px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: #94a3b8;
+        max-width: 520px;
+        line-height: 1.5;
+      }
+      @keyframes bootPulse {
+        from { transform: translateX(-25%); width: 42%; }
+        to { transform: translateX(135%); width: 55%; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-canvas-root"></div>
+    <div id="ui-root">
+      <div id="boot-splash">
+        <div class="boot-badge"><span class="boot-dot"></span>3D Арена на выживание</div>
+        <h1 class="boot-title">Knights: Last Standing</h1>
+        <div class="boot-bar"><div class="boot-bar-fill"></div></div>
+        <div id="boot-status" class="boot-status">Запуск арены...</div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        window.__knightsBooted = false;
+        window.__reportBootIssue = function (msg) {
+          var el = document.getElementById('boot-status');
+          if (el) {
+            el.style.color = '#fca5a5';
+            el.textContent = 'Ошибка запуска: ' + msg;
+          }
+          try {
+            fetch('/api/client-error', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: String(msg), href: location.href })
+            }).catch(function () {});
+          } catch (_) {}
+        };
+
+        window.addEventListener('error', function (e) {
+          if (window.__knightsBooted) return;
+          var t = e.target;
+          if (t && t !== window && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+            window.__reportBootIssue('Не загрузился ' + (t.src || t.href || t.tagName));
+            return;
+          }
+          if (e.message) {
+            window.__reportBootIssue(e.message);
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function (e) {
+          if (window.__knightsBooted) return;
+          var reason = e.reason && (e.reason.message || String(e.reason));
+          window.__reportBootIssue(reason || 'Unhandled rejection');
+        });
+
+        setTimeout(function () {
+          if (!window.__knightsBooted) {
+            var el = document.getElementById('boot-status');
+            if (el && el.textContent.indexOf('Ошибка') === -1) {
+              if (location.protocol === 'about:' || location.protocol === 'blob:' || location.protocol === 'file:') {
+                el.style.color = '#fde68a';
+                el.textContent = 'Открыт статический предпросмотр файла. Переключитесь на вкладку превью сервера «Website» (порт 5173).';
+              } else {
+                el.textContent = 'Загрузка модулей игры (' + location.host + ')...';
+              }
+            }
+          }
+        }, 2500);
+      })();
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

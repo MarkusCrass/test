@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="44%" r="65%">
+      <stop offset="0%" stop-color="#0f5c4a"/>
+      <stop offset="58%" stop-color="#092924"/>
+      <stop offset="100%" stop-color="#050e10"/>
+    </radialGradient>
+    <linearGradient id="fg" x1="18%" y1="8%" x2="82%" y2="94%">
+      <stop offset="0%" stop-color="#eafff8"/>
+      <stop offset="48%" stop-color="#6ef7c8"/>
+      <stop offset="100%" stop-color="#14a887"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="42%" stop-color="#ffffff" stop-opacity="0.03"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.28"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="36" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="206" fill="none" stroke="#3ce0a8" stroke-width="4" stroke-opacity="0.32" stroke-dasharray="none"/>
+  <rect x="18" y="18" width="476" height="476" rx="28" fill="none" stroke="#3ce0a8" stroke-width="5" stroke-opacity="0.42"/>
+  <g transform="translate(56.3, 56.3) scale(0.78)">
+    <path d="M174.844 14.875c47.1 42.275 78.124 90.35 95.312 138.063C200.613 126.285 119.028 114.165 32 129.155c96.11-8.437 180.524 13 245.625 47.72 43.035 161.78-70.46 307.352-250.97 192.155 112.67 95.877 201.475 101.817 254.94 60.908 307.477 77.54 238.903-156.1 27.374-260.094-25.886-55.805-69.74-110.694-134.126-154.97zM323 205.345c123.386 90.75 139.423 227.623-38.656 222.436C336.51 385.317 353.196 296.868 323 205.345z" fill="none" stroke="#2cf5b3" stroke-width="28" stroke-linejoin="round" stroke-opacity="0.22"/>
+    <path d="M174.844 14.875c47.1 42.275 78.124 90.35 95.312 138.063C200.613 126.285 119.028 114.165 32 129.155c96.11-8.437 180.524 13 245.625 47.72 43.035 161.78-70.46 307.352-250.97 192.155 112.67 95.877 201.475 101.817 254.94 60.908 307.477 77.54 238.903-156.1 27.374-260.094-25.886-55.805-69.74-110.694-134.126-154.97zM323 205.345c123.386 90.75 139.423 227.623-38.656 222.436C336.51 385.317 353.196 296.868 323 205.345z" transform="translate(0, 12)" fill="#07090d" fill-opacity="0.78" stroke="#07090d" stroke-width="16" stroke-linejoin="round"/>
+    <path d="M174.844 14.875c47.1 42.275 78.124 90.35 95.312 138.063C200.613 126.285 119.028 114.165 32 129.155c96.11-8.437 180.524 13 245.625 47.72 43.035 161.78-70.46 307.352-250.97 192.155 112.67 95.877 201.475 101.817 254.94 60.908 307.477 77.54 238.903-156.1 27.374-260.094-25.886-55.805-69.74-110.694-134.126-154.97zM323 205.345c123.386 90.75 139.423 227.623-38.656 222.436C336.51 385.317 353.196 296.868 323 205.345z" fill="url(#fg)" stroke="#fff8e3" stroke-width="4" stroke-opacity="0.42" stroke-linejoin="round"/>
+  </g>
+  <rect width="512" height="512" rx="36" fill="url(#sheen)"/>
+</svg>

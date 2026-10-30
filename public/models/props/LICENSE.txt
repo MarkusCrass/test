@@ -1,0 +1,26 @@
+Arena Architectural, Fire, Siege & Prop 3D Assets — CC0 1.0 Public Domain
+=========================================================================
+
+1. Kenney Graveyard & Nature Kits (fire_brazier.glb, column_large.glb,
+   border_pillar.glb, altar_stone.glb, pillar_obelisk.glb, lantern_candle.glb,
+   pine_tree.glb, pine_crooked.glb, rocks_tall.glb, campfire_stones.glb,
+   campfire_bricks.glb, Textures/colormap.png)
+   Author: Kenney (https://kenney.nl/assets/graveyard-kit, https://kenney.nl/assets/nature-kit)
+   License: CC0 1.0 Universal (Public Domain)
+
+2. Kenney Castle Kit (tower_base.glb, tower_hex_mid.glb, tower_hex_top.glb,
+   tower_hex_roof.glb, castle_flag.glb, castle_pennant.glb, siege_ballista.glb,
+   siege_catapult.glb, siege_trebuchet.glb, tree_large.glb, rocks_large.glb,
+   Textures/colormap.png)
+   Author: Kenney (https://kenney.nl/assets/castle-kit)
+   License: CC0 1.0 Universal (Public Domain)
+
+3. Kenney Survival Kit & Particle Pack (campfire.glb, anvil.glb, grindstone.glb,
+   pavilion_tent.glb, public/textures/fx/flame_01.png, flame_04.png, fire_01.png,
+   circle_05.png)
+   Author: Kenney (https://kenney.nl/assets/survival-kit, https://kenney.nl/assets/particle-pack)
+   License: CC0 1.0 Universal (Public Domain)
+
+4. Poly Pizza / Quaternius Low-Poly Medieval Props (campfire_flames.glb,
+   cauldron.glb, dungeon_chain.glb, fire_mesh.glb)
+   License: CC0 1.0 Universal (Public Domain)

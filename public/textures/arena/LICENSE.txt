@@ -1,0 +1,12 @@
+Open-Source PBR Arena Surface Textures — MIT & CC0 1.0
+======================================================
+
+1. Aged Hardwood Plank PBR Set (`hardwood2_diffuse.jpg`, `hardwood2_bump.jpg`, `hardwood2_roughness.jpg`)
+   & Royal Inlaid Stone Tiles (`marble_checker_diffuse.jpg`, `marble_checker_normal.jpg`)
+   Source: https://github.com/mrdoob/three.js/tree/dev/examples/textures
+   License: MIT License (Three.js Authors)
+
+2. KayKit Dungeon Remastered 3D Modular Floor Tiles (`floor_wood_large.gltf.glb`,
+   `floor_wood_large_dark.gltf.glb`, `floor_dirt_large.gltf.glb`, `floor_tile_large.gltf.glb`)
+   Author: Kay Lousberg (https://kaylousberg.itch.io/kaykit-dungeon-remastered)
+   License: CC0 1.0 Universal (Public Domain)

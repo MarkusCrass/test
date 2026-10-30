@@ -1,0 +1,14 @@
+KayKit Character Packs — CC0 1.0 Universal (Public Domain)
+==========================================================
+
+1. KayKit : Adventurers Character Pack (1.0)
+   Models: Knight.glb, Rogue_Hooded.glb, Barbarian.glb, Rogue.glb
+   Author: Kay Lousberg (https://www.kaylousberg.com)
+   License: Creative Commons Zero (CC0 1.0) — https://creativecommons.org/publicdomain/zero/1.0/
+
+2. KayKit : Skeletons Character Pack (1.0)
+   Models: Skeleton_Warrior.glb, Skeleton_Rogue.glb, Skeleton_Minion.glb,
+           Skeleton_Blade.glb, Skeleton_Axe.glb, Skeleton_Shield_Large_A.glb,
+           Skeleton_Shield_Large_B.glb, Skeleton_Shield_Small_A.glb
+   Author: Kay Lousberg (https://www.kaylousberg.com)
+   License: Creative Commons Zero (CC0 1.0) — https://creativecommons.org/publicdomain/zero/1.0/
