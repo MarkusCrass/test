@@ -122,8 +122,9 @@ jobs:
 
       - name: Check public relay health and CORS
         run: |
-          status=$(curl -sS --max-time 15 -D /tmp/relay-headers -o /tmp/relay-body -w '%{http_code}' -H 'Origin: https://yandex.ru' 'https://igra.ezekie6n.beget.tech/api/mp.php?action=health') || {
-            echo '::warning::Public relay could not be reached over HTTPS from the GitHub runner.'
+          status=$(curl -sS --max-time 15 -D /tmp/relay-headers -o /tmp/relay-body -w '%{http_code}' -H 'Origin: https://yandex.ru' 'https://igra.ezekie6n.beget.tech/api/mp.php?action=health' 2>/tmp/relay-error) || {
+            error=$(head -c 250 /tmp/relay-error | tr '\r\n' ' ')
+            echo "::warning::Public relay could not be reached over HTTPS from the GitHub runner: $error"
             exit 0
           }
           if [ "$status" != 200 ]; then
