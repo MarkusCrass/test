@@ -155,6 +155,11 @@ export const LOCALES: Record<string, Record<Lang, string>> = {
   adRewardBtn: { ru: 'Получить +10 монет', en: 'Get +10 coins', tr: '+10 altın alın', es: 'Obtener +10 monedas', ar: 'احصل على +10 عملات' },
   adCloseBtn: { ru: 'Закрыть', en: 'Close', tr: 'Kapat', es: 'Cerrar', ar: 'إغلاق' },
 
+  adUnavailable: { ru: 'Реклама недоступна или просмотр не завершён. Монеты не начислены.', en: 'The ad is unavailable or was not completed. No coins were awarded.', tr: 'Reklam kullanılamıyor veya tamamlanmadı. Altın verilmedi.', es: 'El anuncio no está disponible o no se completó. No se otorgaron monedas.', ar: 'الإعلان غير متاح أو لم يكتمل. لم تُمنح عملات.' },
+  aboutTitle: { ru: 'Об игре и лицензии', en: 'About and licenses', tr: 'Oyun ve lisanslar', es: 'Acerca del juego y licencias', ar: 'حول اللعبة والتراخيص' },
+  aboutIntro: { ru: 'Авторы ресурсов, используемые библиотеки и полные тексты лицензий.', en: 'Asset creators, libraries and full license notices.', tr: 'Varlık oluşturucuları, kütüphaneler ve tam lisans metinleri.', es: 'Creadores de recursos, bibliotecas y textos completos de licencias.', ar: 'منشئو الموارد والمكتبات ونصوص التراخيص الكاملة.' },
+  aboutLoading: { ru: 'Загрузка…', en: 'Loading…', tr: 'Yükleniyor…', es: 'Cargando…', ar: 'جار التحميل…' },
+  aboutError: { ru: 'Не удалось загрузить текст лицензии.', en: 'Could not load the license text.', tr: 'Lisans metni yüklenemedi.', es: 'No se pudo cargar el texto de la licencia.', ar: 'تعذر تحميل نص الترخيص.' },
   // ===== Settings =====
   settingsTitle: { ru: 'Настройки игры', en: 'Game Settings', tr: 'Oyun Ayarları', es: 'Configuración del juego', ar: 'إعدادات اللعبة' },
   settingsVol: { ru: 'Громкость звука', en: 'Sound volume', tr: 'Ses seviyesi', es: 'Volumen de sonido', ar: 'مستوى الصوت' },
@@ -259,4 +264,11 @@ export function isLanguage(value: unknown): value is Lang {
 export function detectLanguage(value?: string): Lang {
   const code = value?.toLowerCase().split(/[-_]/)[0];
   return isLanguage(code) ? code : DEFAULT_LANG;
+}
+
+/** Platform fallback: Russian for be/kk/uk/uz, English for other unsupported languages. */
+export function detectYandexLanguage(value?: string): Lang {
+  const code = value?.toLowerCase().split(/[-_]/)[0];
+  if (isLanguage(code)) return code;
+  return code && ['be', 'kk', 'uk', 'uz'].includes(code) ? 'ru' : 'en';
 }

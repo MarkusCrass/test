@@ -26,6 +26,7 @@ import {
   ArenaThemeId,
   GameSettings,
   getArenaThemeMeta,
+  markLanguageSelected,
   GraphicsQuality,
 } from '../config/settings';
 import { Fighter } from '../core/Fighter';
@@ -62,6 +63,7 @@ export interface UICallbacks {
   onResumeGame: () => void;
   onCycleSpectator: (delta: 1 | -1) => void;
   onSettingsChanged: (next: GameSettings) => void;
+  onWatchRewardedAd?: (reward: () => void, finished: (rewarded: boolean) => void) => boolean;
   onSelectPreviewClass: (
     classId: KnightClassId,
     userInitiated?: boolean
@@ -204,15 +206,12 @@ export class UIManager {
   private readonly controlsModalEl: HTMLElement;
   private readonly resultsModalEl: HTMLElement;
   private readonly adModalEl: HTMLElement;
-  private readonly adCountdownEl: HTMLElement;
   private readonly adCloseBtnEl: HTMLButtonElement;
   private readonly adRewardBtnEl: HTMLButtonElement;
   private readonly btnWatchAdEl: HTMLButtonElement;
   private profile: PlayerProfile;
+  private playerNameEdited = false;
   private readonly hubCoinDisplayEl: HTMLElement;
-  private adCountdownTimer: ReturnType<typeof setTimeout> | null = null;
-  private adCountdownSeconds = 5;
-  private adPendingReward = false;
 
   // Multiplayer elements
   private readonly mpConnPillEl: HTMLElement;
@@ -868,15 +867,10 @@ export class UIManager {
               <div id="ad-sub" class="ad-sub" data-i18n="adSub">Получите +10 монет за просмотр</div>
             </div>
           </div>
-          <div class="ad-body">
-            <div class="ad-countdown-wrap">
-              <span class="ad-countdown-label" data-i18n="adCountdownLabel">Реклама пойдёт через</span>
-              <span id="ad-countdown" class="ad-countdown">5</span>
-            </div>
-          </div>
+          <div class="ad-body"><p id="ad-status" role="status"></p></div>
           <div class="ad-actions">
-            <button id="btn-ad-close" class="btn btn-ghost ad-close-btn hidden" data-i18n="adCloseBtn">Закрыть</button>
-            <button id="btn-ad-reward" class="btn btn-primary btn-hero ad-reward-btn hidden">
+            <button id="btn-ad-close" class="btn btn-ghost ad-close-btn" data-i18n="adCloseBtn">Закрыть</button>
+            <button id="btn-ad-reward" class="btn btn-primary btn-hero ad-reward-btn">
               ${ICONS.trophy}
               <span data-i18n="adRewardBtn">Получить +10 монет</span>
             </button>
@@ -984,12 +978,48 @@ export class UIManager {
             </div>
           </div>
 
-          <div class="modal-bottom-row" style="justify-content: flex-end;">
+          <div class="modal-bottom-row" style="justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <button id="btn-settings-about" class="btn btn-ghost"><span data-i18n="aboutTitle">${this.tl('aboutTitle')}</span></button>
             <button id="btn-settings-close" class="btn btn-primary" style="min-width: 155px;">
               ${ICONS.check}
               <span data-i18n="settingsDone">Готово</span>
             </button>
           </div>
+        </div>
+      </div>
+      <div id="modal-about" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
+        <div class="glass-modal about-sheet">
+          <div class="modal-top-row">
+            <h2 id="about-title" class="modal-sheet-title" data-i18n="aboutTitle">${this.tl('aboutTitle')}</h2>
+            <button id="btn-about-x" class="icon-close-btn" data-i18n-title="adCloseBtn" aria-label="Close">×</button>
+          </div>
+          <p class="about-intro" data-i18n="aboutIntro">${this.tl('aboutIntro')}</p>
+          <p class="about-game-title">KNIGHTS: LAST STANDING</p>
+          <div class="about-credits">
+            ${[
+              ['Game-Icons.net — Lorc, Delapouite (CC BY 3.0; modified icons)', 'icons/skills/LICENSE.txt'],
+              ['KayKit: Adventurers & Skeletons — Kay Lousberg (CC0)', 'models/kaykit/LICENSE.txt'],
+              ['KayKit: Dungeon Remastered — Kay Lousberg (CC0)', 'models/dungeon/LICENSE.txt'],
+              ['Kenney & Quaternius — arena props (CC0)', 'models/props/LICENSE.txt'],
+              ['Arena textures — sources and verification', 'textures/arena/LICENSE.txt'],
+              ['Fire effects and textures — source credits', 'textures/fx/LICENSE.txt'],
+              ['Sound effects — creator and source list', 'audio/LICENSE.txt'],
+              ['Three.js — MIT', 'licenses/three-MIT.txt'],
+              ['THREE.Fire — typeWolffo — MIT', 'licenses/typeWolffo-THREE.Fire-MIT.txt'],
+              ['THREE.Fire — mattatz — MIT', 'licenses/mattatz-THREE.Fire-MIT.txt'],
+              ['Flame — rethinkos-playground — MIT', 'licenses/rethinkos-playground-flame-MIT.txt'],
+              ['WebGL noise — Ashima Arts & Stefan Gustavson — MIT', 'licenses/ashima-webgl-noise-MIT.txt'],
+              ['Inter — SIL Open Font License 1.1', 'licenses/inter-OFL.txt'],
+              ['Cinzel — SIL Open Font License 1.1', 'licenses/cinzel-OFL.txt'],
+              ['Philosopher — SIL Open Font License 1.1', 'licenses/philosopher-OFL.txt'],
+              ['ws — MIT', 'licenses/ws-MIT.txt'],
+              ['CC0 1.0 — full text', 'licenses/CC0-1.0.txt'],
+              ['Conquest — Apache 2.0', 'licenses/conquest-Apache-2.0.txt'],
+              ['Conquest — original NOTICE', 'licenses/conquest-NOTICE.txt'],
+              ['VolumetricFire — upstream package metadata', 'licenses/VolumetricFire-package.json'],
+            ].map(([title, path]) => `<details class="about-credit" data-license-path="${path}"><summary>${title}</summary><pre></pre></details>`).join('')}
+          </div>
+          <div class="modal-bottom-row"><button id="btn-about-close" class="btn btn-primary" data-i18n="adCloseBtn">${this.tl('adCloseBtn')}</button></div>
         </div>
       </div>
     `;
@@ -1016,7 +1046,6 @@ export class UIManager {
     this.controlsModalEl = this.q('#modal-controls');
     this.resultsModalEl = this.q('#modal-results');
     this.adModalEl = this.q('#modal-ad');
-    this.adCountdownEl = this.q('#ad-countdown');
     this.adCloseBtnEl = this.q('#btn-ad-close') as HTMLButtonElement;
     this.adRewardBtnEl = this.q('#btn-ad-reward') as HTMLButtonElement;
     this.btnWatchAdEl = this.q('#btn-watch-ad') as HTMLButtonElement;
@@ -1092,6 +1121,14 @@ export class UIManager {
     this.applyTranslations();
   }
 
+  /** Only use the platform name when the player has not selected their own. */
+  public useYandexPlayerName(name: string): void {
+    try { if (localStorage.getItem(MP_NAME_STORAGE_KEY)) return; } catch { return; }
+    if (this.playerNameEdited || document.activeElement === this.mpNameInputEl) return;
+    const clean = name.trim().slice(0, 18);
+    if (clean.length >= 2) this.mpNameInputEl.value = clean;
+  }
+
   public updateSettingsExternal(next: GameSettings): void {
     this.settings = { ...next };
     this.refreshLanguage();
@@ -1108,7 +1145,7 @@ export class UIManager {
     this.renderedActionBarClass = null;
     if (this.lastRenderedState === 'MatchFinished' && this.lastResults) {
       const { match, isHost, rewards } = this.lastResults;
-      this.renderResults(match, isHost, rewards, false);
+      this.renderResults(match, isHost, rewards);
     }
     this.lastRenderedState = null;
   }
@@ -1682,7 +1719,7 @@ export class UIManager {
 
     // Watch ad button (menu)
     this.btnWatchAdEl.addEventListener('click', () => {
-      this.showAd(false);
+      this.showAd();
     });
 
     // Ad modal close
@@ -1697,6 +1734,8 @@ export class UIManager {
         this.hideAd();
       }
     });
+
+    this.mpNameInputEl.addEventListener('input', () => { this.playerNameEdited = true; });
 
     // Settings controls
     const volInp = this.q('#inp-vol') as HTMLInputElement;
@@ -1749,8 +1788,31 @@ export class UIManager {
         const code = btn.dataset.lang as Lang | undefined;
         if (!code) return;
         this.settings = { ...this.settings, language: code };
+        markLanguageSelected();
         this.refreshLanguage();
         this.callbacks.onSettingsChanged(this.settings);
+      });
+    });
+
+    const about = this.q('#modal-about');
+    const closeAbout = () => about.classList.add('hidden');
+    this.q('#btn-settings-about').addEventListener('click', () => about.classList.remove('hidden'));
+    this.q('#btn-about-close').addEventListener('click', closeAbout);
+    this.q('#btn-about-x').addEventListener('click', closeAbout);
+    about.addEventListener('click', (event) => { if (event.target === about) closeAbout(); });
+    about.querySelectorAll<HTMLDetailsElement>('details[data-license-path]').forEach((details) => {
+      details.addEventListener('toggle', () => {
+        if (!details.open || details.dataset.loaded === 'true') return;
+        const text = details.querySelector('pre')!;
+        text.textContent = this.tl('aboutLoading');
+        const base = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+        void fetch(`${base}${details.dataset.licensePath}`).then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.text();
+        }).then((value) => {
+          text.textContent = value;
+          details.dataset.loaded = 'true';
+        }).catch(() => { text.textContent = this.tl('aboutError'); });
       });
     });
 
@@ -2468,8 +2530,7 @@ export class UIManager {
   private renderResults(
     match: MatchManager,
     isHost: boolean,
-    rewards?: { coins: number; breakdown: { place: number }; place: number } | null,
-    showAd = true
+    rewards?: { coins: number; breakdown: { place: number }; place: number } | null
   ): void {
     const standings = match.getStandings();
     const winner = standings[0];
@@ -2517,12 +2578,6 @@ export class UIManager {
         ? this.tl('resWinner', { name: this.fighterName(match, winner.name) })
         : this.tl('resDraw');
       headline.classList.remove('victory-gold');
-    }
-
-    // Show mandatory ad after EVERY battle (win or loss) — 10 coins for watching
-    if (showAd) {
-      this.adPendingReward = true;
-      this.showAd(true);
     }
 
     if (match.isOnlineMatch && this.mpRoom) {
@@ -2573,57 +2628,37 @@ export class UIManager {
       .join('');
   }
 
-  /** Show ad modal. mandatory = cannot skip until countdown finishes */
-  private showAd(mandatory: boolean): void {
+  /** Rewarded advertising is always optional and requires an explicit click. */
+  private showAd(): void {
     this.adModalEl.classList.remove('hidden');
-    this.adCountdownSeconds = 5;
-    this.adCountdownEl.textContent = String(this.adCountdownSeconds);
-    this.adRewardBtnEl.classList.add('hidden');
-    this.adCloseBtnEl.classList.toggle('hidden', mandatory);
-
-    if (this.adCountdownTimer) {
-      clearInterval(this.adCountdownTimer);
-    }
-    this.adCountdownTimer = setInterval(() => {
-      this.adCountdownSeconds -= 1;
-      if (this.adCountdownSeconds <= 0) {
-        clearInterval(this.adCountdownTimer!);
-        this.adCountdownTimer = null;
-        this.adCountdownEl.textContent = '0';
-        this.adRewardBtnEl.classList.remove('hidden');
-        this.adCloseBtnEl.classList.remove('hidden');
-      } else {
-        this.adCountdownEl.textContent = String(this.adCountdownSeconds);
-      }
-    }, 1000);
+    this.adRewardBtnEl.disabled = false;
+    this.adCloseBtnEl.disabled = false;
+    this.q('#ad-status').textContent = '';
   }
 
   private hideAd(): void {
-    this.adModalEl.classList.add('hidden');
-    if (this.adCountdownTimer) {
-      clearInterval(this.adCountdownTimer);
-      this.adCountdownTimer = null;
-    }
-    // If ad was pending after victory and user closed without claiming, still go to menu
-    if (this.adPendingReward) {
-      this.adPendingReward = false;
-      this.callbacks.onReturnMainMenu();
-    }
+    if (!this.adCloseBtnEl.disabled) this.adModalEl.classList.add('hidden');
   }
 
   private claimAdReward(): void {
-    // Показываем рекламу через Яндекс SDK, если доступна
-    const app = (window as unknown as { __knightsApp?: any }).__knightsApp;
-    const sdk = app?.yandexSdk;
-    if (sdk?.showAdv) {
-      sdk.showAdv().then(() => {
-        this.grantAdCoins();
-      }).catch(() => {
-        this.grantAdCoins();
-      });
-      return;
+    if (this.adRewardBtnEl.disabled) return;
+    this.adRewardBtnEl.disabled = true;
+    this.adCloseBtnEl.disabled = true;
+    this.q('#ad-status').textContent = '';
+    const started = this.callbacks.onWatchRewardedAd?.(
+      () => this.grantAdCoins(),
+      (rewarded) => {
+        this.adRewardBtnEl.disabled = false;
+        this.adCloseBtnEl.disabled = false;
+        if (rewarded) this.hideAd();
+        else this.q('#ad-status').textContent = this.tl('adUnavailable');
+      }
+    );
+    if (!started) {
+      this.adRewardBtnEl.disabled = false;
+      this.adCloseBtnEl.disabled = false;
+      this.q('#ad-status').textContent = this.tl('adUnavailable');
     }
-    this.grantAdCoins();
   }
 
   private grantAdCoins(): void {
@@ -2631,7 +2666,6 @@ export class UIManager {
     saveProfile(this.profile);
     this.hubCoinDisplayEl.textContent = String(this.profile.coins);
     this.q('#hub-main-coin-display').textContent = String(this.profile.coins);
-    this.hideAd();
   }
 
   private fighterName(match: MatchManager, name: string): string {

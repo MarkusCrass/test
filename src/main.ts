@@ -11,7 +11,7 @@ import '@fontsource/inter/latin-ext-800.css';
 import './style.css';
 import { KnightClassId } from './config/classes';
 import { hasSavedLanguage, loadSettings, saveSettings } from './config/settings';
-import { detectLanguage } from './config/locales';
+import { detectYandexLanguage } from './config/locales';
 import { loadProfile } from './config/playerProfile';
 import { createEmptyIntent, FighterInputIntent } from './core/Fighter';
 import { MatchManager, MatchMode, MatchState } from './core/MatchManager';
@@ -30,6 +30,7 @@ import {
 } from './render/CameraRig';
 import { WorldRenderer } from './render/WorldRenderer';
 import { HudReticleViewState, UIManager } from './ui/UIManager';
+import { YandexGames, type YandexLoader } from './platform/YandexGames';
 
 class KnightsGameApp {
   private settings = loadSettings();
@@ -73,51 +74,15 @@ class KnightsGameApp {
   private lastFrameTime = performance.now();
   private lastCountdownWhole = -1;
 
-  // Яндекс Игры SDK (доступен только на plataforma Яндекс Игр, локально — undefined)
-  private yandexSdk: any = null;
+  private platformPaused = false;
+  private adPaused = false;
+  private readonly yandex = new YandexGames((paused) => {
+    this.platformPaused = paused;
+    this.syncPlatformPause();
+  });
+  private sdkInitialized: Promise<void> = Promise.resolve();
 
   constructor() {
-    // Инициализация Яндекс Игры SDK (не блокирует запуск при локальной разработке)
-    const yaSdk = (window as unknown as { YaGamesSDK?: { init: () => Promise<any> } }).YaGamesSDK;
-    if (yaSdk?.init) {
-      yaSdk.init().then((sdk: any) => {
-        this.yandexSdk = sdk;
-
-        // Включить рекламные блоки Яндекс Игр
-        try { sdk.setAdvStatus?.(true); } catch (_) {}
-
-        // Получить данные игрока Яндекс
-        try {
-          const player = sdk.getPlayer?.();
-          if (player && player.name) {
-            // Сохраняем никнейм Яндекс как имя игрока в сетевой игре
-            this.net?.setName?.(player.name);
-          }
-        } catch (_) {}
-
-        // Prefer the Yandex locale when the player has not chosen a language.
-        // SDK implementations may expose the environment synchronously or asynchronously.
-        try {
-          const environment = sdk.getEnvironment?.() ?? sdk.environment;
-          Promise.resolve(environment).then((env: any) => {
-            if (hasSavedLanguage()) return;
-            const locale = env?.i18n?.lang ?? env?.locale ?? env?.lang;
-            if (typeof locale !== 'string') return;
-            this.settings = { ...this.settings, language: detectLanguage(locale) };
-            this.ui.updateSettingsExternal(this.settings);
-          }).catch(() => {});
-        } catch (_) {}
-
-        // Сообщаем Яндекс Играм, что игра готова
-        try { sdk.ready?.(); } catch (_) {}
-      }).catch(() => {
-        // SDK недоступен — продолжаем без Яндекс Игр
-      });
-    } else {
-      // SDK не найден локально — всё равно сообщаем, что игра готова (для локального теста)
-      this.yandexSdk = null;
-    }
-
     this.match.selectedPlayerClass = this.profile.activeKnight;
     const canvasRoot = document.getElementById('game-canvas-root')!;
     this.canvasRoot = canvasRoot;
@@ -239,6 +204,20 @@ class KnightsGameApp {
           );
         }
       },
+      onWatchRewardedAd: (reward, finished) => {
+        this.adPaused = true;
+        this.syncPlatformPause();
+        const started = this.yandex.showRewarded(reward, (rewarded) => {
+          this.adPaused = false;
+          this.syncPlatformPause();
+          finished(rewarded);
+        });
+        if (!started) {
+          this.adPaused = false;
+          this.syncPlatformPause();
+        }
+        return started;
+      },
       onSettingsChanged: (next) => {
         this.settings = { ...next };
         saveSettings(this.settings);
@@ -335,6 +314,18 @@ class KnightsGameApp {
       },
     });
 
+    const loader = (window as unknown as { YaGames?: YandexLoader }).YaGames;
+    this.sdkInitialized = this.yandex.initialize(loader, (language) => {
+      if (hasSavedLanguage()) return;
+      this.settings = { ...this.settings, language: detectYandexLanguage(language) };
+      this.ui.updateSettingsExternal(this.settings);
+    });
+    void this.sdkInitialized.then(() => this.yandex.getPlayerName()).then((name) => {
+      if (name) this.ui.useYandexPlayerName(name);
+    });
+    document.addEventListener('visibilitychange', () => this.syncPlatformPause());
+    this.syncPlatformPause();
+
     this.setupGlobalInputListeners();
     this.ui.update(this.match, [], false);
 
@@ -364,10 +355,20 @@ class KnightsGameApp {
       );
     });
 
-    // Ссылка на SDK сохранена в this.yandexSdk и доступна через window.__knightsApp.yandexSdk
-    void this.yandexSdk;
-
     requestAnimationFrame(this.loop);
+  }
+
+  private syncPlatformPause(): void {
+    const blocked = this.platformPaused || this.adPaused || document.hidden;
+    this.sound.setMuted(blocked);
+    if (blocked) {
+      this.clearActionInputs();
+      if (this.match.isOnlineMatch) {
+        this.net.streamInputIntent(0.1, createEmptyIntent(this.world?.cameraRig.yaw ?? this.fallbackYaw));
+      }
+      this.releasePointerLock();
+      this.yandex.setGameplay(false);
+    }
   }
 
   private initWorldRenderer(canvasRoot: HTMLElement): void {
@@ -380,6 +381,10 @@ class KnightsGameApp {
       world.applyArenaTheme(this.settings.arenaTheme);
       world.syncShowcaseClass(this.match.selectedPlayerClass);
       this.world = world;
+      void Promise.all([this.sdkInitialized, world.assetsReady]).then(() => {
+        // Wait for an interactive frame after the preload before signalling readiness.
+        requestAnimationFrame(() => this.yandex.ready());
+      });
       this.attachCanvasListeners(world.renderer.domElement);
 
       if (
@@ -1028,6 +1033,15 @@ class KnightsGameApp {
     const rawDt = (now - this.lastFrameTime) / 1000;
     this.lastFrameTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
+
+    const blocked = this.platformPaused || this.adPaused || document.hidden;
+    const playing = !blocked && !this.match.paused &&
+      (this.match.state === 'Countdown' || this.match.state === 'InProgress');
+    this.yandex.setGameplay(playing);
+    if (blocked) {
+      requestAnimationFrame(this.loop);
+      return;
+    }
 
     const camYaw = this.world ? this.world.cameraRig.yaw : this.fallbackYaw;
     if (this.match.isOnlineMatch) {

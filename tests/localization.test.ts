@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LANGS, LOCALES, classDisplayName, detectLanguage, t } from '../src/config/locales';
-import { DEFAULT_SETTINGS, hasSavedLanguage, loadSettings, saveSettings } from '../src/config/settings';
+import { LANGS, LOCALES, classDisplayName, detectLanguage, detectYandexLanguage, t } from '../src/config/locales';
+import { DEFAULT_SETTINGS, hasSavedLanguage, loadSettings, saveSettings, markLanguageSelected } from '../src/config/settings';
 import { CLASS_ORDER } from '../src/config/classes';
 import { UIManager, type UICallbacks } from '../src/ui/UIManager';
 
@@ -22,11 +22,16 @@ describe('localization', () => {
     expect(t('playBuy', 'en', { price: 300 })).toBe('Buy for 300');
     expect(detectLanguage('tr-TR')).toBe('tr');
     expect(detectLanguage('fr-FR')).toBe('ru');
+    expect(detectYandexLanguage('fr-FR')).toBe('en');
+    expect(detectYandexLanguage('uk-UA')).toBe('ru');
+    expect(detectYandexLanguage('ar')).toBe('ar');
   });
 
   it('persists and validates a language preference', () => {
     expect(hasSavedLanguage()).toBe(false);
     saveSettings({ ...DEFAULT_SETTINGS, language: 'tr' });
+    expect(hasSavedLanguage()).toBe(false);
+    markLanguageSelected();
     expect(hasSavedLanguage()).toBe(true);
     expect(loadSettings().language).toBe('tr');
     localStorage.setItem('knights_last_standing_settings_v2', '{"language":"invalid"}');

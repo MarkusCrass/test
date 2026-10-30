@@ -77,6 +77,8 @@ const CINEMATIC_GRADE_SHADER = {
  * 2048px Soft Shadows, Rim Backlighting, 3D Weapon Ribbon Trails, and HDR Post-Processing.
  */
 export class WorldRenderer {
+  public readonly assetsReady: Promise<void>;
+
   public readonly renderer: THREE.WebGLRenderer;
   public readonly scene: THREE.Scene;
   public readonly cameraRig: CameraRig;
@@ -167,20 +169,16 @@ export class WorldRenderer {
     this.buildShowcasePedestal();
     this.rebuildPostProcessing(1, 'ultra');
 
-    // Defer 3D .glb asset streaming until after Main Menu UI has painted so initial page boot is instant
-    window.setTimeout(() => {
-      kayKitAssets
-        .preload()
-        .catch((err) => console.error('KayKit character preload error:', err))
-        .finally(() => {
-          dungeonAssets.preload().catch((err) => {
-            console.error('KayKit dungeon preload error:', err);
-          });
-          arenaProps.preload().catch((err) => {
-            console.error('Arena props preload error:', err);
-          });
-        });
-    }, 180);
+    // Shared promises also allow the platform to be notified only after assets load.
+    this.assetsReady = new Promise<void>((resolve) => {
+      window.setTimeout(() => {
+        void kayKitAssets.preload().catch((err) => console.error('KayKit character preload error:', err))
+          .then(() => Promise.all([
+            dungeonAssets.preload().catch((err) => console.error('KayKit dungeon preload error:', err)),
+            arenaProps.preload().catch((err) => console.error('Arena props preload error:', err)),
+          ])).then(() => resolve());
+      }, 180);
+    });
   }
 
   private setupLighting(sunPos: THREE.Vector3): void {

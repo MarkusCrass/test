@@ -232,6 +232,7 @@ export class SoundManager {
   private masterGain: GainNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
   private volume = 0.7;
+  private muted = false;
 
   private readonly decodedBanks = new Map<SfxBankId, AudioBuffer[]>();
   private readonly lastVariantByBank = new Map<SfxBankId, number>();
@@ -250,11 +251,16 @@ export class SoundManager {
     this.volume = Math.max(0, Math.min(1, vol));
     if (this.masterGain && this.ctx) {
       try {
-        this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+        this.masterGain.gain.setValueAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime);
       } catch {
-        this.masterGain.gain.value = this.volume;
+        this.masterGain.gain.value = this.muted ? 0 : this.volume;
       }
     }
+  }
+
+  public setMuted(muted: boolean): void {
+    this.muted = muted;
+    this.setVolume(this.volume);
   }
 
   public updateListener(
@@ -284,7 +290,7 @@ export class SoundManager {
         if (AudioCtx) {
           this.ctx = new AudioCtx();
           this.masterGain = this.ctx.createGain();
-          this.masterGain.gain.value = this.volume;
+          this.masterGain.gain.value = this.muted ? 0 : this.volume;
 
           if (typeof this.ctx.createDynamicsCompressor === 'function') {
             this.compressor = this.ctx.createDynamicsCompressor();

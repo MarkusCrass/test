@@ -3874,3 +3874,12 @@ body {
 :lang(ar) {
   font-family: Arial, sans-serif;
 }
+
+/* About and third-party notices */
+.about-sheet { width: min(760px, 94vw); padding: 24px 26px; }
+.about-intro { color: #d8eaff; line-height: 1.5; }
+.about-game-title { font-weight: 800; letter-spacing: .05em; color: #fff; }
+.about-credits { display: grid; gap: 8px; margin: 16px 0; }
+.about-credit { border: 1px solid rgba(149, 200, 255, .22); border-radius: 14px; background: rgba(12, 33, 61, .54); }
+.about-credit summary { cursor: pointer; padding: 13px 15px; font-weight: 700; color: #e6f4ff; }
+.about-credit pre { margin: 0; padding: 14px 16px; max-height: 40vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.55 system-ui, sans-serif; color: #d9e8fb; }

@@ -151,6 +151,8 @@ export function loadSettings(): GameSettings {
 export function hasSavedLanguage(): boolean {
   try {
     if (typeof localStorage === 'undefined') return false;
+    const mode = localStorage.getItem('kls_language_preference_manual');
+    if (mode === 'auto') return false;
     const value = localStorage.getItem(STORAGE_KEY);
     return value !== null && isLanguage((JSON.parse(value) as Partial<GameSettings>).language);
   } catch {
@@ -158,9 +160,17 @@ export function hasSavedLanguage(): boolean {
   }
 }
 
+/** Only the language selector, not other settings, opts out of platform detection. */
+export function markLanguageSelected(): void {
+  try { localStorage.setItem('kls_language_preference_manual', 'manual'); } catch { /* storage unavailable */ }
+}
+
 export function saveSettings(settings: GameSettings): void {
   try {
     if (typeof localStorage !== 'undefined') {
+      if (localStorage.getItem('kls_language_preference_manual') === null && localStorage.getItem(STORAGE_KEY) === null) {
+        localStorage.setItem('kls_language_preference_manual', 'auto');
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     }
   } catch {
