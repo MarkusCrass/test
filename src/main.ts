@@ -78,9 +78,33 @@ class KnightsGameApp {
     if (yaSdk?.init) {
       yaSdk.init().then((sdk: any) => {
         this.yandexSdk = sdk;
+
+        // Включить рекламные блоки Яндекс Игр
+        try { sdk.setAdvStatus?.(true); } catch (_) {}
+
+        // Получить данные игрока Яндекс
+        try {
+          const player = sdk.getPlayer?.();
+          if (player && player.name) {
+            // Сохраняем никнейм Яндекс как имя игрока в сетевой игре
+            this.net?.setName?.(player.name);
+          }
+        } catch (_) {}
+
+        // Получить окружение (язык, регион)
+        try {
+          const env = sdk.getEnvironment?.();
+          console.log('Yandex env:', env?.locale, env?.region);
+        } catch (_) {}
+
+        // Сообщаем Яндекс Играм, что игра готова
+        try { sdk.ready?.(); } catch (_) {}
       }).catch(() => {
         // SDK недоступен — продолжаем без Яндекс Игр
       });
+    } else {
+      // SDK не найден локально — всё равно сообщаем, что игра готова (для локального теста)
+      this.yandexSdk = null;
     }
 
     this.match.selectedPlayerClass = this.profile.activeKnight;
@@ -316,11 +340,21 @@ class KnightsGameApp {
     // Initialize 3D WorldRenderer on next tick after Main Menu UI is already interactive on screen
     window.setTimeout(() => {
       this.initWorldRenderer(canvasRoot);
-      // Сообщаем Яндекс Играм, что игра готова к работе
-      if (this.yandexSdk?.ready) {
-        try { this.yandexSdk.ready(); } catch (_) {}
-      }
     }, 16);
+
+    // Экспонируем приложение для доступа из UI (например, к Яндекс SDK для рекламы)
+    (window as unknown as { __knightsApp?: KnightsGameApp }).__knightsApp = this;
+
+    // Обработка изменения размера окна (Яндекс Игры запускают во фрейме)
+    window.addEventListener('resize', () => {
+      this.world?.applyGraphicsConfig(
+        this.settings.pixelScale,
+        this.settings.graphicsQuality
+      );
+    });
+
+    // Ссылка на SDK сохранена в this.yandexSdk и доступна через window.__knightsApp.yandexSdk
+    void this.yandexSdk;
 
     requestAnimationFrame(this.loop);
   }

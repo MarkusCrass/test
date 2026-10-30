@@ -2537,6 +2537,21 @@ export class UIManager {
   }
 
   private claimAdReward(): void {
+    // Показываем рекламу через Яндекс SDK, если доступна
+    const app = (window as unknown as { __knightsApp?: any }).__knightsApp;
+    const sdk = app?.yandexSdk;
+    if (sdk?.showAdv) {
+      sdk.showAdv().then(() => {
+        this.grantAdCoins();
+      }).catch(() => {
+        this.grantAdCoins();
+      });
+      return;
+    }
+    this.grantAdCoins();
+  }
+
+  private grantAdCoins(): void {
     this.profile = addCoins(this.profile, AD_COIN_REWARD);
     saveProfile(this.profile);
     this.hubCoinDisplayEl.textContent = String(this.profile.coins);
