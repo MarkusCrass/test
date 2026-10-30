@@ -11,7 +11,7 @@ import {
   unlockKnight,
   PlayerProfile,
 } from '../config/playerProfile';
-import { KNIGHT_UNLOCK_CONFIG } from '../config/rewards';
+import { AD_COIN_REWARD, KNIGHT_UNLOCK_CONFIG } from '../config/rewards';
 import {
   ARENA_THEMES,
   ArenaThemeId,
@@ -218,8 +218,16 @@ export class UIManager {
   private readonly settingsModalEl: HTMLElement;
   private readonly controlsModalEl: HTMLElement;
   private readonly resultsModalEl: HTMLElement;
+  private readonly adModalEl: HTMLElement;
+  private readonly adCountdownEl: HTMLElement;
+  private readonly adCloseBtnEl: HTMLButtonElement;
+  private readonly adRewardBtnEl: HTMLButtonElement;
+  private readonly btnWatchAdEl: HTMLButtonElement;
   private profile: PlayerProfile;
   private readonly hubCoinDisplayEl: HTMLElement;
+  private adCountdownTimer: ReturnType<typeof setTimeout> | null = null;
+  private adCountdownSeconds = 5;
+  private adPendingReward = false;
 
   // Multiplayer elements
   private readonly mpConnPillEl: HTMLElement;
@@ -359,6 +367,10 @@ export class UIManager {
             <span class="hub-coin-label">Монеты:</span>
             <span id="hub-main-coin-display">${this.profile.coins}</span>
           </div>
+          <button id="btn-watch-ad" class="hub-ad-btn" title="Посмотреть рекламу за 10 монет">
+            ${ICONS.bolt}
+            <span>Реклама → +10 монет</span>
+          </button>
           <div class="hub-stack-header">
             <span class="hub-eyebrow">Выберите режим боя</span>
             <h1 class="hub-headline">Готовы к схватке?</h1>
@@ -858,6 +870,33 @@ export class UIManager {
         </div>
       </div>
 
+      <!-- AD MODAL (mandatory after victory / optional from menu) -->
+      <div id="modal-ad" class="modal-backdrop hidden">
+        <div class="glass-modal ad-sheet">
+          <div class="ad-header">
+            <div class="ad-icon">📺</div>
+            <div>
+              <div class="ad-pill">Реклама</div>
+              <h2 class="ad-title">Смотрите рекламу</h2>
+              <div id="ad-sub" class="ad-sub">Получите +10 монет за просмотр</div>
+            </div>
+          </div>
+          <div class="ad-body">
+            <div class="ad-countdown-wrap">
+              <span class="ad-countdown-label">Реклама пойдёт через</span>
+              <span id="ad-countdown" class="ad-countdown">5</span>
+            </div>
+          </div>
+          <div class="ad-actions">
+            <button id="btn-ad-close" class="btn btn-ghost ad-close-btn hidden">Закрыть</button>
+            <button id="btn-ad-reward" class="btn btn-primary btn-hero ad-reward-btn hidden">
+              ${ICONS.trophy}
+              <span>Получить +10 монет</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- SETTINGS MODAL -->
       <div id="modal-settings" class="modal-backdrop hidden">
         <div class="glass-modal settings-sheet">
@@ -968,6 +1007,11 @@ export class UIManager {
     this.settingsModalEl = this.q('#modal-settings');
     this.controlsModalEl = this.q('#modal-controls');
     this.resultsModalEl = this.q('#modal-results');
+    this.adModalEl = this.q('#modal-ad');
+    this.adCountdownEl = this.q('#ad-countdown');
+    this.adCloseBtnEl = this.q('#btn-ad-close') as HTMLButtonElement;
+    this.adRewardBtnEl = this.q('#btn-ad-reward') as HTMLButtonElement;
+    this.btnWatchAdEl = this.q('#btn-watch-ad') as HTMLButtonElement;
     this.hubCoinDisplayEl = this.q('#hub-coin-display');
 
     this.mpConnPillEl = this.q('#mp-conn-pill');
@@ -1605,6 +1649,24 @@ export class UIManager {
     });
     this.resMenuBtnEl.addEventListener('click', () => {
       this.callbacks.onReturnMainMenu();
+    });
+
+    // Watch ad button (menu)
+    this.btnWatchAdEl.addEventListener('click', () => {
+      this.showAd(false);
+    });
+
+    // Ad modal close
+    this.adCloseBtnEl.addEventListener('click', () => {
+      this.hideAd();
+    });
+    this.adRewardBtnEl.addEventListener('click', () => {
+      this.claimAdReward();
+    });
+    this.adModalEl.addEventListener('click', (ev) => {
+      if (ev.target === this.adModalEl) {
+        this.hideAd();
+      }
     });
 
     // Settings controls
@@ -2337,7 +2399,7 @@ export class UIManager {
   private renderResults(
     match: MatchManager,
     isHost: boolean,
-    rewards?: { coins: number; breakdown: { victory: number } } | null
+    rewards?: { coins: number; breakdown: { place: number }; place: number } | null
   ): void {
     const standings = match.getStandings();
     const winner = standings[0];
@@ -2347,10 +2409,12 @@ export class UIManager {
     const sub = this.q('#res-sub');
     const badge = this.q('#res-badge');
 
-    // Inject coin payout row into results sub-text
+    // Inject coin payout row into results sub-text based on place
     if (rewards && rewards.coins > 0) {
       sub.textContent =
-        `Заработано монет: ${rewards.coins} (победа: ${rewards.coins}). ` +
+        `Заработано монет: ${rewards.coins} (${
+          rewards.place === 1 ? 'победа' : rewards.place === 2 ? '2-е место' : rewards.place === 3 ? '3-е место' : 'место'
+        }: ${rewards.coins}). ` +
         (match.finishReason === 'time_up'
           ? 'Время раунда вышло — чемпион определён по запасу здоровья и урону.'
           : `Длительность боя: ${Math.round(match.matchElapsed)} сек.${
@@ -2373,6 +2437,9 @@ export class UIManager {
       badge.textContent = 'Последний выживший';
       headline.textContent = 'Победа на арене!';
       headline.classList.add('victory-gold');
+      // Show mandatory ad after victory
+      this.adPendingReward = true;
+      this.showAd(true);
     } else {
       badge.textContent = 'Матч завершён';
       headline.textContent = winner
@@ -2380,15 +2447,6 @@ export class UIManager {
         : 'Ничья на арене';
       headline.classList.remove('victory-gold');
     }
-
-    sub.textContent =
-      match.finishReason === 'time_up'
-        ? 'Время раунда вышло — чемпион определён по запасу здоровья и урону.'
-        : `Длительность боя: ${Math.round(match.matchElapsed)} сек.${
-            match.isOnlineMatch && this.mpStatus === 'connected'
-              ? ' · Комната активна'
-              : ''
-          }`;
 
     if (match.isOnlineMatch && this.mpRoom) {
       this.resMenuBtnEl.textContent = 'Покинуть комнату';
@@ -2436,6 +2494,52 @@ export class UIManager {
         `;
       })
       .join('');
+  }
+
+  /** Show ad modal. mandatory = cannot skip until countdown finishes */
+  private showAd(mandatory: boolean): void {
+    this.adModalEl.classList.remove('hidden');
+    this.adCountdownSeconds = 5;
+    this.adCountdownEl.textContent = String(this.adCountdownSeconds);
+    this.adRewardBtnEl.classList.add('hidden');
+    this.adCloseBtnEl.classList.toggle('hidden', mandatory);
+
+    if (this.adCountdownTimer) {
+      clearInterval(this.adCountdownTimer);
+    }
+    this.adCountdownTimer = setInterval(() => {
+      this.adCountdownSeconds -= 1;
+      if (this.adCountdownSeconds <= 0) {
+        clearInterval(this.adCountdownTimer!);
+        this.adCountdownTimer = null;
+        this.adCountdownEl.textContent = '0';
+        this.adRewardBtnEl.classList.remove('hidden');
+        this.adCloseBtnEl.classList.remove('hidden');
+      } else {
+        this.adCountdownEl.textContent = String(this.adCountdownSeconds);
+      }
+    }, 1000);
+  }
+
+  private hideAd(): void {
+    this.adModalEl.classList.add('hidden');
+    if (this.adCountdownTimer) {
+      clearInterval(this.adCountdownTimer);
+      this.adCountdownTimer = null;
+    }
+    // If ad was pending after victory and user closed without claiming, still go to menu
+    if (this.adPendingReward) {
+      this.adPendingReward = false;
+      this.callbacks.onReturnMainMenu();
+    }
+  }
+
+  private claimAdReward(): void {
+    this.profile = addCoins(this.profile, AD_COIN_REWARD);
+    saveProfile(this.profile);
+    this.hubCoinDisplayEl.textContent = String(this.profile.coins);
+    this.q('#hub-main-coin-display').textContent = String(this.profile.coins);
+    this.hideAd();
   }
 
   private q(selector: string): HTMLElement {

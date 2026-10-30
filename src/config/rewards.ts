@@ -35,13 +35,31 @@ export const RARITY_COLOR: Record<KnightRarity, string> = {
 export interface MatchRewards {
   coins: number;
   breakdown: {
-    victory: number;
+    place: number;
   };
+  place: number;
 }
 
-export const COIN_REWARDS = {
-  victory: 30, // максимум 30 монет за победу
+/**
+ * Coin rewards by final place in the match.
+ * Victory (1st place) = 30 coins max, lower places get less.
+ */
+export const PLACE_COIN_REWARDS: Record<number, number> = {
+  1: 30, // Победа — максимум
+  2: 20, // Второе место
+  3: 10, // Третье место
 };
+
+// Default: 0 coins for places 4+
+export function coinsForPlace(place: number): number {
+  return PLACE_COIN_REWARDS[place] ?? 0;
+}
+
+export interface AdRewards {
+  coins: number;
+}
+
+export const AD_COIN_REWARD = 10; // 10 монет за просмотр рекламы
 
 export function formatCoins(amount: number): string {
   return `${amount} монет`;

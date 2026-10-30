@@ -3650,7 +3650,7 @@ body {
 }
 
 /* =========================================================================
-   COIN BALANCE & HERO PRICES — Main Hub (no clip-path)
+   COIN BALANCE & HERO PRICES — Main Hub
    ========================================================================= */
 
 /* Coin balance on main hub left side */
@@ -3719,4 +3719,145 @@ body {
 /* Play button — buy state */
 .hub-play-cta.buy-state .hub-play-title {
   color: #fbbf24;
+}
+
+/* =========================================================================
+   AD SYSTEM — Watch ad for coins
+   ========================================================================= */
+
+/* Watch ad button on main hub */
+.hub-ad-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 10px;
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.hub-ad-btn:hover {
+  background: rgba(251, 191, 36, 0.3);
+  border-color: #fbbf24;
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.35);
+}
+.hub-ad-btn:active {
+  transform: translateY(-1px);
+}
+
+/* Ad Modal */
+.ad-sheet {
+  max-width: 420px;
+  width: 85vw;
+  display: flex;
+  flex-direction: column;
+}
+.ad-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(148, 184, 232, 0.12);
+}
+.ad-icon {
+  font-size: 32px;
+}
+.ad-pill {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #38bdf8;
+}
+.ad-title {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  margin: 4px 0 0 0;
+  color: #ffffff;
+}
+.ad-sub {
+  font-size: 13px;
+  color: rgba(226, 238, 255, 0.7);
+  margin-top: 4px;
+}
+.ad-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+}
+.ad-countdown-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.ad-countdown-label {
+  font-size: 12px;
+  color: rgba(226, 238, 255, 0.6);
+}
+.ad-countdown {
+  font-family: 'Cinzel', serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+.ad-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(148, 184, 232, 0.12);
+  background: rgba(15, 25, 44, 0.4);
+}
+.ad-close-btn {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 184, 232, 0.2);
+  background: rgba(15, 25, 44, 0.3);
+  color: rgba(226, 238, 255, 0.6);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.ad-close-btn:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #ffffff;
+}
+.ad-reward-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(37, 99, 235, 0.4);
+  color: #3b82f6;
+  font-family: 'Cinzel', serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.ad-reward-btn:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.3);
+  color: #60a5fa;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.35);
+}
+.ad-reward-btn.hidden {
+  display: none;
+}
+.ad-close-btn.hidden {
+  display: none;
+}
+#modal-ad {
+  z-index: 70;
 }

@@ -1,7 +1,7 @@
 import { ARENA_CONFIG, ArenaConfig } from '../config/arenaConfig';
 import { CLASS_ORDER, KnightClassId } from '../config/classes';
 import {
-  COIN_REWARDS,
+  PLACE_COIN_REWARDS,
   MatchRewards,
 } from '../config/rewards';
 import { BotController } from './BotAI';
@@ -586,15 +586,21 @@ export class MatchManager {
 
   /**
    * Calculate coin rewards for the local player at match end.
-   * Victory only — maximum 30 coins per match.
+   * Coins by final place: 1st = 30, 2nd = 20, 3rd = 10, 4+ = 0.
    */
   public getMatchRewards(): MatchRewards {
-    const won = this.winnerId === this.localPlayerId;
-    const victory = won ? COIN_REWARDS.victory : 0;
+    const standings = this.getStandings();
+    const player = this.getPlayer();
+    const playerId = player?.id ?? this.localPlayerId;
+
+    const standing = standings.find((s) => s.fighterId === playerId);
+    const place = standing?.place ?? standings.length;
+    const coins = PLACE_COIN_REWARDS[place] ?? 0;
 
     return {
-      coins: victory,
-      breakdown: { victory },
+      coins,
+      breakdown: { place },
+      place,
     };
   }
 }
