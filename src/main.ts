@@ -69,7 +69,20 @@ class KnightsGameApp {
   private lastFrameTime = performance.now();
   private lastCountdownWhole = -1;
 
+  // Яндекс Игры SDK (доступен только на plataforma Яндекс Игр, локально — undefined)
+  private yandexSdk: any = null;
+
   constructor() {
+    // Инициализация Яндекс Игры SDK (не блокирует запуск при локальной разработке)
+    const yaSdk = (window as unknown as { YaGamesSDK?: { init: () => Promise<any> } }).YaGamesSDK;
+    if (yaSdk?.init) {
+      yaSdk.init().then((sdk: any) => {
+        this.yandexSdk = sdk;
+      }).catch(() => {
+        // SDK недоступен — продолжаем без Яндекс Игр
+      });
+    }
+
     this.match.selectedPlayerClass = this.profile.activeKnight;
     const canvasRoot = document.getElementById('game-canvas-root')!;
     this.canvasRoot = canvasRoot;
@@ -303,6 +316,10 @@ class KnightsGameApp {
     // Initialize 3D WorldRenderer on next tick after Main Menu UI is already interactive on screen
     window.setTimeout(() => {
       this.initWorldRenderer(canvasRoot);
+      // Сообщаем Яндекс Играм, что игра готова к работе
+      if (this.yandexSdk?.ready) {
+        try { this.yandexSdk.ready(); } catch (_) {}
+      }
     }, 16);
 
     requestAnimationFrame(this.loop);
