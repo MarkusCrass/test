@@ -13,10 +13,10 @@ const HEROES: Record<KnightClassId, { role: Texts; summary: Texts }> = {
       "ar": "فارس متوازن"
     },
     "summary": {
-      "en": "A versatile swordsman who charges, heals and strikes from above.",
-      "tr": "Atılır, iyileşir ve yukarıdan saldırır.",
-      "es": "Espadachín versátil que embiste, se cura y golpea desde arriba.",
-      "ar": "مقاتل متعدد المهارات يندفع ويتعافى ويضرب من الأعلى."
+      "en": "A balanced swordsman in steel armor and a cape, combining swift lunges, combat healing and a crushing overhead leap.",
+      "tr": "Çelik zırhlı ve pelerinli dengeli kılıç ustası; hızlı hamleleri, savaşta iyileşmeyi ve yukarıdan yıkıcı sıçrayışı birleştirir.",
+      "es": "Espadachín equilibrado con armadura de acero y capa, que combina estocadas rápidas, curación en combate y un salto aplastante.",
+      "ar": "مبارز متوازن بدرع فولاذي وعباءة يجمع بين الطعنات السريعة والعلاج القتالي والقفزة الساحقة من الأعلى."
     }
   },
   "dual": {
@@ -27,10 +27,10 @@ const HEROES: Record<KnightClassId, { role: Texts; summary: Texts }> = {
       "ar": "قاتل سريع"
     },
     "summary": {
-      "en": "A fast dual-blade fighter who spins, throws daggers and dashes through enemies.",
-      "tr": "Dönen, hançer fırlatan ve düşmanların arasından atılan çift kılıçlı savaşçı.",
-      "es": "Luchador rápido de dos espadas que gira, lanza dagas y atraviesa enemigos.",
-      "ar": "مقاتل سريع بسيفين يدور ويرمي الخناجر ويندفع عبر الأعداء."
+      "en": "A swift hooded fighter with two blades who attacks in a whirlwind, throws daggers and escapes with a shadow slash.",
+      "tr": "İki kılıçlı çevik, kapüşonlu savaşçı; kasırgayla saldırır, hançer fırlatır ve gölge kesişiyle uzaklaşır.",
+      "es": "Ágil luchador encapuchado con dos espadas que ataca como un torbellino, lanza dagas y escapa con un corte sombrío.",
+      "ar": "مقاتل سريع مقنّع بسيفين يهاجم بدوامة ويرمي الخناجر وينسحب بضربة الظل."
     }
   },
   "spear": {
@@ -41,10 +41,10 @@ const HEROES: Record<KnightClassId, { role: Texts; summary: Texts }> = {
       "ar": "التحكم بالمسافة"
     },
     "summary": {
-      "en": "A polearm master who keeps enemies at range and throws javelins.",
-      "tr": "Düşmanları uzakta tutan ve cirit fırlatan sırıklı silah ustası.",
-      "es": "Maestro del arma de asta que mantiene la distancia y lanza jabalinas.",
-      "ar": "محترف رمح يُبقي الأعداء بعيدًا ويرمي الحراب."
+      "en": "A master of the long polearm who keeps enemies at spearpoint, deflects attacks and throws a javelin.",
+      "tr": "Uzun sırıklı silah ustası; düşmanları mızrak ucunda tutar, saldırıları savuşturur ve cirit fırlatır.",
+      "es": "Maestro del arma de asta que mantiene a raya a los enemigos, desvía ataques y lanza jabalinas.",
+      "ar": "محترف سلاح طويل يُبقي الأعداء عند رأس رمحه ويصد الهجمات ويرمي الحربة."
     }
   },
   "hammer": {
@@ -55,10 +55,10 @@ const HEROES: Record<KnightClassId, { role: Texts; summary: Texts }> = {
       "ar": "مدافع ثقيل"
     },
     "summary": {
-      "en": "A shield and hammer guardian who charges, shakes the ground and reinforces armor.",
-      "tr": "Kalkanı ve çekiciyle hücum eden, yeri sarsan ve zırhını güçlendiren muhafız.",
-      "es": "Guardián con escudo y martillo que embiste, sacude el suelo y refuerza su armadura.",
-      "ar": "حارس بدرع ومطرقة يندفع ويهز الأرض ويقوّي درعه."
+      "en": "A massive armored guardian with a tower shield and war hammer who rams enemies, shakes the ground and hardens armor.",
+      "tr": "Kule kalkanlı ve savaş çekiçli iri zırhlı muhafız; düşmanlara çarpar, yeri sarsar ve zırhını güçlendirir.",
+      "es": "Guardián corpulento con escudo torre y martillo de guerra que embiste, sacude el suelo y refuerza su armadura.",
+      "ar": "حارس ضخم مدرع بدرع كبير ومطرقة حرب يندفع نحو الأعداء ويهز الأرض ويقوي درعه."
     }
   },
   "barbarian": {
@@ -69,10 +69,10 @@ const HEROES: Record<KnightClassId, { role: Texts; summary: Texts }> = {
       "ar": "مهاجم بفأس ذات يدين"
     },
     "summary": {
-      "en": "A fierce warrior who leaps into battle, rages and throws axes.",
-      "tr": "Savaşa sıçrayan, öfkelenen ve balta fırlatan vahşi savaşçı.",
-      "es": "Guerrero feroz que salta al combate, entra en furia y lanza hachas.",
-      "ar": "محارب شرس يقفز إلى القتال ويثور غضبًا ويرمي الفؤوس."
+      "en": "A fierce northern warrior in a horned helmet wielding a two-handed axe, leaping into battle, entering a rage and throwing axes.",
+      "tr": "Boynuzlu miğferli, çift elli balta kullanan vahşi kuzeyli savaşçı; savaşa sıçrar, öfkelenir ve balta fırlatır.",
+      "es": "Feroz guerrero del norte con casco con cuernos y hacha de dos manos que salta al combate, entra en furia y lanza hachas.",
+      "ar": "محارب شمالي شرس بخوذة مقرنة وفأس ذات يدين يقفز إلى القتال ويثور غضبًا ويرمي الفؤوس."
     }
   },
   "duelist": {
@@ -83,10 +83,10 @@ const HEROES: Record<KnightClassId, { role: Texts; summary: Texts }> = {
       "ar": "خبير التصدي وسيف المبارزة"
     },
     "summary": {
-      "en": "A fencing master who punishes mistakes with parries and a powder bomb.",
-      "tr": "Savuşturma ve barut bombasıyla hataları cezalandıran eskrim ustası.",
-      "es": "Maestro de esgrima que castiga errores con paradas y una bomba de pólvora.",
-      "ar": "مبارز يعاقب الأخطاء بالتصدي وقنبلة بارود."
+      "en": "A helmetless fencing virtuoso with a blade and round buckler, punishing mistakes with perfect parries and a powder bomb.",
+      "tr": "Kılıç ve yuvarlak kalkan taşıyan miğfersiz eskrim ustası; hataları kusursuz savuşturmalar ve barut bombasıyla cezalandırır.",
+      "es": "Virtuoso de la esgrima sin casco, con espada y rodela, que castiga errores con paradas perfectas y una bomba de pólvora.",
+      "ar": "مبارز بارع بلا خوذة يحمل نصلًا وترسًا دائريًا ويعاقب الأخطاء بتصدٍ متقن وقنبلة بارود."
     }
   },
   "skeleton_knight": {
@@ -97,10 +97,10 @@ const HEROES: Record<KnightClassId, { role: Texts; summary: Texts }> = {
       "ar": "فارس مدرع يمتص الحياة"
     },
     "summary": {
-      "en": "An undead knight who steals health and advances behind a shield.",
-      "tr": "Can çalan ve kalkanıyla ilerleyen ölümsüz şövalye.",
-      "es": "Caballero no muerto que roba vida y avanza tras su escudo.",
-      "ar": "فارس ميت يمتص الصحة ويتقدم خلف درعه."
+      "en": "An ancient undead knight in a horned helmet with a jagged blade and large shield, stealing health and pressing relentlessly.",
+      "tr": "Boynuzlu miğferli, tırtıklı kılıç ve büyük kalkan taşıyan kadim ölümsüz şövalye; can çalar ve amansızca saldırır.",
+      "es": "Antiguo caballero no muerto con casco con cuernos, hoja dentada y gran escudo que roba vida y presiona sin descanso.",
+      "ar": "فارس قديم من الموتى بخوذة مقرنة ونصل مسنن ودرع كبير يمتص الصحة ويضغط بلا هوادة."
     }
   },
   "skeleton_reaper": {
@@ -111,10 +111,10 @@ const HEROES: Record<KnightClassId, { role: Texts; summary: Texts }> = {
       "ar": "قاتل يمتص الحياة"
     },
     "summary": {
-      "en": "A hooded reaper who spins, steals health in leaps and throws bone shards.",
-      "tr": "Dönen, sıçrayarak can çalan ve kemik parçaları fırlatan kapüşonlu azrail.",
-      "es": "Segador encapuchado que gira, roba vida al saltar y lanza fragmentos de hueso.",
-      "ar": "حاصد مقنّع يدور ويمتص الصحة بالقفز ويرمي شظايا العظام."
+      "en": "An elusive hooded reaper with two jagged blades who spins through enemies, steals health in a leap and throws bone shards.",
+      "tr": "İki tırtıklı bıçak taşıyan yakalanması güç kapüşonlu azrail; döner, sıçrayışta can çalar ve kemik parçaları fırlatır.",
+      "es": "Escurridizo segador encapuchado con dos hojas dentadas que gira, roba vida al saltar y lanza fragmentos de hueso.",
+      "ar": "حاصد مقنّع مراوغ بنصلين مسننين يدور ويمتص الصحة بالقفز ويرمي شظايا العظام."
     }
   },
   "skeleton_berserker": {
@@ -125,10 +125,10 @@ const HEROES: Record<KnightClassId, { role: Texts; summary: Texts }> = {
       "ar": "مقاتل بالفأس والدرع"
     },
     "summary": {
-      "en": "A risen gladiator who breaks guards, bashes with a shield and heals in battle.",
-      "tr": "Savunmayı kıran, kalkanla vuran ve savaşta iyileşen dirilmiş gladyatör.",
-      "es": "Gladiador resucitado que rompe defensas, golpea con el escudo y se cura.",
-      "ar": "مصارع عائد يكسر الدفاع ويضرب بالدرع ويتعافى أثناء القتال."
+      "en": "A risen arena champion with a battle axe and spiked shield who breaks defenses from above, shield-bashes and heals in combat.",
+      "tr": "Savaş baltası ve dikenli kalkan taşıyan dirilmiş arena şampiyonu; yukarıdan savunmayı kırar, kalkanla vurur ve iyileşir.",
+      "es": "Campeón resucitado con hacha y escudo espinoso que rompe defensas desde arriba, golpea con el escudo y se cura en combate.",
+      "ar": "بطل ساحة عائد بفأس قتال ودرع شائك يكسر الدفاع من الأعلى ويضرب بالدرع ويتعافى أثناء القتال."
     }
   }
 };
