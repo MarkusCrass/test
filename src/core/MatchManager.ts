@@ -1,9 +1,6 @@
 import { ARENA_CONFIG, ArenaConfig } from '../config/arenaConfig';
 import { CLASS_ORDER, KnightClassId } from '../config/classes';
-import {
-  PLACE_COIN_REWARDS,
-  MatchRewards,
-} from '../config/rewards';
+import { MatchRewards, coinsForPlace } from '../config/rewards';
 import { BotController } from './BotAI';
 import { CharacterBody } from './CharacterBody';
 import { CombatEvent, CombatSystem } from './CombatSystem';
@@ -591,14 +588,14 @@ export class MatchManager {
   public getMatchRewards(): MatchRewards {
     const standings = this.getStandings();
     const player = this.getPlayer();
+    // Fall back to localPlayerId if getPlayer() returns null (e.g. mid-match disconnect)
     const playerId = player?.id ?? this.localPlayerId;
 
     const standing = standings.find((s) => s.fighterId === playerId);
     const place = standing?.place ?? standings.length;
-    const coins = PLACE_COIN_REWARDS[place] ?? 0;
 
     return {
-      coins,
+      coins: coinsForPlace(place),
       breakdown: { place },
       place,
     };

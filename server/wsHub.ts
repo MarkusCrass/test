@@ -20,6 +20,16 @@ const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const SIM_DT = 1 / 60;
 const HTTP_SESSION_TIMEOUT_MS = 35_000;
 const MAX_HTTP_OUTBOX = 56;
+const BOT_ROOM_INTERVAL_MS = 45_000; // Create a bot room every 45s
+const MAX_BOT_ROOMS = 3; // Keep up to 3 bot rooms in the lobby
+const BOT_HOST_NAMES = [
+  'Бот-хост Арес',
+  'Бот-хост Афина',
+  'Бот-хост Аполлон',
+  'Бот-хост Артемида',
+  'Бот-хост Гермес',
+  'Бот-хост Афродита',
+];
 
 interface ClientSession {
   clientId: string;
@@ -115,6 +125,7 @@ export class MultiplayerHub {
   private nextClientNum = 1;
   private simLoopTimer: ReturnType<typeof setInterval> | null = null;
   private pruneTimer: ReturnType<typeof setInterval> | null = null;
+  private botRoomTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.wss = new WebSocketServer({ noServer: true });
@@ -124,6 +135,11 @@ export class MultiplayerHub {
       4000
     );
     this.pruneTimer.unref?.();
+    this.botRoomTimer = setInterval(
+      () => this.maybeCreateBotRoom(),
+      BOT_ROOM_INTERVAL_MS
+    );
+    this.botRoomTimer.unref?.();
   }
 
   public handleUpgrade(
@@ -619,6 +635,52 @@ export class MultiplayerHub {
     return `R${Math.floor(100 + Math.random() * 900)}`;
   }
 
+  /** Periodically create bot-hosted public rooms so players always have something to join. */
+  private maybeCreateBotRoom(): void {
+    const publicRooms = [...this.rooms.values()].filter(
+      (r) => r.isPublic && r.phase === 'lobby' && r.hostClientId.startsWith('c_bot_')
+    );
+    if (publicRooms.length >= MAX_BOT_ROOMS) return;
+
+    const botIndex = publicRooms.length;
+    const hostName = BOT_HOST_NAMES[botIndex % BOT_HOST_NAMES.length];
+    const host = this.createBotSession(hostName);
+    const room = this.createRoomInstance(host, true, true);
+
+    console.log(
+      `[MP Hub] Bot room ${room.roomCode} created by ${hostName}`
+    );
+    this.broadcastPublicRoomsToLobbyBrowsers();
+
+    // Auto-start the bot room match after 10 seconds in lobby
+    setTimeout(() => {
+      const r = this.rooms.get(room.roomCode);
+      if (r && r.phase === 'lobby') {
+        this.launchRoomMatch(r);
+      }
+    }, 10_000).unref?.();
+  }
+
+  private createBotSession(name: string): ClientSession {
+    const num = this.nextClientNum++;
+    const clientId = `c_bot_${num}`;
+    const session: ClientSession = {
+      clientId,
+      transport: 'http',
+      ws: null,
+      httpOutbox: [],
+      lastSeenAt: Date.now(),
+      name,
+      classId: 'sword',
+      ready: true,
+      pingMs: 10,
+      roomCode: null,
+      fighterId: `bot_${num}`,
+    };
+    this.clients.set(clientId, session);
+    return session;
+  }
+
   private leaveCurrentRoom(
     session: ClientSession,
     notifyCaller: boolean
@@ -642,8 +704,14 @@ export class MultiplayerHub {
 
     if (room.players.length === 0) {
       this.rooms.delete(code);
+      // Clean up bot sessions from this room
+      room.players.forEach((p) => {
+        if (p.clientId.startsWith('c_bot_')) {
+          this.clients.delete(p.clientId);
+        }
+      });
       this.ensureSimLoopState();
-      this.broadcastPublicRoomsToLobbyBrowsers();
+        this.broadcastPublicRoomsToLobbyBrowsers();
       return;
     }
 

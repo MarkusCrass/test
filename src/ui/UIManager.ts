@@ -1384,6 +1384,7 @@ export class UIManager {
           this.profile = addCoins(this.profile, rewards.coins);
           saveProfile(this.profile);
           this.hubCoinDisplayEl.textContent = String(this.profile.coins);
+          this.q('#hub-main-coin-display').textContent = String(this.profile.coins);
         }
         this.renderResults(match, isHost, rewards);
       }
