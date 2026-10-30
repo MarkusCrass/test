@@ -122,10 +122,20 @@ jobs:
 
       - name: Check public relay health and CORS
         run: |
-          if curl -sS --max-time 15 -D /tmp/relay-headers -o /tmp/relay-body -H 'Origin: https://yandex.ru' 'https://igra.ezekie6n.beget.tech/api/mp.php?action=health' \
-             && grep -q '"ok":true' /tmp/relay-body \
-             && grep -qi 'access-control-allow-origin: \*' /tmp/relay-headers; then
-            echo '::notice::Public multiplayer relay responded with JSON and permissive CORS.'
+          status=$(curl -sS --max-time 15 -D /tmp/relay-headers -o /tmp/relay-body -w '%{http_code}' -H 'Origin: https://yandex.ru' 'https://igra.ezekie6n.beget.tech/api/mp.php?action=health') || {
+            echo '::warning::Public relay could not be reached over HTTPS from the GitHub runner.'
+            exit 0
+          }
+          if [ "$status" != 200 ]; then
+            echo "::warning::Public relay returned HTTP $status instead of 200. Multiplayer is not verified."
+          elif ! grep -q '"ok":true' /tmp/relay-body; then
+            if grep -qi '__beget=' /tmp/relay-body; then
+              echo '::warning::Public relay returned a Beget anti-bot challenge instead of JSON. Cross-origin multiplayer will not work until the challenge is disabled for the API.'
+            else
+              echo '::warning::Public relay returned non-health content instead of expected JSON. Multiplayer is not verified.'
+            fi
+          elif ! grep -qi 'access-control-allow-origin: \*' /tmp/relay-headers; then
+            echo '::warning::Public relay responded without the required CORS header. Multiplayer is not verified.'
           else
-            echo '::warning::Public relay health/CORS could not be verified. Test it from the Yandex Games iframe before moderation.'
+            echo '::notice::Public multiplayer relay responded with JSON and CORS. Still test in the actual Yandex iframe.'
           fi
