@@ -66,6 +66,22 @@ jobs:
               --notes "Готовая сборка для \`igra.ezekie6n.beget.tech/public_html\` на хостинге Beget (включает 3D-арену, рыцарей, звуки, иконки, \`.htaccess\`, \`api/mp.php\` и автоустановщик \`deploy.php\`)."
           fi
 
+      - name: Build separate Yandex Games archive
+        run: |
+          npm run package:yandex
+          unzip -t knights-yandex-games.zip | tail -1
+          ! unzip -Z1 knights-yandex-games.zip | grep -E '(^|/)(deploy.php|mp.php|\.htaccess)$'
+
+      - name: Publish Yandex test archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view yandex-latest >/dev/null 2>&1; then
+            gh release upload yandex-latest knights-yandex-games.zip --clobber
+          else
+            gh release create yandex-latest knights-yandex-games.zip --target "${{ github.sha }}" --title "Knights — Yandex Games test archive" --notes "Test archive for Yandex Games. Configure the external relay host and validate SDK, cloud, and multiplayer in the developer console before moderation."
+          fi
+
       - name: Upload ready-to-host Beget archive artifact
         uses: actions/upload-artifact@v4
         with:
@@ -103,3 +119,13 @@ jobs:
           mirror --reverse --delete --verbose --parallel=6 --exclude-glob api/_runtime/** --exclude-glob api/_runtime dist/ ./
           bye
           EOF
+
+      - name: Check public relay health and CORS
+        run: |
+          if curl -sS --max-time 15 -D /tmp/relay-headers -o /tmp/relay-body -H 'Origin: https://yandex.ru' 'https://igra.ezekie6n.beget.tech/api/mp.php?action=health' \
+             && grep -q '"ok":true' /tmp/relay-body \
+             && grep -qi 'access-control-allow-origin: \*' /tmp/relay-headers; then
+            echo '::notice::Public multiplayer relay responded with JSON and permissive CORS.'
+          else
+            echo '::warning::Public relay health/CORS could not be verified. Test it from the Yandex Games iframe before moderation.'
+          fi

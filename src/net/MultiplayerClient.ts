@@ -526,7 +526,7 @@ export class MultiplayerClient {
 
   private async tryConnectHttpFallback(): Promise<boolean> {
     // On *.beget.tech go straight to api/mp.php first; elsewhere try REST then PHP
-    const preferPhpFirst = !this.customWsUrl && isPhpSharedHostingHostname();
+    const preferPhpFirst = (this.customWsUrl && /^https?:/i.test(this.customWsUrl)) || (!this.customWsUrl && isPhpSharedHostingHostname());
     const order: Array<'rest' | 'php'> = preferPhpFirst
       ? ['php', 'rest']
       : ['rest', 'php'];

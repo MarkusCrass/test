@@ -14,6 +14,14 @@ export interface PlayerProfile {
 }
 
 const STORAGE_KEY = 'kls_player_profile_v1';
+const profileListeners = new Set<(profile: PlayerProfile) => void>();
+let volatileProfile: PlayerProfile | null = null;
+let storageFailed = false;
+
+export function onProfileSaved(listener: (profile: PlayerProfile) => void): () => void {
+  profileListeners.add(listener);
+  return () => profileListeners.delete(listener);
+}
 
 export const DEFAULT_PROFILE: PlayerProfile = {
   coins: 100,
@@ -22,10 +30,14 @@ export const DEFAULT_PROFILE: PlayerProfile = {
   totals: { gamesPlayed: 0, wins: 0, kills: 0 },
 };
 
+function copyProfile(profile: PlayerProfile): PlayerProfile {
+  return { ...profile, unlockedKnights: [...profile.unlockedKnights], totals: { ...profile.totals } };
+}
+
 export function loadProfile(): PlayerProfile {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_PROFILE };
+    if (!raw) return storageFailed && volatileProfile ? copyProfile(volatileProfile) : copyProfile(DEFAULT_PROFILE);
     const parsed = JSON.parse(raw) as Partial<PlayerProfile>;
     const profile: PlayerProfile = {
       coins: typeof parsed.coins === 'number' ? parsed.coins : DEFAULT_PROFILE.coins,
@@ -59,15 +71,20 @@ export function loadProfile(): PlayerProfile {
     }
     return profile;
   } catch {
-    return { ...DEFAULT_PROFILE };
+    return volatileProfile ? copyProfile(volatileProfile) : copyProfile(DEFAULT_PROFILE);
   }
 }
 
 export function saveProfile(profile: PlayerProfile): void {
+  volatileProfile = copyProfile(profile);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    storageFailed = false;
   } catch {
-    // Ignore storage quota / blocked errors
+    storageFailed = true;
+  }
+  for (const listener of profileListeners) {
+    try { listener(profile); } catch (error) { console.warn('Profile save listener failed:', error); }
   }
 }
 

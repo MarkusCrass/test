@@ -27,6 +27,15 @@ describe('about and rewarded ad interface', () => {
     expect(root.querySelector('#modal-settings')?.classList.contains('hidden')).toBe(false);
     vi.unstubAllGlobals();
   });
+  it('asks which save to use when cloud and device conflict', () => {
+    const { root, ui, click } = setup();
+    const choose = vi.fn(); ui.showCloudConflict(choose);
+    expect(root.querySelector('#modal-cloud-conflict')?.classList.contains('hidden')).toBe(false);
+    click('#btn-cloud-local'); expect(choose).toHaveBeenCalledWith('local');
+    expect(root.querySelector('#modal-cloud-conflict')?.classList.contains('hidden')).toBe(true);
+    ui.showCloudConflict(choose); click('#btn-cloud-remote');
+    expect(choose.mock.calls).toEqual([['local'], ['cloud']]);
+  });
   it('does not overwrite a user nickname with a delayed platform name', () => {
     const { root, ui } = setup();
     ui.useYandexPlayerName('Platform Player');

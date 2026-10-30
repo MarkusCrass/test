@@ -31,6 +31,7 @@ import {
 import { WorldRenderer } from './render/WorldRenderer';
 import { HudReticleViewState, UIManager } from './ui/UIManager';
 import { YandexGames, type YandexLoader } from './platform/YandexGames';
+import { CloudProfile, type CloudPlayer } from './platform/CloudProfile';
 
 class KnightsGameApp {
   private settings = loadSettings();
@@ -74,15 +75,17 @@ class KnightsGameApp {
   private lastFrameTime = performance.now();
   private lastCountdownWhole = -1;
 
-  private platformPaused = false;
+  private platformPaused: boolean;
   private adPaused = false;
-  private readonly yandex = new YandexGames((paused) => {
-    this.platformPaused = paused;
-    this.syncPlatformPause();
-  });
-  private sdkInitialized: Promise<void> = Promise.resolve();
+  private windowFocused = true;
+  private readonly yandex: YandexGames;
 
-  constructor() {
+  constructor(yandex: YandexGames, platformLanguage: string | undefined, platformPaused: boolean, cloud: CloudProfile | null) {
+    this.yandex = yandex;
+    this.platformPaused = platformPaused;
+    if (platformLanguage && !hasSavedLanguage()) {
+      this.settings = { ...this.settings, language: detectYandexLanguage(platformLanguage) };
+    }
     this.match.selectedPlayerClass = this.profile.activeKnight;
     const canvasRoot = document.getElementById('game-canvas-root')!;
     this.canvasRoot = canvasRoot;
@@ -141,7 +144,7 @@ class KnightsGameApp {
         this.match.goToMultiplayerLobby();
         this.ui.updateMultiplayerRoom(room, this.net.clientId);
       },
-    });
+    }, (import.meta as unknown as { env?: { VITE_MULTIPLAYER_BASE_URL?: string } }).env?.VITE_MULTIPLAYER_BASE_URL || undefined);
 
     // Mount UI immediately so Main Menu opens in <100ms without waiting on Three.js/WebGL!
     this.ui = new UIManager(uiRoot, this.settings, {
@@ -314,15 +317,25 @@ class KnightsGameApp {
       },
     });
 
-    const loader = (window as unknown as { YaGames?: YandexLoader }).YaGames;
-    this.sdkInitialized = this.yandex.initialize(loader, (language) => {
-      if (hasSavedLanguage()) return;
-      this.settings = { ...this.settings, language: detectYandexLanguage(language) };
-      this.ui.updateSettingsExternal(this.settings);
-    });
-    void this.sdkInitialized.then(() => this.yandex.getPlayerName()).then((name) => {
+    void this.yandex.getPlayerName().then((name) => {
       if (name) this.ui.useYandexPlayerName(name);
     });
+    const showCloudConflict = () => {
+      if (!cloud) return;
+      if (this.match.state === 'Countdown' || this.match.state === 'InProgress') {
+        this.match.paused = true;
+        this.clearActionInputs();
+        this.releasePointerLock();
+      }
+      this.ui.showCloudConflict((choice) => {
+        cloud.resolveConflict(choice);
+        const profile = loadProfile();
+        this.match.selectedPlayerClass = profile.activeKnight;
+        this.world?.syncShowcaseClass(profile.activeKnight);
+      });
+    };
+    cloud?.onConflict(showCloudConflict);
+    if (cloud?.conflict) showCloudConflict();
     document.addEventListener('visibilitychange', () => this.syncPlatformPause());
     this.syncPlatformPause();
 
@@ -358,8 +371,13 @@ class KnightsGameApp {
     requestAnimationFrame(this.loop);
   }
 
+  public setPlatformPause(paused: boolean): void {
+    this.platformPaused = paused;
+    this.syncPlatformPause();
+  }
+
   private syncPlatformPause(): void {
-    const blocked = this.platformPaused || this.adPaused || document.hidden;
+    const blocked = this.platformPaused || this.adPaused || document.hidden || !this.windowFocused;
     this.sound.setMuted(blocked);
     if (blocked) {
       this.clearActionInputs();
@@ -381,7 +399,7 @@ class KnightsGameApp {
       world.applyArenaTheme(this.settings.arenaTheme);
       world.syncShowcaseClass(this.match.selectedPlayerClass);
       this.world = world;
-      void Promise.all([this.sdkInitialized, world.assetsReady]).then(() => {
+      void world.assetsReady.then(() => {
         // Wait for an interactive frame after the preload before signalling readiness.
         requestAnimationFrame(() => this.yandex.ready());
       });
@@ -702,10 +720,14 @@ class KnightsGameApp {
     });
 
     window.addEventListener('blur', () => {
+      this.windowFocused = false;
+      this.syncPlatformPause();
       this.showcaseDragging = false;
       this.clearActionInputs();
       this.syncCursorVisualClass();
     });
+
+    window.addEventListener('focus', () => { this.windowFocused = true; this.syncPlatformPause(); });
 
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) {
@@ -1034,7 +1056,7 @@ class KnightsGameApp {
     this.lastFrameTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
 
-    const blocked = this.platformPaused || this.adPaused || document.hidden;
+    const blocked = this.platformPaused || this.adPaused || document.hidden || !this.windowFocused;
     const playing = !blocked && !this.match.paused &&
       (this.match.state === 'Countdown' || this.match.state === 'InProgress');
     this.yandex.setGameplay(playing);
@@ -1135,13 +1157,36 @@ class KnightsGameApp {
   };
 }
 
-try {
-  new KnightsGameApp();
-} catch (err) {
+async function startGame(): Promise<void> {
+  let app: KnightsGameApp | undefined;
+  let platformPaused = false;
+  let platformLanguage: string | undefined;
+  const yandex = new YandexGames((paused) => {
+    platformPaused = paused;
+    app?.setPlatformPause(paused);
+  });
+  const loader = (window as unknown as { YaGames?: YandexLoader }).YaGames;
+  // Keep the game usable if a third-party SDK or account request stalls.
+  const bounded = <T>(promise: Promise<T>, fallback: T): Promise<T> => new Promise(resolve => {
+    const timeout = window.setTimeout(() => resolve(fallback), 10000);
+    promise.then(value => { clearTimeout(timeout); resolve(value); }, () => { clearTimeout(timeout); resolve(fallback); });
+  });
+  await bounded(yandex.initialize(loader, language => { platformLanguage = language; }), undefined);
+  let cloud: CloudProfile | null = null;
+  yandex.watchAccountSelection(
+    () => cloud?.pause(),
+    () => { cloud?.pause(); window.location.reload(); }
+  );
+  const player = await bounded(yandex.getPlayer(), undefined);
+  if (player?.getUniqueID && player.getData && player.setData) {
+    cloud = await CloudProfile.start(player as CloudPlayer);
+  }
+  app = new KnightsGameApp(yandex, platformLanguage, platformPaused, cloud);
+}
+
+void startGame().catch((err: unknown) => {
   console.error('Boot error:', err);
   const msg = err instanceof Error ? err.message : String(err);
-  const w = window as unknown as {
-    __reportBootIssue?: (m: string) => void;
-  };
+  const w = window as unknown as { __reportBootIssue?: (m: string) => void };
   w.__reportBootIssue?.(msg);
-}
+});

@@ -1,3 +1,5 @@
+import type { CloudPlayer } from './CloudProfile';
+
 /** Minimal surface of the official Yandex Games SDK used by the game. */
 export interface YandexSdk {
   environment?: { i18n?: { lang?: string } };
@@ -8,8 +10,8 @@ export interface YandexSdk {
   adv?: { showRewardedVideo(options: { callbacks: {
     onOpen(): void; onRewarded(): void; onClose(wasShown: boolean): void; onError(error: unknown): void;
   } }): void };
-  getPlayer?(): Promise<{ getName(): string }>;
-  on?(event: 'game_api_pause' | 'game_api_resume', callback: () => void): void;
+  getPlayer?(): Promise<Partial<CloudPlayer> & { getName(): string }>;
+  on?(event: 'game_api_pause' | 'game_api_resume' | 'ACCOUNT_SELECTION_DIALOG_OPENED' | 'ACCOUNT_SELECTION_DIALOG_CLOSED', callback: () => void): void;
 }
 export interface YandexLoader { init(): Promise<YandexSdk> }
 
@@ -19,6 +21,7 @@ export class YandexGames {
   private gameplay = false;
   private readySent = false;
   private adActive = false;
+  private playerPromise: ReturnType<NonNullable<YandexSdk['getPlayer']>> | null = null;
   constructor(private readonly setPlatformPause: (paused: boolean) => void) {}
 
   async initialize(loader: YandexLoader | undefined, onLanguage: (language: string) => void): Promise<void> {
@@ -33,11 +36,21 @@ export class YandexGames {
     } catch (error) { console.warn('Yandex Games SDK initialization failed:', error); }
   }
 
-  async getPlayerName(): Promise<string | undefined> {
+  async getPlayer(): Promise<(Partial<CloudPlayer> & { getName(): string }) | undefined> {
     try {
-      const player = await this.sdk?.getPlayer?.();
-      return player?.getName()?.trim() || undefined;
+      if (!this.sdk?.getPlayer) return undefined;
+      this.playerPromise ??= this.sdk.getPlayer();
+      return await this.playerPromise;
     } catch { return undefined; }
+  }
+
+  async getPlayerName(): Promise<string | undefined> {
+    try { return (await this.getPlayer())?.getName()?.trim() || undefined; } catch { return undefined; }
+  }
+
+  watchAccountSelection(onOpen: () => void, onClose: () => void): void {
+    this.sdk?.on?.('ACCOUNT_SELECTION_DIALOG_OPENED', onOpen);
+    this.sdk?.on?.('ACCOUNT_SELECTION_DIALOG_CLOSED', onClose);
   }
 
   ready(): void {

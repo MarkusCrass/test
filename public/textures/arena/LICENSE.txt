@@ -5,9 +5,9 @@ Open-Source PBR Arena Surface Textures — MIT & CC0 1.0
    Source: https://github.com/mrdoob/three.js/tree/dev/examples/textures
    License: MIT License (Three.js Authors)
 
-2. The previous project notice also attributed `marble_checker_diffuse.jpg` and
-   `marble_checker_normal.jpg` to Three.js, but their original source has not
-   been verified. Their license must be confirmed before distribution.
+2. Checker-stone textures (`marble_checker_diffuse.jpg`, `marble_checker_normal.jpg`)
+   Original procedural game assets, generated from mathematical functions by
+   `scripts/generate-marble.py`; no external images were used.
 
 3. KayKit Dungeon Remastered 3D Modular Floor Tiles (`floor_wood_large.gltf.glb`,
    `floor_wood_large_dark.gltf.glb`, `floor_dirt_large.gltf.glb`, `floor_tile_large.gltf.glb`)

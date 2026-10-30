@@ -987,6 +987,16 @@ export class UIManager {
           </div>
         </div>
       </div>
+      <div id="modal-cloud-conflict" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="cloud-conflict-title">
+        <div class="glass-modal about-sheet">
+          <h2 id="cloud-conflict-title" class="modal-sheet-title" data-i18n="cloudConflictTitle">${this.tl('cloudConflictTitle')}</h2>
+          <p class="about-intro" data-i18n="cloudConflictText">${this.tl('cloudConflictText')}</p>
+          <div class="modal-bottom-row" style="gap: 12px; flex-wrap: wrap;">
+            <button id="btn-cloud-local" class="btn btn-ghost" data-i18n="cloudChooseLocal">${this.tl('cloudChooseLocal')}</button>
+            <button id="btn-cloud-remote" class="btn btn-primary" data-i18n="cloudChooseRemote">${this.tl('cloudChooseRemote')}</button>
+          </div>
+        </div>
+      </div>
       <div id="modal-about" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <div class="glass-modal about-sheet">
           <div class="modal-top-row">
@@ -1119,6 +1129,23 @@ export class UIManager {
     this.updateMultiplayerStatus(this.mpStatus, this.mpPingMs);
     this.syncSettingsControls();
     this.applyTranslations();
+  }
+
+  public showCloudConflict(onChoice: (choice: 'local' | 'cloud') => void): void {
+    const modal = this.q('#modal-cloud-conflict');
+    modal.classList.remove('hidden');
+    const choose = (choice: 'local' | 'cloud') => {
+      onChoice(choice);
+      this.profile = loadProfile();
+      this.hubCoinDisplayEl.textContent = String(this.profile.coins);
+      this.q('#hub-main-coin-display').textContent = String(this.profile.coins);
+      this.renderSelectionClass(this.profile.activeKnight, false);
+      this.renderHubQuickHeroStrip();
+      this.updatePlayButtonSubtitle();
+      modal.classList.add('hidden');
+    };
+    (this.q('#btn-cloud-local') as HTMLButtonElement).onclick = () => choose('local');
+    (this.q('#btn-cloud-remote') as HTMLButtonElement).onclick = () => choose('cloud');
   }
 
   /** Only use the platform name when the player has not selected their own. */

@@ -36,10 +36,11 @@ function knightsMultiplayerPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: './',
   plugins: [knightsMultiplayerPlugin()],
   build: {
+    outDir: mode === 'yandex' ? 'dist-yandex' : 'dist',
     modulePreload: false,
     cssCodeSplit: false,
     rollupOptions: {
@@ -62,4 +63,4 @@ export default defineConfig({
     port: 4173,
     allowedHosts: true,
   },
-});
+}));

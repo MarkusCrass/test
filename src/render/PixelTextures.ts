@@ -94,7 +94,7 @@ export class MaterialLibrary {
     this.contactShadowTex = this.createContactShadowTexture(128);
     this.crackDecalTex = this.createGroundCrackTexture(128);
 
-    // 6. Real Open-Source PBR Hardwood Plank & Royal Marble Textures (with headless fallback)
+    // 6. PBR hardwood and original procedural checker-stone textures (with headless fallback)
     this.pbrHardwoodDiffuse = this.loadSeamlessArenaTex(
       'textures/arena/hardwood2_diffuse.jpg',
       true,

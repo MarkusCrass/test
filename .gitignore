@@ -6,3 +6,7 @@ coverage
 *.log
 public/api/_runtime
 public/api/.mp_state.json
+
+# Separate Yandex Games packaging output
+dist-yandex
+knights-yandex-games.zip
