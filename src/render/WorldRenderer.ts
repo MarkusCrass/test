@@ -24,6 +24,7 @@ import { kayKitAssets } from './KayKitAssetCache';
 import { KnightVisualRig } from './KnightMesh';
 import { MaterialLibrary } from './PixelTextures';
 import { SkyAndAtmosphere } from './SkyAndAtmosphere';
+import type { LoadingStage } from '../ui/LoadingScreen';
 
 /** Reduce the 3D buffer on Fast without changing HUD size or camera aspect. */
 export function getGraphicsPixelRatio(
@@ -127,7 +128,8 @@ export class WorldRenderer {
 
   constructor(
     container: HTMLElement,
-    initialTheme: ArenaThemeId = 'oak_tournament'
+    initialTheme: ArenaThemeId = 'oak_tournament',
+    onLoadingStage?: (stage: LoadingStage) => void
   ) {
     let glRenderer: THREE.WebGLRenderer;
     try {
@@ -186,15 +188,17 @@ export class WorldRenderer {
     this.rebuildPostProcessing(1, 'ultra');
 
     // Shared promises also allow the platform to be notified only after assets load.
-    this.assetsReady = new Promise<void>((resolve) => {
-      window.setTimeout(() => {
-        void kayKitAssets.preload().catch((err) => console.error('KayKit character preload error:', err))
-          .then(() => Promise.all([
-            dungeonAssets.preload().catch((err) => console.error('KayKit dungeon preload error:', err)),
-            arenaProps.preload().catch((err) => console.error('Arena props preload error:', err)),
-          ])).then(() => resolve());
-      }, 180);
-    });
+    this.assetsReady = new Promise<void>(resolve => window.setTimeout(resolve, 180))
+      .then(async () => {
+        onLoadingStage?.('characters');
+        await kayKitAssets.preload().catch(err => console.error('KayKit character preload error:', err));
+        onLoadingStage?.('arena');
+        await Promise.all([
+          dungeonAssets.preload().catch(err => console.error('KayKit dungeon preload error:', err)),
+          arenaProps.preload().catch(err => console.error('Arena props preload error:', err)),
+        ]);
+        onLoadingStage?.('finishing');
+      });
   }
 
   private setupLighting(sunPos: THREE.Vector3): void {

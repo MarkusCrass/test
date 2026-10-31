@@ -109,12 +109,14 @@ export function isValidArenaTheme(v: unknown): v is ArenaThemeId {
 }
 
 export function loadSettings(): GameSettings {
+  const crazyDefault = import.meta.env.VITE_PLATFORM === 'crazygames';
+  const defaultLanguage = crazyDefault ? 'en' : detectLanguage(typeof navigator === 'undefined' ? undefined : navigator.language);
   try {
     if (typeof localStorage === 'undefined') {
-      return { ...DEFAULT_SETTINGS };
+      return { ...DEFAULT_SETTINGS, language: defaultLanguage };
     }
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS, language: detectLanguage(typeof navigator === 'undefined' ? undefined : navigator.language) };
+    if (!raw) return { ...DEFAULT_SETTINGS, language: defaultLanguage };
     const parsed = JSON.parse(raw) as Partial<GameSettings>;
     const q = parsed.graphicsQuality;
     return {
@@ -140,10 +142,10 @@ export function loadSettings(): GameSettings {
       arenaTheme: isValidArenaTheme(parsed.arenaTheme)
         ? parsed.arenaTheme
         : 'oak_tournament',
-      language: isLanguage(parsed.language) ? parsed.language : detectLanguage(typeof navigator === 'undefined' ? undefined : navigator.language),
+      language: crazyDefault && !hasSavedLanguage() ? 'en' : isLanguage(parsed.language) ? parsed.language : defaultLanguage,
     };
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, language: defaultLanguage };
   }
 }
 

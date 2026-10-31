@@ -9,6 +9,7 @@ import '@fontsource/inter/latin-800.css';
 import '@fontsource/inter/latin-ext-600.css';
 import '@fontsource/inter/latin-ext-800.css';
 import './style.css';
+import { DefaultLoadingManager } from 'three';
 import { KnightClassId } from './config/classes';
 import { hasSavedLanguage, loadSettings, saveSettings } from './config/settings';
 import { detectYandexLanguage } from './config/locales';
@@ -30,6 +31,8 @@ import {
 } from './render/CameraRig';
 import { WorldRenderer } from './render/WorldRenderer';
 import { HudReticleViewState, UIManager } from './ui/UIManager';
+import { LoadingScreen } from './ui/LoadingScreen';
+import { LoadingTracker } from './render/LoadingTracker';
 import { YandexGames, type YandexLoader } from './platform/YandexGames';
 import { CrazyGames, findCrazySdk } from './platform/CrazyGames';
 import type { GamePlatform } from './platform/GamePlatform';
@@ -82,13 +85,15 @@ class KnightsGameApp {
   private windowFocused = true;
   private readonly platform: GamePlatform;
   private readonly isCrazyGames = import.meta.env.VITE_PLATFORM === 'crazygames';
+  private loading = true;
 
-  constructor(platform: GamePlatform, platformLanguage: string | undefined, platformPaused: boolean, cloud: CloudProfile | null) {
+  constructor(platform: GamePlatform, platformLanguage: string | undefined, platformPaused: boolean, cloud: CloudProfile | null, private readonly loadingScreen: LoadingScreen) {
     this.platform = platform;
     this.platformPaused = platformPaused;
     if (platformLanguage && !hasSavedLanguage()) {
       this.settings = { ...this.settings, language: detectYandexLanguage(platformLanguage) };
     }
+    this.loadingScreen.setLanguage(this.settings.language);
     this.match.selectedPlayerClass = this.profile.activeKnight;
     const canvasRoot = document.getElementById('game-canvas-root')!;
     this.canvasRoot = canvasRoot;
@@ -345,17 +350,7 @@ class KnightsGameApp {
     this.setupGlobalInputListeners();
     this.ui.update(this.match, [], false);
 
-    (window as unknown as { __knightsBooted?: boolean }).__knightsBooted = true;
-    if (
-      location.hostname === 'localhost' ||
-      location.hostname === '127.0.0.1' ||
-      location.hostname.endsWith('.e2b.app') ||
-      location.hostname.endsWith('.arena.site')
-    ) {
-      fetch('/api/client-ready', { method: 'POST' }).catch(() => {});
-    }
-
-    // Initialize 3D WorldRenderer on next tick after Main Menu UI is already interactive on screen
+    // Create the renderer while the loading overlay blocks interaction.
     window.setTimeout(() => {
       this.initWorldRenderer(canvasRoot);
     }, 16);
@@ -394,30 +389,58 @@ class KnightsGameApp {
   }
 
   private initWorldRenderer(canvasRoot: HTMLElement): void {
+    const tracker = new LoadingTracker(DefaultLoadingManager);
     try {
-      const world = new WorldRenderer(canvasRoot, this.settings.arenaTheme);
-      world.applyGraphicsConfig(
-        this.settings.pixelScale,
-        this.settings.graphicsQuality
-      );
+      const world = new WorldRenderer(canvasRoot, this.settings.arenaTheme, stage => this.loadingScreen.setStage(stage));
+      world.applyGraphicsConfig(this.settings.pixelScale, this.settings.graphicsQuality);
       world.applyArenaTheme(this.settings.arenaTheme);
       world.syncShowcaseClass(this.match.selectedPlayerClass);
       this.world = world;
-      void world.assetsReady.then(() => {
-        // Wait for an interactive frame after the preload before signalling readiness.
-        requestAnimationFrame(() => this.platform.ready());
-      });
+      this.loadingScreen.allowContinue(() => this.finishInitialLoading());
       this.attachCanvasListeners(world.renderer.domElement);
 
-      if (
-        this.match.state === 'Countdown' ||
-        this.match.state === 'InProgress' ||
-        this.match.state === 'PlayerEliminated'
-      ) {
-        world.resetCameraBehindPlayer(this.match);
-      }
+      void world.assetsReady.then(async () => {
+        await tracker.waitForIdle();
+        if (document.fonts) await document.fonts.ready;
+        tracker.dispose();
+        if (!this.loading) {
+          this.platform.ready();
+        } else if (tracker.hasFailures) {
+          this.loadingScreen.showProblem('failed');
+        } else {
+          this.finishInitialLoading();
+        }
+      }).catch(err => {
+        tracker.dispose();
+        console.error('Game asset preparation failed:', err);
+        this.loadingScreen.showProblem('failed');
+      });
     } catch (err) {
+      tracker.dispose();
       console.error('3D WorldRenderer initialization failed:', err);
+      this.loadingScreen.showProblem('fatal');
+    }
+  }
+
+  private finishInitialLoading(): void {
+    if (!this.loading || !this.world) return;
+    try {
+      // Draw once behind the overlay before making the menu interactive.
+      this.world.renderFrame(0, this.match, this.settings);
+    } catch (err) {
+      console.error('First game frame failed:', err);
+      this.loadingScreen.showProblem('fatal');
+      return;
+    }
+    this.loading = false;
+    this.clearActionInputs();
+    this.loadingScreen.finish();
+    (window as unknown as { __knightsBooted?: boolean }).__knightsBooted = true;
+    // Fallback is a deliberate user choice; the first playable frame is ready even if downloads continue.
+    this.platform.ready();
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' ||
+        location.hostname.endsWith('.e2b.app') || location.hostname.endsWith('.arena.site')) {
+      fetch('/api/client-ready', { method: 'POST' }).catch(() => {});
     }
   }
 
@@ -614,6 +637,7 @@ class KnightsGameApp {
     );
 
     window.addEventListener('keydown', (e) => {
+      if (this.loading) return;
       const activeTag = document.activeElement?.tagName;
       if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') {
         return;
@@ -1059,6 +1083,7 @@ class KnightsGameApp {
     const rawDt = (now - this.lastFrameTime) / 1000;
     this.lastFrameTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
+    if (this.loading) { requestAnimationFrame(this.loop); return; }
 
     const blocked = this.platformPaused || this.adPaused || document.hidden || !this.windowFocused;
     if (!blocked || !this.isCrazyGames) {
@@ -1163,6 +1188,9 @@ class KnightsGameApp {
   };
 }
 
+const loadingScreen = new LoadingScreen(loadSettings().language);
+(window as unknown as { __knightsLoadingStarted?: boolean }).__knightsLoadingStarted = true;
+
 async function startGame(): Promise<void> {
   let app: KnightsGameApp | undefined;
   let platformPaused = false;
@@ -1171,7 +1199,7 @@ async function startGame(): Promise<void> {
     const crazy = new CrazyGames();
     // Ignore late initialization after a timeout: it must not attach to a running session.
     await crazy.initialize(await findCrazySdk());
-    app = new KnightsGameApp(crazy, undefined, false, null);
+    app = new KnightsGameApp(crazy, undefined, false, null, loadingScreen);
     return;
   }
   const yandex = new YandexGames((paused) => {
@@ -1184,7 +1212,10 @@ async function startGame(): Promise<void> {
     const timeout = window.setTimeout(() => resolve(fallback), 10000);
     promise.then(value => { clearTimeout(timeout); resolve(value); }, () => { clearTimeout(timeout); resolve(fallback); });
   });
-  await bounded(yandex.initialize(loader, language => { platformLanguage = language; }), undefined);
+  await bounded(yandex.initialize(loader, language => {
+    platformLanguage = language;
+    if (!hasSavedLanguage()) loadingScreen.setLanguage(detectYandexLanguage(language));
+  }), undefined);
   let cloud: CloudProfile | null = null;
   yandex.watchAccountSelection(
     () => cloud?.pause(),
@@ -1194,11 +1225,12 @@ async function startGame(): Promise<void> {
   if (player?.getUniqueID && player.getData && player.setData) {
     cloud = await CloudProfile.start(player as CloudPlayer);
   }
-  app = new KnightsGameApp(yandex, platformLanguage, platformPaused, cloud);
+  app = new KnightsGameApp(yandex, platformLanguage, platformPaused, cloud, loadingScreen);
 }
 
 void startGame().catch((err: unknown) => {
   console.error('Boot error:', err);
+  loadingScreen.showProblem('fatal');
   const msg = err instanceof Error ? err.message : String(err);
   const w = window as unknown as { __reportBootIssue?: (m: string) => void };
   w.__reportBootIssue?.(msg);

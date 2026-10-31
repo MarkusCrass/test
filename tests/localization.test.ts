@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LANGS, LOCALES, classDisplayName, detectLanguage, detectYandexLanguage, t } from '../src/config/locales';
 import { DEFAULT_SETTINGS, hasSavedLanguage, loadSettings, saveSettings, markLanguageSelected } from '../src/config/settings';
 import { CLASS_ORDER } from '../src/config/classes';
@@ -7,6 +7,7 @@ import { UIManager, type UICallbacks } from '../src/ui/UIManager';
 
 describe('localization', () => {
   beforeEach(() => { localStorage.clear(); document.body.innerHTML = '<div id="root"></div>'; });
+  afterEach(() => vi.unstubAllEnvs());
 
   it('has complete dictionaries, valid placeholders, and names for all classes', () => {
     for (const [key, translations] of Object.entries(LOCALES)) {
@@ -37,6 +38,19 @@ describe('localization', () => {
     localStorage.setItem('knights_last_standing_settings_v2', '{"language":"invalid"}');
     expect(hasSavedLanguage()).toBe(false);
     expect(LANGS.map(l => l.code)).toContain(loadSettings().language);
+  });
+
+  it('defaults CrazyGames to English but retains a manually selected language', () => {
+    vi.stubEnv('VITE_PLATFORM', 'crazygames');
+    expect(loadSettings().language).toBe('en');
+    saveSettings({ ...DEFAULT_SETTINGS, language: 'ru' });
+    expect(loadSettings().language).toBe('en'); // automatically saved language is not a manual choice
+    markLanguageSelected();
+    expect(loadSettings().language).toBe('ru');
+    saveSettings({ ...DEFAULT_SETTINGS, language: 'tr' });
+    expect(loadSettings().language).toBe('tr');
+    localStorage.setItem('knights_last_standing_settings_v2', '{broken');
+    expect(loadSettings().language).toBe('en');
   });
 
   it('updates the interface and direction immediately without losing other settings', () => {

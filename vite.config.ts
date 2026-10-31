@@ -12,6 +12,7 @@ function knightsMultiplayerPlugin(mode: string): Plugin {
         // and in production builds convert module script to classic <script defer> (no-cors with full cookies).
         let out = html.replace(/\s+crossorigin(?:="[^"]*")?/gi, '');
         if (mode === 'crazygames') {
+          out = out.replace('<html lang="ru">', '<html lang="en" data-default-language="en">');
           out = out.replace(
             '<script src="/sdk.js"></script>',
             '<script id="crazygames-sdk" async src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>'
