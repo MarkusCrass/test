@@ -7,9 +7,16 @@ multiplayer, whereas the Yandex archive points to the public HTTPS relay set
 in `.env.yandex`. The value is compiled into the game and must be a public
 HTTPS service, not a local address.
 
+The API for the Yandex host is deployed separately, without deleting files on
+that site, to `/igra.cosmorox.ru/public_html/api/mp.php` by default. If Beget
+uses a different site directory, set GitHub Actions secret
+`BEGET_YANDEX_RELAY_DIR` to the correct existing document root. The existing
+Beget website deploy remains unchanged. The API creates its own protected
+runtime directory; never remove it during deployment.
+
 Before submitting the game:
 
-1. Upload the **Yandex** archive to the draft. Add `igra.ezekie6n.beget.tech`
+1. Upload the **Yandex** archive to the draft. Add `igra.cosmorox.ru`
    under allowed external hosts. Check the relay's HTTPS certificate, CORS and
    hosting anti-bot rules from the actual Yandex iframe. A successful unit test
    or an unconfigured Beget deploy does not establish that it is reachable.

@@ -120,9 +120,37 @@ jobs:
           bye
           EOF
 
+      # Upload just the relay: never mirror/delete the user's new website.
+      - name: Deploy Yandex multiplayer relay to HTTPS site
+        env:
+          BEGET_HOST: ${{ secrets.BEGET_HOST || 'ezekie6n.beget.tech' }}
+          BEGET_USER: ${{ secrets.BEGET_USER || 'ezekie6n' }}
+          BEGET_PASSWORD: ${{ secrets.BEGET_PASSWORD }}
+          BEGET_RELAY_DIR: ${{ secrets.BEGET_YANDEX_RELAY_DIR || '/igra.cosmorox.ru/public_html' }}
+        run: |
+          if [ -z "$BEGET_PASSWORD" ]; then
+            echo '::warning::Relay was not uploaded: BEGET_PASSWORD is not configured. Upload public/api/mp.php to the HTTPS site API directory or configure deployment.'
+            exit 0
+          fi
+          if ! command -v lftp >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq lftp; fi
+          if ! lftp -u "$BEGET_USER","$BEGET_PASSWORD" "$BEGET_HOST" <<EOF
+          set ssl:verify-certificate no
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 25
+          set ftp:passive-mode true
+          cd "$BEGET_RELAY_DIR"
+          mkdir -p api
+          put public/api/mp.php -o api/mp.php
+          bye
+          EOF
+          then
+            echo '::warning::Relay upload failed. Check the HTTPS site document root and BEGET_YANDEX_RELAY_DIR.'
+          fi
+
       - name: Check public relay health and CORS
         run: |
-          status=$(curl -sS --max-time 15 -D /tmp/relay-headers -o /tmp/relay-body -w '%{http_code}' -H 'Origin: https://yandex.ru' 'https://igra.ezekie6n.beget.tech/api/mp.php?action=health' 2>/tmp/relay-error) || {
+          status=$(curl -sS --max-time 15 -D /tmp/relay-headers -o /tmp/relay-body -w '%{http_code}' -H 'Origin: https://yandex.ru' 'https://igra.cosmorox.ru/api/mp.php?action=health' 2>/tmp/relay-error) || {
             error=$(head -c 250 /tmp/relay-error | tr '\r\n' ' ')
             echo "::warning::Public relay could not be reached over HTTPS from the GitHub runner: $error"
             exit 0

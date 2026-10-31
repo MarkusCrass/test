@@ -144,7 +144,7 @@ class KnightsGameApp {
         this.match.goToMultiplayerLobby();
         this.ui.updateMultiplayerRoom(room, this.net.clientId);
       },
-    }, (import.meta as unknown as { env?: { VITE_MULTIPLAYER_BASE_URL?: string } }).env?.VITE_MULTIPLAYER_BASE_URL || undefined);
+    }, import.meta.env.VITE_MULTIPLAYER_BASE_URL || undefined);
 
     // Mount UI immediately so Main Menu opens in <100ms without waiting on Three.js/WebGL!
     this.ui = new UIManager(uiRoot, this.settings, {
