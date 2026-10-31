@@ -1,3 +1,4 @@
+import { assetUrl } from '../config/assetUrls';
 import {
   CLASS_ORDER,
   KNIGHT_CLASSES,
@@ -1832,8 +1833,7 @@ export class UIManager {
         if (!details.open || details.dataset.loaded === 'true') return;
         const text = details.querySelector('pre')!;
         text.textContent = this.tl('aboutLoading');
-        const base = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
-        void fetch(`${base}${details.dataset.licensePath}`).then((response) => {
+        void fetch(assetUrl(details.dataset.licensePath!)).then((response) => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           return response.text();
         }).then((value) => {

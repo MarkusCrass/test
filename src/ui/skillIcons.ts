@@ -1,3 +1,4 @@
+import { assetUrl } from '../config/assetUrls';
 import { t, type Lang } from '../config/locales';
 import { coreSkillText } from '../config/coreSkillLocales';
 import { abilityText } from '../config/heroLocales';
@@ -92,14 +93,8 @@ const HEAVY_DESCS_BY_CLASS: Record<KnightClassId, string> = {
     'Удерживайте ЛКМ для сокрушительного прыжкового раскола черепа топором сверху вниз.',
 };
 
-function getBaseUrl(): string {
-  const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
-  const base = meta.env?.BASE_URL ?? '/';
-  return base.endsWith('/') ? base : `${base}/`;
-}
-
 export function getSkillIconUrl(iconFile: string): string {
-  return `${getBaseUrl()}icons/skills/${iconFile}`;
+  return assetUrl(`icons/skills/${iconFile}`);
 }
 
 /**

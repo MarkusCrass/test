@@ -1,3 +1,4 @@
+import { assetUrl } from '../config/assetUrls';
 import { AbilityKind, KnightClassId } from '../config/classes';
 import { CombatEvent } from '../core/CombatSystem';
 import { Fighter } from '../core/Fighter';
@@ -317,12 +318,6 @@ export class SoundManager {
     }
   }
 
-  private getBaseUrl(): string {
-    const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
-    const base = meta.env?.BASE_URL ?? '/';
-    return base.endsWith('/') ? base : `${base}/`;
-  }
-
   /**
    * Loads and decodes CC0 MP3 banks using at most 4 concurrent HTTP requests
    * after the user's first interaction, avoiding proxy connection saturation at boot.
@@ -330,7 +325,7 @@ export class SoundManager {
   private async decodeAllBanksThrottled(): Promise<void> {
     if (!this.ctx || typeof fetch !== 'function') return;
     const ctx = this.ctx;
-    const baseUrl = this.getBaseUrl();
+    const baseUrl = assetUrl('');
 
     const queue: Array<{ bankId: SfxBankId; file: string }> = [];
     const entries = Object.entries(SFX_BANKS) as [SfxBankId, readonly string[]][];
