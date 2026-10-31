@@ -10,3 +10,7 @@ public/api/.mp_state.json
 # Separate Yandex Games packaging output
 dist-yandex
 knights-yandex-games.zip
+
+# CrazyGames standalone archive
+dist-crazygames
+knights-crazygames.zip

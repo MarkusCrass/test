@@ -31,6 +31,8 @@ import {
 import { WorldRenderer } from './render/WorldRenderer';
 import { HudReticleViewState, UIManager } from './ui/UIManager';
 import { YandexGames, type YandexLoader } from './platform/YandexGames';
+import { CrazyGames, findCrazySdk } from './platform/CrazyGames';
+import type { GamePlatform } from './platform/GamePlatform';
 import { CloudProfile, type CloudPlayer } from './platform/CloudProfile';
 
 class KnightsGameApp {
@@ -78,10 +80,11 @@ class KnightsGameApp {
   private platformPaused: boolean;
   private adPaused = false;
   private windowFocused = true;
-  private readonly yandex: YandexGames;
+  private readonly platform: GamePlatform;
+  private readonly isCrazyGames = import.meta.env.VITE_PLATFORM === 'crazygames';
 
-  constructor(yandex: YandexGames, platformLanguage: string | undefined, platformPaused: boolean, cloud: CloudProfile | null) {
-    this.yandex = yandex;
+  constructor(platform: GamePlatform, platformLanguage: string | undefined, platformPaused: boolean, cloud: CloudProfile | null) {
+    this.platform = platform;
     this.platformPaused = platformPaused;
     if (platformLanguage && !hasSavedLanguage()) {
       this.settings = { ...this.settings, language: detectYandexLanguage(platformLanguage) };
@@ -210,7 +213,7 @@ class KnightsGameApp {
       onWatchRewardedAd: (reward, finished) => {
         this.adPaused = true;
         this.syncPlatformPause();
-        const started = this.yandex.showRewarded(reward, (rewarded) => {
+        const started = this.platform.showRewarded(reward, (rewarded) => {
           this.adPaused = false;
           this.syncPlatformPause();
           finished(rewarded);
@@ -317,7 +320,7 @@ class KnightsGameApp {
       },
     });
 
-    void this.yandex.getPlayerName().then((name) => {
+    void this.platform.getPlayerName().then((name) => {
       if (name) this.ui.useYandexPlayerName(name);
     });
     const showCloudConflict = () => {
@@ -385,7 +388,8 @@ class KnightsGameApp {
         this.net.streamInputIntent(0.1, createEmptyIntent(this.world?.cameraRig.yaw ?? this.fallbackYaw));
       }
       this.releasePointerLock();
-      this.yandex.setGameplay(false);
+      // CrazyGames handles focus changes itself; only the game pauses locally.
+      if (!this.isCrazyGames) this.platform.setGameplay(false);
     }
   }
 
@@ -401,7 +405,7 @@ class KnightsGameApp {
       this.world = world;
       void world.assetsReady.then(() => {
         // Wait for an interactive frame after the preload before signalling readiness.
-        requestAnimationFrame(() => this.yandex.ready());
+        requestAnimationFrame(() => this.platform.ready());
       });
       this.attachCanvasListeners(world.renderer.domElement);
 
@@ -1057,9 +1061,11 @@ class KnightsGameApp {
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
 
     const blocked = this.platformPaused || this.adPaused || document.hidden || !this.windowFocused;
-    const playing = !blocked && !this.match.paused &&
-      (this.match.state === 'Countdown' || this.match.state === 'InProgress');
-    this.yandex.setGameplay(playing);
+    if (!blocked || !this.isCrazyGames) {
+      const playing = (this.isCrazyGames || !blocked) && !this.match.paused &&
+        (this.match.state === 'InProgress' || (!this.isCrazyGames && this.match.state === 'Countdown'));
+      this.platform.setGameplay(playing);
+    }
     if (blocked) {
       requestAnimationFrame(this.loop);
       return;
@@ -1161,6 +1167,13 @@ async function startGame(): Promise<void> {
   let app: KnightsGameApp | undefined;
   let platformPaused = false;
   let platformLanguage: string | undefined;
+  if (import.meta.env.VITE_PLATFORM === 'crazygames') {
+    const crazy = new CrazyGames();
+    // Ignore late initialization after a timeout: it must not attach to a running session.
+    await crazy.initialize(await findCrazySdk());
+    app = new KnightsGameApp(crazy, undefined, false, null);
+    return;
+  }
   const yandex = new YandexGames((paused) => {
     platformPaused = paused;
     app?.setPlatformPause(paused);

@@ -2,7 +2,7 @@ import type { Server as HttpServer } from 'node:http';
 import { defineConfig, type Plugin } from 'vite';
 import { attachMultiplayerHub } from './server/wsHub';
 
-function knightsMultiplayerPlugin(): Plugin {
+function knightsMultiplayerPlugin(mode: string): Plugin {
   return {
     name: 'knights-multiplayer-ws',
     transformIndexHtml: {
@@ -11,6 +11,15 @@ function knightsMultiplayerPlugin(): Plugin {
         // Strip anonymous `crossorigin` attributes so authenticated preview proxies receive same-origin cookies,
         // and in production builds convert module script to classic <script defer> (no-cors with full cookies).
         let out = html.replace(/\s+crossorigin(?:="[^"]*")?/gi, '');
+        if (mode === 'crazygames') {
+          out = out.replace(
+            '<script src="/sdk.js"></script>',
+            '<script id="crazygames-sdk" async src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>'
+          );
+          // An unavailable optional SDK is not a game boot failure.
+          out = out.replace("if (t && t !== window &&", "if (t && t.id === 'crazygames-sdk') return;\n          if (t && t !== window &&");
+          out = out.replace("fetch('/api/client-error'", "fetch('./api/client-error'");
+        }
         if (ctx.bundle) {
           out = out.replace(/<script\s+type="module"\s+src=/gi, '<script defer src=');
         }
@@ -38,9 +47,9 @@ function knightsMultiplayerPlugin(): Plugin {
 
 export default defineConfig(({ mode }) => ({
   base: './',
-  plugins: [knightsMultiplayerPlugin()],
+  plugins: [knightsMultiplayerPlugin(mode)],
   build: {
-    outDir: mode === 'yandex' ? 'dist-yandex' : 'dist',
+    outDir: mode === 'yandex' ? 'dist-yandex' : mode === 'crazygames' ? 'dist-crazygames' : 'dist',
     modulePreload: false,
     cssCodeSplit: false,
     rollupOptions: {

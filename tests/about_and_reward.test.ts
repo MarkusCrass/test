@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETTINGS } from '../src/config/settings';
 import { loadProfile } from '../src/config/playerProfile';
 import { UIManager, type UICallbacks } from '../src/ui/UIManager';
@@ -13,6 +13,7 @@ function setup(watch?: UICallbacks['onWatchRewardedAd']) {
 }
 describe('about and rewarded ad interface', () => {
   beforeEach(() => { localStorage.clear(); document.body.innerHTML = '<div id="root"></div>'; });
+  afterEach(() => vi.unstubAllEnvs());
   it('opens license notices inside settings and reads the full bundled license safely', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => 'The MIT License\nCopyright authors' });
     vi.stubGlobal('fetch', fetchMock);
@@ -43,6 +44,11 @@ describe('about and rewarded ad interface', () => {
     expect(name.value).toBe('Platform Player');
     name.value = 'My chosen name'; name.dispatchEvent(new Event('input'));
     ui.useYandexPlayerName('Late name'); expect(name.value).toBe('My chosen name');
+  });
+  it('hides the rewarded button in CrazyGames Basic Launch', () => {
+    vi.stubEnv('VITE_PLATFORM', 'crazygames');
+    const { root } = setup();
+    expect(root.querySelector('#btn-watch-ad')?.classList.contains('hidden')).toBe(true);
   });
   it('does not grant coins when an ad is missing or closed without reward', () => {
     const { root, click } = setup(() => false);

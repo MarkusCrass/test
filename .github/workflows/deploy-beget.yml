@@ -83,6 +83,24 @@ jobs:
             gh release create yandex-latest knights-yandex-games.zip --target "${{ github.sha }}" --title "Knights — Yandex Games test archive" --notes "Test archive for Yandex Games. Configure the external relay host and validate SDK, cloud, and multiplayer in the developer console before moderation."
           fi
 
+      - name: Build CrazyGames Basic Launch archive
+        run: |
+          npm run package:crazygames
+          unzip -t knights-crazygames.zip | tail -1
+          ! unzip -Z1 knights-crazygames.zip | grep -E '(^|/)(deploy.php|mp.php|\.htaccess)$'
+          unzip -p knights-crazygames.zip index.html | grep -q 'https://sdk.crazygames.com/crazygames-sdk-v3.js'
+          ! unzip -p knights-crazygames.zip index.html | grep -q '/sdk.js'
+
+      - name: Publish CrazyGames test archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view crazygames-latest >/dev/null 2>&1; then
+            gh release upload crazygames-latest knights-crazygames.zip --clobber
+          else
+            gh release create crazygames-latest knights-crazygames.zip --target "${{ github.sha }}" --title "Knights — CrazyGames Basic Launch archive" --notes "Basic Launch archive without ads. Validate SDK, persistence and multiplayer on CrazyGames before publishing."
+          fi
+
       - name: Upload ready-to-host Beget archive artifact
         uses: actions/upload-artifact@v4
         with:

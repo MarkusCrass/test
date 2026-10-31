@@ -1061,6 +1061,7 @@ export class UIManager {
     this.adCloseBtnEl = this.q('#btn-ad-close') as HTMLButtonElement;
     this.adRewardBtnEl = this.q('#btn-ad-reward') as HTMLButtonElement;
     this.btnWatchAdEl = this.q('#btn-watch-ad') as HTMLButtonElement;
+    if (import.meta.env.VITE_PLATFORM === 'crazygames') this.btnWatchAdEl.classList.add('hidden');
     this.hubCoinDisplayEl = this.q('#hub-coin-display');
 
     this.mpConnPillEl = this.q('#mp-conn-pill');
