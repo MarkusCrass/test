@@ -870,7 +870,7 @@ export class MultiplayerClient {
     this.stopHostSim();
 
     const sim = new AuthoritativeMatchSim();
-    sim.start(msg.roster, msg.fillBots);
+    sim.start(msg.roster, msg.fillBots, msg.preferredBotName);
     this.hostSim = sim;
     this.hostSimTick = 0;
     this.hostSimAccum = 0;

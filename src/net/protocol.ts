@@ -209,6 +209,7 @@ export type ServerMsg =
       roomCode: string;
       yourFighterId: string;
       fillBots: boolean;
+      preferredBotName?: string;
       roster: Array<{
         fighterId: string;
         name: string;

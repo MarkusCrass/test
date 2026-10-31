@@ -1,7 +1,29 @@
+import type { KnightClassId } from './classes';
 import type { Lang } from './locales';
+
+// Fictional casual nicknames, not claims about actual users.
+export const BOT_NICKNAMES: Record<KnightClassId, string[]> = {
+  sword: ['Макс_777', 'Санёк'],
+  dual: ['Котик', 'Ninja_Pro'],
+  spear: ['Артём', 'Лис'],
+  hammer: ['Денис', 'Богатырь'],
+  barbarian: ['Волк', 'Игрок_777'],
+  duelist: ['Саша', 'Lucky'],
+  skeleton_knight: ['Кирилл', 'Рыцарь'],
+  skeleton_reaper: ['Тёмный', 'Егор'],
+  skeleton_berserker: ['Тимур', 'Миша'],
+};
 
 // Only applied to AI fighters, never to player-entered nicknames.
 const NAMES: Record<string, [string, string]> = {
+  'Макс_777': ['Max_777', 'ماكس_777'], 'Санёк': ['Sanyok', 'سانيوك'],
+  'Котик': ['Kitty', 'كيتي'], 'Артём': ['Artem', 'أرتيوم'],
+  'Лис': ['Fox', 'فوكس'], 'Денис': ['Denis', 'دينيس'],
+  'Богатырь': ['Bogatýr', 'بوغاتير'], 'Волк': ['Wolf', 'وولف'],
+  'Игрок_777': ['Player_777', 'لاعب_777'], 'Саша': ['Sasha', 'ساشا'],
+  'Кирилл': ['Kirill', 'كيريل'], 'Рыцарь': ['Knight', 'الفارس'],
+  'Тёмный': ['Dark', 'دارك'], 'Егор': ['Egor', 'يغور'],
+  'Тимур': ['Timur', 'تيمور'], 'Миша': ['Misha', 'ميشا'],
   'Бот-хост Арес': ['Bot host Ares', 'المضيف الآلي آريس'],
   'Бот-хост Афина': ['Bot host Athena', 'المضيف الآلي أثينا'],
   'Бот-хост Аполлон': ['Bot host Apollo', 'المضيف الآلي أبولو'],
@@ -20,7 +42,8 @@ const NAMES: Record<string, [string, string]> = {
 };
 export function botDisplayName(name: string, lang: Lang): string {
   if (lang === 'ru') return name;
-  const match = name.match(/^(.*?)( \d+)?$/);
+  const prefix = name.startsWith('🤖 ') ? '🤖 ' : '';
+  const match = name.slice(prefix.length).match(/^(.*?)( \d+)?$/);
   const translated = match && NAMES[match[1]];
-  return translated ? translated[lang === 'ar' ? 1 : 0] + (match?.[2] ?? '') : name;
+  return translated ? prefix + translated[lang === 'ar' ? 1 : 0] + (match?.[2] ?? '') : name;
 }

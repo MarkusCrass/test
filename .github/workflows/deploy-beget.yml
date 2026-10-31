@@ -28,6 +28,7 @@ jobs:
           php -l public/api/mp.php
           php -l public/deploy.php
           php -l scripts/beget-deploy-stub.php
+          node scripts/test-php-bot-rooms.mjs
           php -r '$_GET["action"]="health"; $_SERVER["REQUEST_METHOD"]="GET"; include "public/api/mp.php";' | grep -q '"ok":true'
           HOST_JSON=$(php -r '$_GET["action"]="connect"; $_SERVER["REQUEST_METHOD"]="POST"; include "public/api/mp.php";')
           echo "$HOST_JSON" | grep -q '"relayMode":"host_sim"'

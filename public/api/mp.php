@@ -180,13 +180,51 @@ function mp_enqueue(&$state, $clientId, $msg) {
     $outbox[] = $msg;
 }
 
+// Shared-host PHP has no background worker. Advance the room scheduler while
+// servicing requests, under the same file lock used for all room state.
+function mp_maintain_bot_rooms(&$state, $now) {
+    $changed = false;
+    $count = 0;
+    $usedNames = array();
+    foreach ($state['rooms'] as $code => $room) {
+        if (empty($room['botHostName']) || !empty($room['players'])) continue;
+        if ($now >= (isset($room['botExpiresAt']) ? $room['botExpiresAt'] : 0)) {
+            unset($state['rooms'][$code]);
+            $changed = true;
+        } else {
+            $count++;
+            $usedNames[] = $room['botHostName'];
+        }
+    }
+    $last = isset($state['lastBotRoomAt']) ? (float)$state['lastBotRoomAt'] : 0;
+    if ($count < 3 && ($last <= 0 || $now - $last >= 45)) {
+        $names = array('Котик', 'Макс_777', 'Санёк', 'Лис', 'Ninja_Pro', 'Волк', 'Артём', 'Lucky', 'Миша', 'Игрок_777');
+        $available = array_values(array_diff($names, $usedNames));
+        $name = $available[mp_rand_int(0, count($available) - 1)];
+        $code = mp_generate_code($state);
+        $state['rooms'][$code] = array(
+            'roomCode' => $code, 'hostClientId' => '', 'isPublic' => true,
+            'fillBots' => true, 'phase' => 'lobby', 'matchGeneration' => 0,
+            'players' => array(), 'botHostName' => $name, 'botExpiresAt' => $now + 180,
+        );
+        $state['lastBotRoomAt'] = $now;
+        $changed = true;
+    }
+    return $changed;
+}
+
+function mp_room_bot_count($room) {
+    return !empty($room['botHostName']) && !empty($room['fillBots']) && count($room['players']) < MP_MAX_PLAYERS ? 1 : 0;
+}
+
 function mp_public_rooms(&$state) {
     $list = array();
     foreach ($state['rooms'] as $r) {
         if (empty($r['isPublic'])) {
             continue;
         }
-        $hostName = 'Рыцарь';
+        $botHost = !empty($r['botHostName']) && count($r['players']) === 0;
+        $hostName = $botHost ? $r['botHostName'] : 'Рыцарь';
         foreach ($r['players'] as $cid) {
             if ($cid === $r['hostClientId'] && isset($state['clients'][$cid])) {
                 $hostName = $state['clients'][$cid]['name'];
@@ -196,7 +234,8 @@ function mp_public_rooms(&$state) {
         $list[] = array(
             'roomCode' => $r['roomCode'],
             'hostName' => $hostName,
-            'playerCount' => count($r['players']),
+            'hostIsBot' => $botHost,
+            'playerCount' => count($r['players']) + mp_room_bot_count($r),
             'maxPlayers' => MP_MAX_PLAYERS,
             'fillBots' => (bool)$r['fillBots'],
             'phase' => $r['phase'],
@@ -220,6 +259,13 @@ function mp_serialize_room(&$state, &$room) {
             'ready' => (bool)$c['ready'],
             'isHost' => ($c['clientId'] === $room['hostClientId']),
             'pingMs' => (int)$c['pingMs'],
+        );
+    }
+    if (mp_room_bot_count($room)) {
+        $players[] = array(
+            'clientId' => 'c_bot_' . $room['roomCode'], 'fighterId' => 'bot_1',
+            'name' => $room['botHostName'], 'classId' => 'sword', 'ready' => true,
+            'isHost' => false, 'pingMs' => 0,
         );
     }
     return array(
@@ -379,6 +425,7 @@ function mp_launch_match(&$state, $code) {
             'roomCode' => $room['roomCode'],
             'yourFighterId' => $state['clients'][$hostCid]['fighterId'],
             'fillBots' => (bool)$room['fillBots'],
+            'preferredBotName' => !empty($room['botHostName']) ? $room['botHostName'] : null,
             'roster' => $roster,
         ));
     }
@@ -459,7 +506,7 @@ function mp_handle_msg(&$state, $cid, $msg) {
                 ));
                 return;
             }
-            if (count($room['players']) >= MP_MAX_PLAYERS) {
+            if (count($room['players']) + mp_room_bot_count($room) >= MP_MAX_PLAYERS) {
                 mp_enqueue($state, $cid, array(
                     'type' => 'error',
                     'message' => 'Комната заполнена (' . MP_MAX_PLAYERS . '/' . MP_MAX_PLAYERS . ').',
@@ -478,6 +525,7 @@ function mp_handle_msg(&$state, $cid, $msg) {
             $state['clients'][$cid]['ready'] = true;
             $state['clients'][$cid]['roomCode'] = $code;
             $state['rooms'][$code]['players'][] = $cid;
+            if (empty($state['rooms'][$code]['hostClientId'])) $state['rooms'][$code]['hostClientId'] = $cid;
 
             $roomRef = &$state['rooms'][$code];
             mp_enqueue($state, $cid, array(
@@ -502,12 +550,14 @@ function mp_handle_msg(&$state, $cid, $msg) {
             $state['clients'][$cid]['ready'] = true;
 
             $targetCode = null;
+            $botFallback = null;
             foreach ($state['rooms'] as $rCode => $r) {
-                if (!empty($r['isPublic']) && $r['phase'] === 'lobby' && count($r['players']) < MP_MAX_PLAYERS) {
-                    $targetCode = $rCode;
-                    break;
+                if (!empty($r['isPublic']) && $r['phase'] === 'lobby' && count($r['players']) + mp_room_bot_count($r) < MP_MAX_PLAYERS) {
+                    if (!empty($r['players'])) { $targetCode = $rCode; break; }
+                    if ($botFallback === null) $botFallback = $rCode;
                 }
             }
+            if ($targetCode === null) $targetCode = $botFallback;
 
             if ($targetCode === null) {
                 $targetCode = mp_create_room($state, $cid, true, true);
@@ -520,6 +570,7 @@ function mp_handle_msg(&$state, $cid, $msg) {
             } else {
                 $state['clients'][$cid]['roomCode'] = $targetCode;
                 $state['rooms'][$targetCode]['players'][] = $cid;
+                if (empty($state['rooms'][$targetCode]['hostClientId'])) $state['rooms'][$targetCode]['hostClientId'] = $cid;
                 $roomRef = &$state['rooms'][$targetCode];
                 mp_enqueue($state, $cid, array(
                     'type' => 'room_joined',
@@ -852,6 +903,10 @@ $dirty = false;
 
 if (count($staleIds) > 0) {
     $dirty = true;
+}
+if ($action !== 'health' && mp_maintain_bot_rooms($state, $now)) {
+    $dirty = true;
+    mp_broadcast_public_rooms($state);
 }
 
 if ($action === 'health') {

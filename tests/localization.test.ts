@@ -135,7 +135,7 @@ describe('complete localized game content', () => {
       { roomCode: 'USER', hostName: 'Бот-хост Арес', playerCount: 1, maxPlayers: 5, fillBots: true, phase: 'lobby' },
     ]);
     const names = [...root.querySelectorAll('.mp-room-host')].map(el => el.textContent);
-    expect(names).toEqual(['Bot host Ares', 'Бот-хост Арес']);
+    expect(names).toEqual(['🤖 Bot host Ares', 'Бот-хост Арес']);
   });
 
   it('updates battle HUD and results without awarding a second payout on language change', async () => {

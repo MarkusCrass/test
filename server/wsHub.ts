@@ -22,14 +22,7 @@ const HTTP_SESSION_TIMEOUT_MS = 35_000;
 const MAX_HTTP_OUTBOX = 56;
 const BOT_ROOM_INTERVAL_MS = 45_000; // Create a bot room every 45s
 const MAX_BOT_ROOMS = 3; // Keep up to 3 bot rooms in the lobby
-const BOT_HOST_NAMES = [
-  'Бот-хост Арес',
-  'Бот-хост Афина',
-  'Бот-хост Аполлон',
-  'Бот-хост Артемида',
-  'Бот-хост Гермес',
-  'Бот-хост Афродита',
-];
+const BOT_HOST_NAMES = ['Котик', 'Макс_777', 'Санёк', 'Лис', 'Ninja_Pro', 'Волк', 'Артём', 'Lucky', 'Миша', 'Игрок_777'];
 
 interface ClientSession {
   clientId: string;
@@ -52,6 +45,8 @@ interface RoomInstance {
   fillBots: boolean;
   phase: 'lobby' | 'in_match';
   matchGeneration: number;
+  botHostName?: string;
+  botExpiresAt?: number;
   players: ClientSession[];
   sim: AuthoritativeMatchSim | null;
   serverTick: number;
@@ -247,6 +242,10 @@ export class MultiplayerHub {
       clearInterval(this.pruneTimer);
       this.pruneTimer = null;
     }
+    if (this.botRoomTimer) {
+      clearInterval(this.botRoomTimer);
+      this.botRoomTimer = null;
+    }
     for (const session of this.clients.values()) {
       try {
         session.ws?.close();
@@ -399,7 +398,7 @@ export class MultiplayerHub {
           });
           return;
         }
-        if (room.players.length >= MAX_PLAYERS_PER_ROOM) {
+        if (room.players.length + this.botSlotCount(room) >= MAX_PLAYERS_PER_ROOM) {
           this.sendSession(session, {
             type: 'error',
             message: `Комната заполнена (${MAX_PLAYERS_PER_ROOM}/${MAX_PLAYERS_PER_ROOM}).`,
@@ -413,6 +412,7 @@ export class MultiplayerHub {
         session.ready = true;
         session.roomCode = room.roomCode;
         room.players.push(session);
+        if (!room.hostClientId) room.hostClientId = session.clientId;
 
         this.sendSession(session, {
           type: 'room_joined',
@@ -430,17 +430,13 @@ export class MultiplayerHub {
         session.classId = sanitizeClassId(msg.classId);
         session.ready = true;
 
-        let targetRoom: RoomInstance | null = null;
-        for (const r of this.rooms.values()) {
-          if (
-            r.isPublic &&
-            r.phase === 'lobby' &&
-            r.players.length < MAX_PLAYERS_PER_ROOM
-          ) {
-            targetRoom = r;
-            break;
-          }
-        }
+        const candidates = [...this.rooms.values()].filter((r) =>
+          r.isPublic && r.phase === 'lobby' &&
+          r.players.length + this.botSlotCount(r) < MAX_PLAYERS_PER_ROOM
+        );
+        // Prefer a real player's lobby, then offer an AI room.
+        const target = candidates.find((r) => r.players.length > 0) ?? candidates[0];
+        let targetRoom: RoomInstance | null = target ?? null;
 
         if (!targetRoom) {
           targetRoom = this.createRoomInstance(session, true, true);
@@ -452,6 +448,7 @@ export class MultiplayerHub {
         } else {
           session.roomCode = targetRoom.roomCode;
           targetRoom.players.push(session);
+          if (!targetRoom.hostClientId) targetRoom.hostClientId = session.clientId;
           this.sendSession(session, {
             type: 'room_joined',
             room: this.serializeRoomLobby(targetRoom),
@@ -635,50 +632,32 @@ export class MultiplayerHub {
     return `R${Math.floor(100 + Math.random() * 900)}`;
   }
 
-  /** Periodically create bot-hosted public rooms so players always have something to join. */
+  /** A visible AI room becomes a human-hosted room when its first player joins. */
   private maybeCreateBotRoom(): void {
-    const publicRooms = [...this.rooms.values()].filter(
-      (r) => r.isPublic && r.phase === 'lobby' && r.hostClientId.startsWith('c_bot_')
-    );
-    if (publicRooms.length >= MAX_BOT_ROOMS) return;
-
-    const botIndex = publicRooms.length;
-    const hostName = BOT_HOST_NAMES[botIndex % BOT_HOST_NAMES.length];
-    const host = this.createBotSession(hostName);
-    const room = this.createRoomInstance(host, true, true);
-
-    console.log(
-      `[MP Hub] Bot room ${room.roomCode} created by ${hostName}`
-    );
-    this.broadcastPublicRoomsToLobbyBrowsers();
-
-    // Auto-start the bot room match after 10 seconds in lobby
-    setTimeout(() => {
-      const r = this.rooms.get(room.roomCode);
-      if (r && r.phase === 'lobby') {
-        this.launchRoomMatch(r);
+    const now = Date.now();
+    for (const [code, room] of this.rooms) {
+      if (room.botHostName && room.players.length === 0 && now >= (room.botExpiresAt ?? 0)) {
+        this.rooms.delete(code);
       }
-    }, 10_000).unref?.();
+    }
+    const vacant = [...this.rooms.values()].filter((r) => r.botHostName && r.players.length === 0);
+    if (vacant.length < MAX_BOT_ROOMS) {
+      const used = new Set(vacant.map((r) => r.botHostName));
+      const choices = BOT_HOST_NAMES.filter((name) => !used.has(name));
+      const roomCode = this.generateUniqueRoomCode();
+      this.rooms.set(roomCode, {
+        roomCode, hostClientId: '', isPublic: true, fillBots: true, phase: 'lobby',
+        matchGeneration: 0, botHostName: choices[Math.floor(Math.random() * choices.length)],
+        botExpiresAt: now + 180_000, players: [], sim: null, serverTick: 0,
+        pendingEvents: [], pendingFootsteps: [], pendingJumps: [], pendingDodges: [],
+        pendingLandings: [], pendingFinalPhase: false,
+      });
+    }
+    this.broadcastPublicRoomsToLobbyBrowsers();
   }
 
-  private createBotSession(name: string): ClientSession {
-    const num = this.nextClientNum++;
-    const clientId = `c_bot_${num}`;
-    const session: ClientSession = {
-      clientId,
-      transport: 'http',
-      ws: null,
-      httpOutbox: [],
-      lastSeenAt: Date.now(),
-      name,
-      classId: 'sword',
-      ready: true,
-      pingMs: 10,
-      roomCode: null,
-      fighterId: `bot_${num}`,
-    };
-    this.clients.set(clientId, session);
-    return session;
+  private botSlotCount(room: RoomInstance): number {
+    return room.botHostName && room.fillBots && room.players.length < MAX_PLAYERS_PER_ROOM ? 1 : 0;
   }
 
   private leaveCurrentRoom(
@@ -749,7 +728,8 @@ export class MultiplayerHub {
         name: p.name,
         classId: p.classId,
       })),
-      room.fillBots
+      room.fillBots,
+      room.botHostName
     );
     room.sim = sim;
 
@@ -864,7 +844,7 @@ export class MultiplayerHub {
       isPublic: room.isPublic,
       fillBots: room.fillBots,
       phase: room.phase,
-      players: room.players.map((p) => ({
+      players: [...room.players.map((p) => ({
         clientId: p.clientId,
         fighterId: p.fighterId,
         name: p.name,
@@ -872,7 +852,10 @@ export class MultiplayerHub {
         ready: p.ready,
         isHost: p.clientId === room.hostClientId,
         pingMs: p.pingMs,
-      })),
+      })), ...(this.botSlotCount(room) ? [{
+        clientId: `c_bot_${room.roomCode}`, fighterId: 'bot_1', name: room.botHostName!,
+        classId: 'sword' as KnightClassId, ready: true, isHost: false, pingMs: 0,
+      }] : [])],
     };
   }
 
@@ -882,11 +865,12 @@ export class MultiplayerHub {
       if (!r.isPublic) continue;
       const host =
         r.players.find((p) => p.clientId === r.hostClientId) ?? r.players[0];
+      const hostIsBot = Boolean(r.botHostName && !host);
       out.push({
         roomCode: r.roomCode,
-        hostName: host ? host.name : 'Рыцарь',
-        hostIsBot: Boolean(host?.clientId.startsWith('c_bot_')),
-        playerCount: r.players.length,
+        hostName: host ? host.name : r.botHostName ?? 'Рыцарь',
+        hostIsBot,
+        playerCount: r.players.length + this.botSlotCount(r),
         maxPlayers: MAX_PLAYERS_PER_ROOM,
         fillBots: r.fillBots,
         phase: r.phase,

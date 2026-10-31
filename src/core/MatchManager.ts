@@ -1,3 +1,4 @@
+import { BOT_NICKNAMES } from '../config/botNames';
 import { ARENA_CONFIG, ArenaConfig } from '../config/arenaConfig';
 import { CLASS_ORDER, KnightClassId } from '../config/classes';
 import { MatchRewards, coinsForPlace } from '../config/rewards';
@@ -52,17 +53,7 @@ export interface MatchStepOutput {
   stateChangedTo: MatchState | null;
 }
 
-const BOT_NAMES: Record<KnightClassId, string[]> = {
-  sword: ['Сэр Роланд', 'Сир Гарет'],
-  dual: ['Корвус Двуклинок', 'Весп Вихрь'],
-  spear: ['Ульрих Пика', 'Лотар Копейщик'],
-  hammer: ['Торвальд Молот', 'Брат Гром'],
-  barbarian: ['Хальвар Лютый', 'Рагнар Секира'],
-  duelist: ['Этьен де Валь', 'Сир Люциан'],
-  skeleton_knight: ['Лорд Мортис', 'Страж Склепа'],
-  skeleton_reaper: ['Тень Жнеца', 'Малакор Серп'],
-  skeleton_berserker: ['Центурион Праха', 'Кратос Костяной'],
-};
+
 
 export const DEFAULT_MATCH_DURATION = 190; // 3m 10s for deeper, higher-HP battles
 export const FINAL_PHASE_THRESHOLD = 35; // Final 35s -> Sudden Death!
@@ -181,7 +172,7 @@ export class MatchManager {
     for (let i = 0; i < botCount; i++) {
       const cls = botClasses[i % botClasses.length];
       const sp = this.arena.spawns[spawnIndices[i + 1]];
-      const pool = BOT_NAMES[cls];
+      const pool = BOT_NICKNAMES[cls];
       let bName = pool[0];
       for (const candidate of pool) {
         if (!usedNames.has(candidate)) {

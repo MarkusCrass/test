@@ -1259,7 +1259,7 @@ export class UIManager {
             <div class="mp-room-row-info">
               <div class="mp-room-row-top">
                 <span class="mp-room-code-chip">${escapeHtml(r.roomCode)}</span>
-                <strong class="mp-room-host">${escapeHtml(r.hostIsBot ? botDisplayName(r.hostName, this.settings.language) : r.hostName)}</strong>
+                <strong class="mp-room-host">${r.hostIsBot ? '🤖 ' : ''}${escapeHtml(r.hostIsBot ? botDisplayName(r.hostName, this.settings.language) : r.hostName)}</strong>
               </div>
               <div class="mp-room-row-meta">
                 ${statusBadge}
@@ -1333,7 +1333,9 @@ export class UIManager {
         const clsCfg = KNIGHT_CLASSES[p.classId];
         const iconUrl = getSkillIconUrl(CLASS_EMBLEM_ICON[p.classId]);
         const isMe = p.clientId === myClientId;
-        const readyPill = p.isHost
+        const readyPill = p.clientId.startsWith('c_bot_')
+          ? `<span class="mp-slot-pill bot">${this.tl('ai')}</span>`
+          : p.isHost
           ? `<span class="mp-slot-pill host">${this.tl('leader')}</span>`
           : p.ready
           ? `<span class="mp-slot-pill ready">${this.tl('ready')}</span>`
@@ -1345,7 +1347,7 @@ export class UIManager {
         }">
             <div class="mp-slot-top">
               <span class="mp-slot-index">#${idx + 1}</span>
-              <span class="mp-slot-ping">${p.pingMs} ms</span>
+              <span class="mp-slot-ping">${p.clientId.startsWith('c_bot_') ? this.tl('ai') : `${p.pingMs} ms`}</span>
             </div>
             <img class="mp-slot-emblem" src="${iconUrl}" alt="" draggable="false" />
             <div class="mp-slot-body">

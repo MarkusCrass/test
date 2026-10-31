@@ -1,3 +1,4 @@
+import { BOT_NICKNAMES } from '../config/botNames';
 import { ARENA_CONFIG, ArenaConfig } from '../config/arenaConfig';
 import {
   AttackConfig,
@@ -30,17 +31,7 @@ import {
   WorldSnapshot,
 } from './protocol';
 
-const BOT_NAMES: Record<KnightClassId, string[]> = {
-  sword: ['Сэр Роланд', 'Сир Гарет'],
-  dual: ['Корвус Двуклинок', 'Весп Вихрь'],
-  spear: ['Ульрих Пика', 'Лотар Копейщик'],
-  hammer: ['Торвальд Молот', 'Брат Гром'],
-  barbarian: ['Хальвар Лютый', 'Рагнар Секира'],
-  duelist: ['Этьен де Валь', 'Сир Люциан'],
-  skeleton_knight: ['Лорд Мортис', 'Страж Склепа'],
-  skeleton_reaper: ['Тень Жнеца', 'Малакор Серп'],
-  skeleton_berserker: ['Центурион Праха', 'Кратос Костяной'],
-};
+
 
 interface HumanInputSlot {
   latest: ClientInputPacket;
@@ -119,7 +110,8 @@ export class AuthoritativeMatchSim {
       name: string;
       classId: KnightClassId;
     }>,
-    fillBots: boolean
+    fillBots: boolean,
+    preferredBotName?: string
   ): void {
     this.fighters = [];
     this.bots.clear();
@@ -199,16 +191,17 @@ export class AuthoritativeMatchSim {
       const spawnIdx =
         spawnOrder[(cappedHumans.length + i) % spawnOrder.length];
       const sp = this.arena.spawns[spawnIdx];
-      const cls = botPool[i % botPool.length];
-      const names = BOT_NAMES[cls];
-      let botName = names.find((n) => !usedNames.has(n)) ?? `${names[0]} ${i + 1}`;
-      botName = `🤖 ${botName}`;
+      const cls = i === 0 && preferredBotName ? 'sword' : botPool[i % botPool.length];
+      const names = BOT_NICKNAMES[cls];
+      const preferred = i === 0 && preferredBotName && !usedNames.has(preferredBotName) ? preferredBotName : undefined;
+      const botName = preferred ?? names.find((n) => !usedNames.has(n)) ?? `${names[0]} ${i + 1}`;
       usedNames.add(botName);
+      const displayName = `🤖 ${botName}`;
 
       const botId = `bot_${i + 1}`;
       const botFighter = new Fighter({
         id: botId,
-        displayName: botName,
+        displayName,
         isHuman: false,
         classId: cls,
         x: sp.x,
