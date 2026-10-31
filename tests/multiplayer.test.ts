@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import { attachMultiplayerHub } from '../server/wsHub';
 import { KnightClassId } from '../src/config/classes';
@@ -646,14 +646,18 @@ describe('Online Multiplayer Simulation, Sync & WebSocket Hub', () => {
         fillBots: true,
         isPublic: true,
       });
+      // createRoom/joinRoom enqueue network messages; their promises do not wait
+      // for the room to be created or joined on the relay.
+      await vi.waitFor(() => expect(hostClient.currentRoom?.roomCode).toBe('BEGT'), { timeout: 3000, interval: 20 });
       await guestClient.joinRoom('BEGT', 'Гость Бегет', 'spear');
+      await vi.waitFor(() => expect(guestClient.currentRoom?.players).toHaveLength(2), { timeout: 3000, interval: 20 });
       hostClient.startMatch();
 
-      // Wait ~360ms for Host 60Hz sim + HTTP relay to bootstrap Guest and deliver snapshots
-      await new Promise((r) => setTimeout(r, 360));
-      expect(hostStarted).toBe(true);
-      expect(guestStarted).toBe(true);
-      expect(guestSnapshots).toBeGreaterThan(0);
+      await vi.waitFor(() => {
+        expect(hostStarted).toBe(true);
+        expect(guestStarted).toBe(true);
+        expect(guestSnapshots).toBeGreaterThan(0);
+      }, { timeout: 3000, interval: 20 });
 
       // Verify Guest input relays back into Host simulation cleanly
       const intent = createEmptyIntent(0.4);
