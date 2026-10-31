@@ -1,4 +1,5 @@
 import { assetUrl } from '../config/assetUrls';
+import { RETICLE_DEFAULT_NORM_X, RETICLE_DEFAULT_NORM_Y } from '../config/aim';
 import {
   CLASS_ORDER,
   KNIGHT_CLASSES,
@@ -2374,8 +2375,8 @@ export class UIManager {
     }
 
     // 3. Pointer Lock / Free-Aim Prompt & Elevated Dynamic Reticle
-    const rx = reticleState ? reticleState.normX : 0.5;
-    const ry = reticleState ? reticleState.normY : 0.34;
+    const rx = reticleState ? reticleState.normX : RETICLE_DEFAULT_NORM_X;
+    const ry = reticleState ? reticleState.normY : RETICLE_DEFAULT_NORM_Y;
     this.reticleEl.style.left = `${(rx * 100).toFixed(2)}%`;
     this.reticleEl.style.top = `${(ry * 100).toFixed(2)}%`;
     this.reticleEl.classList.toggle(

@@ -9,8 +9,7 @@ import {
   yawFromDir,
 } from '../core/math';
 
-export const RETICLE_DEFAULT_NORM_X = 0.5;
-export const RETICLE_DEFAULT_NORM_Y = 0.34; // Elevated MMORPG crosshair (34% from top, well above helmet!)
+export { RETICLE_DEFAULT_NORM_X, RETICLE_DEFAULT_NORM_Y } from '../config/aim';
 
 export interface CrosshairAimResult {
   aimYaw: number;
@@ -28,7 +27,7 @@ export interface CrosshairAimResult {
  * - Unrestricted 360° horizontal orbit (`yaw`)
  * - Full vertical pitch (`-47°` looking steep upward at Skybridge/towers to `+70°` tactical MMORPG overview)
  * - Smooth mouse-wheel zoom (`2.4m` close action view to `10.8m` wide MMORPG arena view)
- * - Elevated over-head sightline pivot so the character never blocks the higher crosshair (`top: 34%`)
+ * - Elevated over-head sightline pivot to keep the character from blocking the crosshair
  * - Universal 3D raycast through any screen crosshair position `(normX, normY)` for parallax-true 3D aiming
  */
 export class CameraRig {
@@ -55,7 +54,9 @@ export class CameraRig {
   private readonly tmpNdc = new THREE.Vector2();
 
   constructor(aspect: number) {
-    this.camera = new THREE.PerspectiveCamera(58, aspect, 0.15, 165);
+    // The 165 m sky dome must lie entirely in front of the far clip plane,
+    // even when the camera is offset toward an arena wall.
+    this.camera = new THREE.PerspectiveCamera(58, aspect, 0.15, 300);
   }
 
   public setAspect(aspect: number): void {
@@ -129,7 +130,7 @@ export class CameraRig {
       0,
       1
     );
-    // Elevated pivot above helmet so crosshair at top=34% always has an unobstructed view!
+    // Elevated pivot keeps the character from blocking the default crosshair.
     return lerp(1.88, 2.14, zoomT);
   }
 
@@ -347,7 +348,7 @@ export class CameraRig {
     }
 
     this.camera.position.set(camX, camY, camZ);
-    // Look slightly above the elevated pivot so the crosshair at top=34% aligns naturally with horizon!
+    // Look slightly above the elevated pivot for a clear view over the hero.
     this.camera.lookAt(this.pivot.x, this.pivot.y + 0.06, this.pivot.z);
     this.camera.updateMatrixWorld();
   }

@@ -48,9 +48,9 @@ describe('CameraRig SpringArm, Obstacles & All 4 Classes Verification', () => {
     expect(camDistFromArenaCenter).toBeLessThan(ARENA_CONFIG.radius);
   });
 
-  it('positions elevated crosshair at top=34%, raycasts anywhere across screen, turns 180° on free-cam attack, and aims 3D projectiles vertically', () => {
+  it('positions the lower crosshair at top=42%, raycasts anywhere across screen, turns 180° on free-cam attack, and aims 3D projectiles vertically', () => {
     expect(RETICLE_DEFAULT_NORM_X).toBeCloseTo(0.5, 4);
-    expect(RETICLE_DEFAULT_NORM_Y).toBeCloseTo(0.34, 4);
+    expect(RETICLE_DEFAULT_NORM_Y).toBeCloseTo(0.42, 4);
 
     const cam = new CameraRig(16 / 9);
     const player = new Fighter({

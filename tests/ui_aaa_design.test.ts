@@ -380,8 +380,8 @@ describe('Modern Spatial Glass & Bento Hero Hub UI', () => {
     expect(
       miniRoot.querySelector('#screen-hud')!.classList.contains('hidden')
     ).toBe(false);
-    // Default elevated MMORPG crosshair sits higher up at top=34.00%
-    expect(miniRoot.querySelector('#hud-reticle')!.style.top).toBe('34.00%');
+    // The default crosshair is slightly closer to the hero.
+    expect(miniRoot.querySelector('#hud-reticle')!.style.top).toBe('42.00%');
     expect(miniRoot.querySelector('#hud-reticle')!.style.left).toBe('50.00%');
 
     // Screen-wide Free-Cursor MMORPG crosshair moves anywhere & highlights locked enemy
