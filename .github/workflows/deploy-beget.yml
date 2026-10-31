@@ -168,3 +168,9 @@ jobs:
           else
             echo '::notice::Public multiplayer relay responded with JSON and CORS. Still test in the actual Yandex iframe.'
           fi
+
+      - name: Test live HTTPS relay with two simulated clients
+        run: |
+          if ! node scripts/smoke-yandex-relay.mjs; then
+            echo '::warning::Live two-client relay check failed; multiplayer is not verified.'
+          fi
