@@ -25,6 +25,22 @@ import { KnightVisualRig } from './KnightMesh';
 import { MaterialLibrary } from './PixelTextures';
 import { SkyAndAtmosphere } from './SkyAndAtmosphere';
 
+/** Reduce the 3D buffer on Fast without changing HUD size or camera aspect. */
+export function getGraphicsPixelRatio(
+  devicePixelRatio: number,
+  pixelScale: 1 | 2 | 3,
+  quality: GraphicsQuality,
+  width: number,
+  height: number
+): number {
+  if (quality === 'low') {
+    // Large 4K displays would otherwise still overwhelm weaker GPUs.
+    return Math.min(devicePixelRatio, 0.75, 1600 / width, 900 / height);
+  }
+  if (pixelScale !== 1) return 1;
+  return Math.min(devicePixelRatio, quality === 'ultra' ? 2 : 1.5);
+}
+
 export interface ProjectedFighterLabel {
   id: string;
   name: string;
@@ -309,11 +325,11 @@ export class WorldRenderer {
     this.cameraRig.setAspect(w / h);
 
     this.sky.setMotesVisible(quality !== 'low');
+    this.arenaBuilder.fireSystem.setLowQuality(quality === 'low');
+    this.renderer.shadowMap.enabled = quality !== 'low';
     this.sunLight.castShadow = quality !== 'low';
 
-    const maxDpr =
-      quality === 'ultra' ? 2 : quality === 'high' ? 1.5 : 1;
-    const dpr = pixelScale === 1 ? Math.min(window.devicePixelRatio || 1, maxDpr) : 1;
+    const dpr = getGraphicsPixelRatio(window.devicePixelRatio || 1, pixelScale, quality, w, h);
 
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h, true);

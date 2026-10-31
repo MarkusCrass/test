@@ -18,5 +18,6 @@ Open-Source Volumetric Fire Shaders & LUT Textures — MIT & CC0 1.0
    - https://github.com/yomotsu/VolumetricFire (MIT License, Copyright (c) Akihiro Oyamada)
 
 4. Kenney Particle Pack (`flame_01.png`, `flame_04.png`, `fire_01.png`, `circle_05.png`)
+   flame_fast.png is a modified version of flame_01.png for the fast graphics preset.
    Author: Kenney (https://kenney.nl/assets/particle-pack)
    License: CC0 1.0 Universal (Public Domain)

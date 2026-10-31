@@ -65,6 +65,36 @@ describe('Open-Source Volumetric 3D Raymarched Fire & Upgraded Brazier/Torch Mod
     }
   });
 
+  it('switches existing and later-created fires to inexpensive effects and restores them', () => {
+    const fireSys = new ArenaFireSystem();
+    const root = new THREE.Group();
+    const makeFire = () => fireSys.createFire({ parent: root, preset: 'brazier', withLight: true });
+    const existing = makeFire();
+    const check = (fire: THREE.Group, low: boolean) => {
+      const volume = fire.children.find((child) =>
+        (child as THREE.Mesh).isMesh &&
+        ((child as THREE.Mesh).material as THREE.ShaderMaterial).fragmentShader?.includes('sampleVolumetricFire')
+      )!;
+      const sprite = fire.children.find((child) => (child as THREE.Sprite).isSprite)!;
+      const light = fire.children.find((child) => (child as THREE.PointLight).isPointLight)!;
+      expect(volume.visible).toBe(!low);
+      expect(sprite.visible).toBe(low);
+      expect(light.visible).toBe(!low);
+    };
+    const sparks = fireSys.group.children.find((child) => (child as THREE.Points).isPoints)!;
+    check(existing, false);
+    fireSys.setLowQuality(true);
+    check(existing, true);
+    expect(sparks.visible).toBe(false);
+    const lateFire = makeFire();
+    check(lateFire, true);
+    fireSys.update(1, 1 / 60, new THREE.Vector3(0, 1, 3));
+    fireSys.setLowQuality(false);
+    check(existing, false);
+    check(lateFire, false);
+    expect(sparks.visible).toBe(true);
+  });
+
   it('dynamically updates uLocalCamPos, uCamDist, and FrontSide/BackSide culling in onBeforeRender', () => {
     const fireSys = new ArenaFireSystem();
     const scene = new THREE.Scene();

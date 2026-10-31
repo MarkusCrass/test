@@ -11,6 +11,9 @@ interface FireInstance {
   group: THREE.Group;
   volumeMesh: THREE.Mesh;
   volumeMat: THREE.ShaderMaterial;
+  simpleFlame: THREE.Sprite;
+  simpleFlameWidth: number;
+  simpleFlameHeight: number;
   haloMesh: THREE.Mesh;
   light: THREE.PointLight | null;
   baseLightIntensity: number;
@@ -499,6 +502,8 @@ export class ArenaFireSystem {
 
   private readonly fireLutTex: THREE.Texture;
   private readonly haloMat: THREE.MeshBasicMaterial;
+  private readonly simpleFlameMat: THREE.SpriteMaterial;
+  private lowQuality = false;
   private readonly coalMat: THREE.ShaderMaterial;
 
   // 1-draw-call GPU-driven rising ember particles
@@ -546,6 +551,14 @@ export class ArenaFireSystem {
     this.fireLutTex.wrapT = THREE.ClampToEdgeWrapping;
 
     const glowTex = loadBrowserTex('textures/fx/circle_05.png');
+    this.simpleFlameMat = new THREE.SpriteMaterial({
+      map: loadBrowserTex('textures/fx/flame_fast.png'),
+      color: new THREE.Color(2.0, 0.5, 0.06),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
 
     this.haloMat = new THREE.MeshBasicMaterial({
       map: glowTex,
@@ -790,6 +803,15 @@ export class ArenaFireSystem {
 
     g.add(volumeMesh);
 
+    // Fast quality uses an inexpensive camera-facing flame instead of raymarching.
+    const simpleFlame = new THREE.Sprite(this.simpleFlameMat);
+    simpleFlame.scale.set(boxWidth * 1.5, boxHeight * 1.15, 1);
+    simpleFlame.position.y = boxHeight * 0.5;
+    simpleFlame.visible = this.lowQuality;
+    simpleFlame.renderOrder = 3;
+    volumeMesh.visible = !this.lowQuality;
+    g.add(simpleFlame);
+
     // Subtle atmospheric heat-bloom halo
     const haloMesh = new THREE.Mesh(this.haloGeo, this.haloMat);
     haloMesh.scale.setScalar(haloSize);
@@ -807,6 +829,7 @@ export class ArenaFireSystem {
         1.65
       );
       light.position.set(0, boxHeight * 0.42 + 0.12, 0);
+      light.visible = !this.lowQuality;
       g.add(light);
     }
 
@@ -814,6 +837,9 @@ export class ArenaFireSystem {
       group: g,
       volumeMesh,
       volumeMat,
+      simpleFlame,
+      simpleFlameWidth: boxWidth * 1.5,
+      simpleFlameHeight: boxHeight * 1.15,
       haloMesh,
       light,
       baseLightIntensity,
@@ -865,6 +891,17 @@ export class ArenaFireSystem {
     this.emberParamsAttr.needsUpdate = true;
   }
 
+  /** Switch existing effects in place; fires created later inherit the setting. */
+  public setLowQuality(low: boolean): void {
+    this.lowQuality = low;
+    this.emberPoints.visible = !low;
+    for (const inst of this.instances) {
+      inst.volumeMesh.visible = !low;
+      inst.simpleFlame.visible = low;
+      if (inst.light) inst.light.visible = !low;
+    }
+  }
+
   public update(elapsed: number, _dt: number, cameraPos?: THREE.Vector3): void {
     this.coalMat.uniforms.uTime.value = elapsed;
     this.emberMat.uniforms.uTime.value = elapsed;
@@ -877,6 +914,13 @@ export class ArenaFireSystem {
         Math.sin(elapsed * 9.6 + inst.phase) * 0.085 +
         Math.cos(elapsed * 17.8 + inst.phase * 1.63) * 0.055;
 
+      if (this.lowQuality) {
+        inst.simpleFlame.scale.set(
+          inst.simpleFlameWidth * flicker,
+          inst.simpleFlameHeight * flicker,
+          1
+        );
+      }
       if (cameraPos) {
         inst.haloMesh.lookAt(cameraPos);
       } else {
