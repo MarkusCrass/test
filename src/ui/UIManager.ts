@@ -1859,6 +1859,7 @@ export class UIManager {
   private currentSelectedClass: KnightClassId = 'sword';
 
   private renderHubQuickHeroStrip(): void {
+    const scrollTop = this.hubHeroStripEl.scrollTop;
     this.hubHeroStripEl.innerHTML = CLASS_ORDER.map((cid) => {
       const c = KNIGHT_CLASSES[cid];
       const iconUrl = getSkillIconUrl(CLASS_EMBLEM_ICON[cid]);
@@ -1882,6 +1883,7 @@ export class UIManager {
       `;
     }).join('');
 
+    this.hubHeroStripEl.scrollTop = scrollTop;
     this.hubHeroStripEl.querySelectorAll('.hub-hero-chip').forEach((btn) => {
       btn.addEventListener('click', () => {
         const cid = (btn as HTMLElement).dataset.cid as KnightClassId;

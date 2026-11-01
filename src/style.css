@@ -435,8 +435,14 @@ body {
   );
 }
 
+#screen-main-menu {
+  padding-bottom: 105px;
+}
+
 .hub-left-stack {
   width: min(390px, 92vw);
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
   margin-top: auto;
   margin-bottom: auto;
   padding: 20px;
@@ -641,17 +647,22 @@ body {
   color: #94a3b8;
 }
 
-/* Bottom Hub Dock: Quick Hero Picker + Giant Juicy Play CTA */
+/* Hero selector on the right, independent of the centered play button. */
 .hub-bottom-dock {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-  flex-wrap: wrap;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .hub-quick-heroes-box {
-  max-width: min(74vw, 960px);
+  position: absolute;
+  top: 80px;
+  right: clamp(16px, 3vw, 34px);
+  width: min(240px, 38vw);
+  max-height: calc(100% - 180px);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
   padding: 11px 14px;
   border-radius: 22px;
   background: var(--glass-bg);
@@ -663,9 +674,9 @@ body {
 
 .hub-quick-heroes-head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
   margin-bottom: 9px;
   font-size: 12px;
   font-weight: 700;
@@ -700,13 +711,17 @@ body {
 
 .hub-hero-strip {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 7px;
-  flex-wrap: wrap;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .hub-hero-chip {
   cursor: pointer;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -792,6 +807,16 @@ body {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
+}
+
+/* Keep both the fight and purchase states centered and within the viewport. */
+#btn-menu-quick {
+  position: absolute;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  translate: -50% 0;
+  max-width: calc(100% - 32px);
+  pointer-events: auto;
 }
 
 /* Giant Juicy Glowing Play Button */
@@ -3156,6 +3181,13 @@ body {
 }
 
 @media (max-width: 880px) {
+  .hub-left-stack {
+    width: min(390px, 46vw);
+    padding: 12px;
+  }
+  .hub-quick-heroes-box {
+    padding: 9px;
+  }
   .hub-brand-text,
   .hub-util-btn span {
     display: none;
@@ -3188,6 +3220,46 @@ body {
   }
   .mp-slot-pill {
     width: auto;
+  }
+}
+
+/* Keep the selector usable in a short embedded game window. */
+@media (max-height: 420px) {
+  #screen-main-menu {
+    padding-top: 64px;
+    padding-bottom: 78px;
+  }
+  .hub-left-stack {
+    max-height: calc(100vh - 142px);
+  }
+  .hub-quick-heroes-box {
+    top: 64px;
+    max-height: calc(100% - 140px);
+    padding: 6px 9px;
+  }
+  .hub-quick-heroes-head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .hub-link-pill {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+  #btn-menu-quick {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 10px;
+    padding: 7px 20px 7px 9px;
+  }
+  #btn-menu-quick .hub-play-icon {
+    width: 36px;
+    height: 36px;
+  }
+  #btn-menu-quick .hub-play-title {
+    font-size: 17px;
+  }
+  #btn-menu-quick .hub-play-sub {
+    font-size: 11px;
   }
 }
 

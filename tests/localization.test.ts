@@ -53,6 +53,19 @@ describe('localization', () => {
     expect(loadSettings().language).toBe('en');
   });
 
+  it('keeps the hero list scroll position while switching between fight and purchase', () => {
+    const callbacks = new Proxy({}, { get: () => vi.fn() }) as unknown as UICallbacks;
+    const root = document.querySelector<HTMLElement>('#root')!;
+    new UIManager(root, { ...DEFAULT_SETTINGS, language: 'ru' }, callbacks);
+    const strip = root.querySelector<HTMLElement>('#hub-hero-strip')!;
+    strip.scrollTop = 180;
+    strip.querySelector<HTMLButtonElement>('[data-cid="skeleton_berserker"]')!.click();
+    expect(strip.scrollTop).toBe(180);
+    expect(root.querySelector('#hub-play-title')?.textContent).toBe('Купить за 300');
+    strip.querySelector<HTMLButtonElement>('[data-cid="sword"]')!.click();
+    expect(root.querySelector('#hub-play-title')?.textContent).toBe('В БОЙ!');
+  });
+
   it('updates the interface and direction immediately without losing other settings', () => {
     const callbacks = new Proxy({ onSettingsChanged: vi.fn() }, { get: (target, key) => key in target ? target[key as 'onSettingsChanged'] : vi.fn() }) as unknown as UICallbacks;
     const root = document.querySelector<HTMLElement>('#root')!;
