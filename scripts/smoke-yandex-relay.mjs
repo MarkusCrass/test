@@ -2,7 +2,7 @@
 // This is not a substitute for a real two-browser Yandex Games test.
 import assert from 'node:assert/strict';
 
-const base = process.argv[2] ?? 'https://igra.cosmorox.ru';
+const base = process.argv[2] ?? 'https://ezegames.ru';
 const sessions = [];
 async function request(action, body) {
   const response = await fetch(`${base}/api/mp.php?action=${action}`, {
