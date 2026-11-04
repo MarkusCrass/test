@@ -26,7 +26,7 @@ export const LOCALES: Record<string, Record<Lang, string>> = {
   backArena: { ru: "Назад в Арену", en: "Back to arena", tr: "Arenaya dön", es: "Volver a la arena", ar: "العودة إلى الساحة" },
   fightNow: { ru: "Сразу начать дуэль", en: "Start duel now", tr: "Düelloyu başlat", es: "Iniciar duelo", ar: "ابدأ المبارزة" },
   mpTitle: { ru: "Сетевая арена", en: "Online arena", tr: "Çevrimiçi arena", es: "Arena en línea", ar: "الساحة الجماعية" },
-  mpSubtitle: { ru: "До 5 живых игроков в матче · Серверная физика 60 Гц", en: "Up to 5 players · Server physics at 60 Hz", tr: "En fazla 5 oyuncu · 60 Hz sunucu fiziği", es: "Hasta 5 jugadores · Física de servidor a 60 Hz", ar: "حتى 5 لاعبين · فيزياء الخادم 60 هرتز" },
+  mpSubtitle: { ru: "До 5 игроков в матче · Симуляция боя 60 Гц", en: "Up to 5 players · 60 Hz match simulation", tr: "En fazla 5 oyuncu · 60 Hz maç simülasyonu", es: "Hasta 5 jugadores · Simulación de combate a 60 Hz", ar: "حتى 5 لاعبين · محاكاة المعركة بتردد 60 هرتز" },
   mpName: { ru: "Ваш никнейм", en: "Your nickname", tr: "Takma adınız", es: "Tu apodo", ar: "اسمك المستعار" },
   mpSelectedHero: { ru: "Выбранный герой", en: "Selected hero", tr: "Seçili kahraman", es: "Héroe seleccionado", ar: "البطل المختار" },
   mpQuickDesc: { ru: "Мгновенный вход в открытую комнату", en: "Join an open room instantly", tr: "Açık bir odaya hemen katıl", es: "Entrar a una sala abierta", ar: "انضم فورًا إلى غرفة مفتوحة" },

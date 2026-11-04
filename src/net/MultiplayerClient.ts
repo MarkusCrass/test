@@ -1302,6 +1302,10 @@ export class MultiplayerClient {
         this.callbacks.onSnapshot?.(msg);
         break;
       case 'pong': {
+        // HTTP sync already measures request/response time above. The ping message
+        // can wait up to a whole polling interval in the outbox before it is sent;
+        // measuring from its creation would report that wait as network latency.
+        if (this.transport === 'http') break;
         const rtt = Math.max(
           1,
           Math.round(performance.now() - msg.clientTime)

@@ -500,7 +500,7 @@ export class UIManager {
               <div class="mp-header-orb">${ICONS.globe}</div>
               <div>
                 <h2 class="mp-heading" data-i18n="mpTitle">Сетевая арена</h2>
-                <p class="mp-subheading" data-i18n="mpSubtitle">До 5 живых игроков в матче · Серверная физика 60 Гц</p>
+                <p class="mp-subheading" data-i18n="mpSubtitle">До 5 игроков в матче · Симуляция боя 60 Гц</p>
               </div>
             </div>
             <div id="mp-conn-pill" class="mp-conn-pill connecting">${this.tl('mpConnecting')}</div>
