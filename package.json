@@ -12,6 +12,8 @@
     "test": "vitest run",
     "build:yandex": "tsc && vite build --mode yandex",
     "package:yandex": "npm run build:yandex && rm -f knights-yandex-games.zip && cd dist-yandex && zip -rq ../knights-yandex-games.zip . -x .htaccess deploy.php \"api/*\"",
+    "build:site": "tsc && vite build --mode site",
+    "package:site": "npm run build:site && rm -f knights-website.zip && cd dist-site && zip -rq ../knights-website.zip . -x .htaccess deploy.php \"api/*\"",
     "build:crazygames": "tsc && vite build --mode crazygames",
     "package:crazygames": "npm run build:crazygames && rm -f knights-crazygames.zip && cd dist-crazygames && zip -rq ../knights-crazygames.zip . -x .htaccess deploy.php \"api/*\""
   },

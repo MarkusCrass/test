@@ -14,3 +14,7 @@ knights-yandex-games.zip
 # CrazyGames standalone archive
 dist-crazygames
 knights-crazygames.zip
+
+# Standalone website package
+dist-site
+knights-website.zip

@@ -11,6 +11,10 @@ function knightsMultiplayerPlugin(mode: string): Plugin {
         // Strip anonymous `crossorigin` attributes so authenticated preview proxies receive same-origin cookies,
         // and in production builds convert module script to classic <script defer> (no-cors with full cookies).
         let out = html.replace(/\s+crossorigin(?:="[^"]*")?/gi, '');
+        if (mode === 'site') {
+          // The standalone website is not inside the Yandex Games platform.
+          out = out.replace('    <!-- Яндекс Игры SDK -->\n    <script src="/sdk.js"></script>\n', '');
+        }
         if (mode === 'crazygames') {
           out = out.replace('<html lang="ru">', '<html lang="en" data-default-language="en">');
           out = out.replace(
@@ -50,7 +54,7 @@ export default defineConfig(({ mode }) => ({
   base: './',
   plugins: [knightsMultiplayerPlugin(mode)],
   build: {
-    outDir: mode === 'yandex' ? 'dist-yandex' : mode === 'crazygames' ? 'dist-crazygames' : 'dist',
+    outDir: mode === 'yandex' ? 'dist-yandex' : mode === 'crazygames' ? 'dist-crazygames' : mode === 'site' ? 'dist-site' : 'dist',
     modulePreload: false,
     cssCodeSplit: false,
     rollupOptions: {

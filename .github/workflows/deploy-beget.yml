@@ -101,6 +101,22 @@ jobs:
             gh release create crazygames-latest knights-crazygames.zip --target "${{ github.sha }}" --title "Knights — CrazyGames Basic Launch archive" --notes "Basic Launch archive without ads. Validate SDK, persistence and multiplayer on CrazyGames before publishing."
           fi
 
+      - name: Build and publish standalone website archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm run package:site
+          unzip -t knights-website.zip | tail -1
+          ! unzip -Z1 knights-website.zip | grep -E '(^|/)(deploy.php|mp.php|\.htaccess)$'
+          ! unzip -p knights-website.zip index.html | grep -q '/sdk.js'
+          if gh release view site-latest >/dev/null 2>&1; then
+            gh release upload site-latest knights-website.zip --clobber
+          else
+            gh release create site-latest knights-website.zip --target "${{ github.sha }}" \
+              --title "Knights — standalone website" \
+              --notes "Static website only. Keeps the separately installed API and its runtime data untouched."
+          fi
+
       - name: Upload ready-to-host Beget archive artifact
         uses: actions/upload-artifact@v4
         with:
