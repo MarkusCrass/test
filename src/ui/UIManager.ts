@@ -456,10 +456,24 @@ export class UIManager {
         </footer>
       </div>
 
-      <!-- SCREEN 2: HEROES INSPECTOR ("ГЕРОИ") — BENTO STATS + INTERACTIVE SKILL DOCK -->
+      <!-- SCREEN 2: HEROES INSPECTOR ("ГЕРОИ") — DETAILS LEFT, HEROES RIGHT, FIGHT CENTER -->
       <div id="screen-selection" class="hub-screen armory-screen hidden">
-        <aside id="hero-bento-card" class="hero-bento-card pointer-auto" data-cls="sword">
-          <div id="class-details"></div>
+        <div class="armory-left-column">
+          <aside id="hero-bento-card" class="hero-bento-card pointer-auto" data-cls="sword">
+            <div id="class-details"></div>
+          </aside>
+          <div class="selection-showcase-dock pointer-auto">
+            <div class="armory-controls-label" data-i18n="navControls">${this.tl('navControls')}</div>
+            <div id="selection-skill-bar" class="skill-squares-row"></div>
+          </div>
+          <button id="btn-sel-back" class="btn btn-icon-circle" title="Назад в Арену" data-i18n-title="backArena">
+            ${ICONS.arrowLeft}
+          </button>
+        </div>
+
+        <aside class="armory-hero-rail pointer-auto">
+          <div class="armory-heroes-label" data-i18n="navHeroes">${this.tl('navHeroes')}</div>
+          <div id="class-tabs" class="armory-hero-pills"></div>
         </aside>
 
         <div class="hub-spin-hint">
@@ -467,27 +481,14 @@ export class UIManager {
           <span data-i18n="rotateHint">Потяните мышью для обзора 360°</span>
         </div>
 
-        <footer class="armory-bottom-dock pointer-auto">
-          <div class="armory-bottom-left">
-            <button id="btn-sel-back" class="btn btn-icon-circle" title="Назад в Арену" data-i18n-title="backArena">
-              ${ICONS.arrowLeft}
-            </button>
-            <div id="class-tabs" class="armory-hero-pills"></div>
-          </div>
-
-          <div class="selection-showcase-dock">
-            <div id="selection-skill-bar" class="skill-squares-row"></div>
-          </div>
-
-          <div class="armory-launch-group">
-            <div class="mode-toggle-row">
-              <button id="mode-ffa5" class="mode-btn active" data-i18n="modeFfaTag">5 бойцов</button>
-              <button id="mode-duel" class="mode-btn" data-i18n="modeDuelName">1 на 1</button>
-            </div>
-            <button id="btn-sel-start" class="hub-play-cta compact">
-              <span class="hub-play-icon">${ICONS.play}</span>
-              <strong class="hub-play-title" data-i18n="playFight">В БОЙ!</strong>
-            </button>
+        <footer class="armory-launch-group pointer-auto">
+          <button id="btn-sel-start" class="hub-play-cta compact">
+            <span class="hub-play-icon">${ICONS.play}</span>
+            <strong class="hub-play-title" data-i18n="playFight">В БОЙ!</strong>
+          </button>
+          <div class="mode-toggle-row">
+            <button id="mode-ffa5" class="mode-btn active" data-i18n="modeFfaTag">5 бойцов</button>
+            <button id="mode-duel" class="mode-btn" data-i18n="modeDuelName">1 на 1</button>
           </div>
         </footer>
       </div>
@@ -1564,31 +1565,9 @@ export class UIManager {
       this.callbacks.onOpenSelection();
     });
 
-    // Big Main Hub Play CTA — buy hero if not owned, otherwise start match!
+    // Both launch buttons must enforce the same unlock/purchase rules.
     this.q('#btn-menu-quick').addEventListener('click', () => {
-      const owned = isKnightUnlocked(this.profile, this.currentSelectedClass);
-      if (!owned) {
-        const unlock = KNIGHT_UNLOCK_CONFIG[this.currentSelectedClass];
-        if (this.profile.coins < unlock.price) {
-          // Not enough coins — do nothing (could show a toast later)
-          return;
-        }
-        const purchased = addCoins(this.profile, -unlock.price);
-        this.profile = purchased;
-        const { profile: newProfile, success } = unlockKnight(
-          this.profile,
-          this.currentSelectedClass
-        );
-        if (!success) return;
-        this.profile = newProfile;
-        saveProfile(this.profile);
-        this.hubCoinDisplayEl.textContent = String(this.profile.coins);
-        this.q('#hub-main-coin-display').textContent = String(this.profile.coins);
-        this.renderHubQuickHeroStrip();
-        this.updatePlayButtonSubtitle();
-        return;
-      }
-      this.callbacks.onStartMatch(this.currentSelectedClass, this.selectedMode);
+      this.startOrUnlockSelectedHero();
     });
 
     // Heroes Inspector Screen
@@ -1604,7 +1583,7 @@ export class UIManager {
       this.callbacks.onReturnMainMenu();
     });
     this.q('#btn-sel-start').addEventListener('click', () => {
-      this.callbacks.onStartMatch(this.currentSelectedClass, this.selectedMode);
+      this.startOrUnlockSelectedHero();
     });
 
     // Multiplayer Lobby & Waiting Room
@@ -1895,6 +1874,24 @@ export class UIManager {
     this.updatePlayButtonSubtitle();
   }
 
+  private startOrUnlockSelectedHero(): void {
+    const classId = this.currentSelectedClass;
+    if (!isKnightUnlocked(this.profile, classId)) {
+      const unlock = KNIGHT_UNLOCK_CONFIG[classId];
+      if (this.profile.coins < unlock.price) return;
+      const purchased = addCoins(this.profile, -unlock.price);
+      const { profile, success } = unlockKnight(purchased, classId);
+      if (!success) return;
+      this.profile = profile;
+      saveProfile(profile);
+      this.hubCoinDisplayEl.textContent = String(profile.coins);
+      this.q('#hub-main-coin-display').textContent = String(profile.coins);
+      this.renderSelectionClass(classId, false);
+      return;
+    }
+    this.callbacks.onStartMatch(classId, this.selectedMode);
+  }
+
   private updatePlayButtonSubtitle(): void {
     const modeLabel =
       this.selectedMode === 'ffa5'
@@ -1915,6 +1912,12 @@ export class UIManager {
       ? `${modeLabel} · ${clsName}`
       : `${this.tl('playBuy', { price: unlock.price })} · ${clsName}`;
     btn.classList.toggle('buy-state', !owned);
+
+    const inspectorBtn = this.q('#btn-sel-start');
+    inspectorBtn.querySelector('.hub-play-title')!.textContent = owned
+      ? this.tl('playFight')
+      : this.tl('playBuy', { price: unlock.price });
+    inspectorBtn.classList.toggle('buy-state', !owned);
   }
 
   private renderMpClassButtons(): void {
@@ -2043,21 +2046,31 @@ export class UIManager {
     this.callbacks.onSelectPreviewClass(classId, userInitiated);
 
     const tabsEl = this.q('#class-tabs');
+    const previousScroll = tabsEl.scrollTop;
     tabsEl.innerHTML = CLASS_ORDER.map((cid) => {
       const c = KNIGHT_CLASSES[cid];
       const iconUrl = getSkillIconUrl(CLASS_EMBLEM_ICON[cid]);
+      const name = classDisplayName(cid, this.settings.language);
+      const role = heroText(cid, 'role', this.settings.language, c.role);
+      const owned = isKnightUnlocked(this.profile, cid);
+      const price = KNIGHT_UNLOCK_CONFIG[cid].price;
+      const priceText = this.tl('hubHeroPrice', { price });
       return `
         <button class="class-tab cls-${cid} ${
           cid === classId ? 'active' : ''
-        }" data-cid="${cid}">
+        } ${owned ? '' : 'locked'}" data-cid="${cid}" aria-pressed="${cid === classId}" title="${escapeHtml(`${name} — ${role}${owned ? '' : ` · ${priceText}`}`)}">
           <img class="class-tab-emblem" src="${iconUrl}" alt="" draggable="false" />
           <div class="class-tab-text">
-            <div class="class-tab-name">${classDisplayName(cid, this.settings.language)}</div>
-            <div class="class-tab-code">${heroText(cid, 'role', this.settings.language, c.role)}</div>
+            <div class="class-tab-name-row">
+              <div class="class-tab-name">${name}</div>
+              ${owned ? '' : `<span class="class-tab-price" title="${escapeHtml(priceText)}">${price}</span>`}
+            </div>
+            <div class="class-tab-code">${role}</div>
           </div>
         </button>
       `;
     }).join('');
+    tabsEl.scrollTop = previousScroll;
 
     tabsEl.querySelectorAll('.class-tab').forEach((btn) => {
       btn.addEventListener('click', () => {

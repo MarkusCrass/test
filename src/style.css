@@ -906,11 +906,34 @@ body {
    SCREEN 2: HEROES INSPECTOR ("ГЕРОИ")
    ============================================================================ */
 
+.armory-screen {
+  --armory-edge: clamp(16px, 3vw, 34px);
+  --armory-left-width: min(425px, calc(50vw - 130px));
+}
+
+.armory-screen .hub-spin-hint {
+  left: 50%;
+  bottom: 140px;
+}
+
+.armory-left-column {
+  position: absolute;
+  top: 80px;
+  bottom: 20px;
+  left: var(--armory-edge);
+  width: var(--armory-left-width);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 0;
+}
+
 .hero-bento-card {
   position: relative;
-  width: min(425px, 92vw);
-  margin-top: auto;
-  margin-bottom: auto;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
   padding: 22px;
   border-radius: 26px;
   background: var(--glass-bg);
@@ -918,7 +941,6 @@ body {
   box-shadow: var(--glass-shadow), var(--glass-specular);
   backdrop-filter: blur(26px) saturate(165%);
   -webkit-backdrop-filter: blur(26px) saturate(165%);
-  max-height: calc(100vh - 196px);
   overflow-y: auto;
 }
 
@@ -1125,49 +1147,97 @@ body {
   line-height: 1.4;
 }
 
-/* Bottom Armory Bar */
-.armory-bottom-dock {
+/* Independent right-hand hero rail and left-hand control legend. */
+.armory-hero-rail {
+  position: absolute;
+  top: 80px;
+  right: var(--armory-edge);
+  width: min(240px, 30vw);
+  max-height: calc(100% - 180px);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.armory-bottom-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.armory-hero-pills {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  max-width: min(56vw, 720px);
-  gap: 6px;
-  padding: 6px;
-  border-radius: 20px;
+  flex-direction: column;
+  min-height: 0;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 22px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow), var(--glass-specular);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+.armory-heroes-label,
+.armory-controls-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.armory-hero-pills {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .class-tab {
   cursor: pointer;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   text-align: left;
   padding: 5px 10px 5px 6px;
   border-radius: 13px;
-  background: transparent;
-  border: 1.5px solid transparent;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
   color: var(--text-main);
   font-family: var(--font-sans);
   transition: all 0.15s ease;
+}
+
+.class-tab-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.class-tab-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.class-tab-name-row .class-tab-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.class-tab-price {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 7px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.class-tab-name,
+.class-tab-code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:dir(rtl) .class-tab {
+  text-align: right;
 }
 
 .class-tab:hover {
@@ -1237,7 +1307,9 @@ body {
 
 .selection-showcase-dock {
   position: relative;
-  padding: 9px 14px;
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 10px 12px 12px;
   border-radius: 20px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
@@ -1247,10 +1319,58 @@ body {
   z-index: 25;
 }
 
+.armory-controls-label {
+  margin-bottom: 9px;
+}
+
+.selection-showcase-dock .skill-squares-row {
+  width: 100%;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.selection-showcase-dock .skill-sq {
+  width: 44px;
+  height: 44px;
+}
+
+.selection-showcase-dock .skill-sq.signature {
+  width: 48px;
+  height: 48px;
+}
+
+.selection-showcase-dock .skill-bar-sep {
+  height: 36px;
+  margin: 0 0 4px;
+}
+
+/* Keep the hover descriptions inside the screen, including the first and last keys. */
+.selection-showcase-dock .skill-sq:nth-child(-n + 3) .skill-tooltip {
+  left: 0;
+  transform: translateY(6px);
+}
+.selection-showcase-dock .skill-sq:nth-child(-n + 3):hover .skill-tooltip {
+  transform: translateY(0);
+}
+.selection-showcase-dock .skill-sq:nth-last-child(-n + 3) .skill-tooltip {
+  left: auto;
+  right: 0;
+  transform: translateY(6px);
+}
+.selection-showcase-dock .skill-sq:nth-last-child(-n + 3):hover .skill-tooltip {
+  transform: translateY(0);
+}
+
 .armory-launch-group {
+  position: absolute;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  z-index: 25;
 }
 
 .mode-toggle-row {
@@ -3170,13 +3290,165 @@ body {
    ============================================================================ */
 
 @media (max-width: 1120px) {
-  .selection-showcase-dock,
   .hub-spin-hint {
     display: none;
+  }
+  .armory-launch-group .hub-play-cta.compact {
+    gap: 9px;
+    padding: 9px 14px 9px 9px;
+  }
+  .armory-launch-group .hub-play-cta.compact .hub-play-icon {
+    width: 30px;
+    height: 30px;
+  }
+  .armory-launch-group .hub-play-cta.compact .hub-play-title {
+    font-size: 16px;
   }
   .hud-vitals {
     bottom: 106px;
     width: min(280px, 60vw);
+  }
+}
+
+@media (max-width: 1050px) {
+  .selection-showcase-dock .skill-sq {
+    width: 36px;
+    height: 36px;
+  }
+  .selection-showcase-dock .skill-sq.signature {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 880px) {
+  .selection-showcase-dock .skill-sq {
+    width: 28px;
+    height: 28px;
+  }
+  .selection-showcase-dock .skill-sq.signature {
+    width: 32px;
+    height: 32px;
+  }
+  .selection-showcase-dock .skill-squares-row {
+    gap: 2px;
+  }
+}
+
+@media (max-width: 740px) and (min-width: 681px) {
+  .selection-showcase-dock .skill-sq {
+    width: 24px;
+    height: 24px;
+  }
+  .selection-showcase-dock .skill-sq.signature {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (max-width: 680px) {
+  .armory-screen {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 74px 16px 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    pointer-events: auto;
+  }
+  .armory-left-column,
+  .armory-hero-rail {
+    position: static;
+    flex: 0 0 auto;
+    width: 100%;
+  }
+  .armory-left-column {
+    gap: 10px;
+  }
+  .hero-bento-card {
+    flex: 0 0 auto;
+    max-height: min(42vh, 380px);
+    padding: 18px;
+  }
+  .armory-hero-rail {
+    order: 2;
+    max-height: 286px;
+  }
+  .armory-launch-group {
+    position: static;
+    transform: none;
+    align-self: center;
+    order: 1;
+  }
+  .selection-showcase-dock .skill-sq {
+    width: 44px;
+    height: 44px;
+  }
+  .selection-showcase-dock .skill-sq.signature {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+@media (max-width: 430px) {
+  .selection-showcase-dock .skill-sq {
+    width: 38px;
+    height: 38px;
+  }
+  .selection-showcase-dock .skill-sq.signature {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-height: 420px) and (min-width: 681px) {
+  .armory-left-column,
+  .armory-hero-rail {
+    top: 64px;
+    bottom: 8px;
+  }
+  .armory-left-column {
+    gap: 6px;
+  }
+  .hero-bento-card {
+    padding: 12px;
+  }
+  .armory-left-column .selection-showcase-dock {
+    display: none;
+  }
+  .armory-left-column #btn-sel-back {
+    width: 36px;
+    height: 36px;
+  }
+  .armory-hero-rail {
+    max-height: none;
+    padding: 7px;
+    gap: 4px;
+  }
+  .armory-hero-pills {
+    gap: 3px;
+  }
+  .armory-hero-rail .class-tab {
+    padding: 2px 6px 2px 3px;
+  }
+  .armory-hero-rail .class-tab-emblem {
+    width: 28px;
+    height: 28px;
+  }
+  .armory-launch-group {
+    bottom: 8px;
+    gap: 4px;
+  }
+  .armory-launch-group .hub-play-cta {
+    padding: 6px 14px 6px 8px;
+  }
+  .armory-launch-group .mode-toggle-row {
+    padding: 2px;
+  }
+  .armory-launch-group .mode-btn {
+    padding: 5px 8px;
+    font-size: 11px;
   }
 }
 

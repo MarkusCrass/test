@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LANGS, LOCALES, classDisplayName, detectLanguage, detectYandexLanguage, t } from '../src/config/locales';
 import { DEFAULT_SETTINGS, hasSavedLanguage, loadSettings, saveSettings, markLanguageSelected } from '../src/config/settings';
 import { CLASS_ORDER } from '../src/config/classes';
+import { DEFAULT_PROFILE, loadProfile } from '../src/config/playerProfile';
 import { UIManager, type UICallbacks } from '../src/ui/UIManager';
 
 describe('localization', () => {
@@ -64,6 +65,56 @@ describe('localization', () => {
     expect(root.querySelector('#hub-play-title')?.textContent).toBe('Купить за 300');
     strip.querySelector<HTMLButtonElement>('[data-cid="sword"]')!.click();
     expect(root.querySelector('#hub-play-title')?.textContent).toBe('В БОЙ!');
+  });
+
+  it('keeps the hero rail on the right and the controls below the dossier while selecting a mode', () => {
+    const callbacks = new Proxy({ onStartMatch: vi.fn() }, { get: (target, key) => key in target ? target[key as 'onStartMatch'] : vi.fn() }) as unknown as UICallbacks;
+    const root = document.querySelector<HTMLElement>('#root')!;
+    new UIManager(root, { ...DEFAULT_SETTINGS, language: 'ru' }, callbacks);
+    const armory = root.querySelector<HTMLElement>('#screen-selection')!;
+    expect(armory.querySelector('.armory-left-column > #hero-bento-card')).not.toBeNull();
+    expect(armory.querySelector('.armory-left-column > .selection-showcase-dock #selection-skill-bar')).not.toBeNull();
+    expect(armory.querySelectorAll('#selection-skill-bar .skill-sq')).toHaveLength(7);
+    const tabs = armory.querySelector<HTMLElement>('.armory-hero-rail > #class-tabs')!;
+    expect(tabs.querySelectorAll('.class-tab')).toHaveLength(CLASS_ORDER.length);
+    const launch = armory.querySelector<HTMLElement>('.armory-launch-group')!;
+    expect(launch.children[0].id).toBe('btn-sel-start');
+    expect(launch.children[1].classList.contains('mode-toggle-row')).toBe(true);
+
+    tabs.scrollTop = 140;
+    tabs.querySelector<HTMLButtonElement>('[data-cid="dual"]')!.click();
+    expect(tabs.scrollTop).toBe(140);
+    expect(tabs.querySelector('[data-cid="dual"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(tabs.querySelector('[data-cid="sword"]')?.getAttribute('aria-pressed')).toBe('false');
+    armory.querySelector<HTMLButtonElement>('#mode-duel')!.click();
+    armory.querySelector<HTMLButtonElement>('#btn-sel-start')!.click();
+    expect(callbacks.onStartMatch).toHaveBeenCalledWith('dual', 'duel_debug');
+  });
+
+  it('does not let the inspector start a locked hero until purchased with coins', () => {
+    const callbacks = new Proxy({ onStartMatch: vi.fn() }, { get: (target, key) => key in target ? target[key as 'onStartMatch'] : vi.fn() }) as unknown as UICallbacks;
+    const root = document.querySelector<HTMLElement>('#root')!;
+    new UIManager(root, { ...DEFAULT_SETTINGS, language: 'ru' }, callbacks);
+    root.querySelector<HTMLButtonElement>('#class-tabs [data-cid="hammer"]')!.click();
+    const launch = root.querySelector<HTMLButtonElement>('#btn-sel-start')!;
+    expect(root.querySelector('#class-tabs [data-cid="hammer"] .class-tab-price')?.textContent).toBe('300');
+    expect(launch.textContent).toContain('Купить за 300');
+    launch.click();
+    expect(callbacks.onStartMatch).not.toHaveBeenCalled();
+    expect(loadProfile().coins).toBe(100);
+
+    root.innerHTML = '';
+    localStorage.setItem('kls_player_profile_v1', JSON.stringify({ ...DEFAULT_PROFILE, coins: 400 }));
+    new UIManager(root, { ...DEFAULT_SETTINGS, language: 'ru' }, callbacks);
+    root.querySelector<HTMLButtonElement>('#class-tabs [data-cid="hammer"]')!.click();
+    root.querySelector<HTMLButtonElement>('#btn-sel-start')!.click();
+    expect(callbacks.onStartMatch).not.toHaveBeenCalled();
+    expect(loadProfile().coins).toBe(100);
+    expect(loadProfile().unlockedKnights).toContain('hammer');
+    expect(root.querySelector('#class-tabs [data-cid="hammer"] .class-tab-price')).toBeNull();
+    expect(root.querySelector('#btn-sel-start')?.textContent).toContain('В БОЙ!');
+    root.querySelector<HTMLButtonElement>('#btn-sel-start')!.click();
+    expect(callbacks.onStartMatch).toHaveBeenCalledWith('hammer', 'ffa5');
   });
 
   it('updates the interface and direction immediately without losing other settings', () => {
