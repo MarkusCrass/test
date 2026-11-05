@@ -100,6 +100,9 @@ export const LOCALES: Record<string, Record<Lang, string>> = {
   navOnline: { ru: 'Онлайн', en: 'Online', tr: 'Çevrimiçi', es: 'En línea', ar: 'عبر الإنترنت' },
   navControls: { ru: 'Управление', en: 'Controls', tr: 'Kontroller', es: 'Controles', ar: 'التحكم' },
   navSettings: { ru: 'Настройки', en: 'Settings', tr: 'Ayarlar', es: 'Ajustes', ar: 'الإعدادات' },
+  fullscreenEnter: { ru: 'Полный экран', en: 'Fullscreen', tr: 'Tam ekran', es: 'Pantalla completa', ar: 'ملء الشاشة' },
+  fullscreenExit: { ru: 'Выйти из полного экрана', en: 'Exit fullscreen', tr: 'Tam ekrandan çık', es: 'Salir de pantalla completa', ar: 'الخروج من ملء الشاشة' },
+  fullscreenUnavailable: { ru: 'Полный экран недоступен в этом браузере или на площадке.', en: 'Fullscreen is unavailable in this browser or embed.', tr: 'Tam ekran bu tarayıcıda veya yerleştirmede kullanılamıyor.', es: 'La pantalla completa no está disponible en este navegador o sitio.', ar: 'وضع ملء الشاشة غير متاح في هذا المتصفح أو الإطار.' },
   navShop: { ru: 'Магазин', en: 'Shop', tr: 'Mağaza', es: 'Tienda', ar: 'المتجر' },
   navLanguage: { ru: 'Язык', en: 'Language', tr: 'Dil', es: 'Idioma', ar: 'اللغة' },
 

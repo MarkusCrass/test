@@ -96,6 +96,14 @@ export interface UICallbacks {
   onMpReturnToLobby: () => void;
 }
 
+type WebkitFullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+type WebkitFullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
+
 const MP_NAME_STORAGE_KEY = 'kls_mp_player_name_v1';
 
 const CLASS_EMBLEM_ICON: Record<KnightClassId, string> = {
@@ -120,6 +128,8 @@ const ICONS = {
   bolt: `<svg class="ui-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 4 14 11 14 10 22 20 10 13 10 13 2"/></svg>`,
   shield: `<svg class="ui-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
   sliders: `<svg class="ui-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2.2" fill="currentColor"/><circle cx="15" cy="12" r="2.2" fill="currentColor"/><circle cx="10" cy="18" r="2.2" fill="currentColor"/></svg>`,
+  fullscreenEnter: `<svg class="ui-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v4M16 3h4a1 1 0 0 1 1 1v4M3 16v4a1 1 0 0 0 1 1h4M21 16v4a1 1 0 0 1-1 1h-4"/></svg>`,
+  fullscreenExit: `<svg class="ui-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v5H4M15 3v5h5M9 21v-5H4M15 21v-5h5"/></svg>`,
   gamepad: `<svg class="ui-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="5"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="10.5" r="1" fill="currentColor"/><circle cx="17.5" cy="13.5" r="1" fill="currentColor"/></svg>`,
   arrowLeft: `<svg class="ui-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/></svg>`,
   arrowRight: `<svg class="ui-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>`,
@@ -274,6 +284,10 @@ export class UIManager {
   private readonly resAgainBtnEl: HTMLButtonElement;
   private readonly resClassBtnEl: HTMLButtonElement;
   private readonly resMenuBtnEl: HTMLButtonElement;
+  private readonly fullscreenButtons: HTMLButtonElement[];
+  private readonly fullscreenFeedbackEl: HTMLElement;
+  private fullscreenPending = false;
+  private fullscreenFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly labelPool = new Map<string, HTMLElement>();
   private renderedActionBarClass: KnightClassId | null = null;
@@ -319,15 +333,15 @@ export class UIManager {
         </div>
 
         <nav class="hub-seg-nav" aria-label="${this.tl('navArena')}">
-          <button id="nav-tab-arena" class="hub-seg-btn active">
+          <button id="nav-tab-arena" class="hub-seg-btn active" data-i18n-aria-label="navArena" data-i18n-title="navArena" aria-label="${this.tl('navArena')}">
             ${ICONS.bolt}
             <span data-i18n="navArena">${this.tl('navArena')}</span>
           </button>
-          <button id="btn-menu-select" class="hub-seg-btn">
+          <button id="btn-menu-select" class="hub-seg-btn" data-i18n-aria-label="navHeroes" data-i18n-title="navHeroes" aria-label="${this.tl('navHeroes')}">
             ${ICONS.shield}
             <span data-i18n="navHeroes">${this.tl('navHeroes')}</span>
           </button>
-          <button id="btn-menu-multiplayer" class="hub-seg-btn">
+          <button id="btn-menu-multiplayer" class="hub-seg-btn" data-i18n-aria-label="navOnline" data-i18n-title="navOnline" aria-label="${this.tl('navOnline')}">
             ${ICONS.globe}
             <span data-i18n="navOnline">${this.tl('navOnline')}</span>
           </button>
@@ -341,6 +355,9 @@ export class UIManager {
           <button id="btn-menu-settings" class="hub-util-btn" title="${this.tl('navSettings')}">
             ${ICONS.sliders}
             <span data-i18n="navSettings">${this.tl('navSettings')}</span>
+          </button>
+          <button id="btn-hub-fullscreen" type="button" class="hub-util-btn hub-fullscreen-btn js-fullscreen-toggle" title="${this.tl('fullscreenEnter')}" aria-label="${this.tl('fullscreenEnter')}" aria-pressed="false">
+            ${ICONS.fullscreenEnter}
           </button>
           <div class="hub-coin-display">
             ${ICONS.trophy}
@@ -669,7 +686,12 @@ export class UIManager {
         <div id="hud-countdown" class="countdown-banner hidden">3</div>
 
         <div class="hud-roster">
-          <div class="roster-title" data-i18n="rosterTitle">Бойцы на арене</div>
+          <div class="roster-heading">
+            <div class="roster-title" data-i18n="rosterTitle">Бойцы на арене</div>
+            <button id="btn-hud-fullscreen" type="button" class="fullscreen-mini-btn pointer-auto js-fullscreen-toggle" title="${this.tl('fullscreenEnter')}" aria-label="${this.tl('fullscreenEnter')}" aria-pressed="false">
+              ${ICONS.fullscreenEnter}
+            </button>
+          </div>
           <div id="hud-roster-list" class="roster-list-inner"></div>
         </div>
 
@@ -754,6 +776,10 @@ export class UIManager {
             <button id="btn-pause-settings" class="btn">
               ${ICONS.sliders}
               <span data-i18n="navSettings">Настройки</span>
+            </button>
+            <button id="btn-pause-fullscreen" type="button" class="btn btn-ghost js-fullscreen-toggle" title="${this.tl('fullscreenEnter')}" aria-label="${this.tl('fullscreenEnter')}" aria-pressed="false">
+              ${ICONS.fullscreenEnter}
+              <span class="fullscreen-label">${this.tl('fullscreenEnter')}</span>
             </button>
             <button id="btn-pause-controls" class="btn">
               ${ICONS.gamepad}
@@ -851,6 +877,9 @@ export class UIManager {
           </div>
 
           <div class="results-actions">
+            <button id="btn-results-fullscreen" type="button" class="btn btn-ghost results-fullscreen-btn js-fullscreen-toggle" title="${this.tl('fullscreenEnter')}" aria-label="${this.tl('fullscreenEnter')}" aria-pressed="false">
+              ${ICONS.fullscreenEnter}
+            </button>
             <button id="btn-res-menu" class="btn btn-ghost">${this.tl('backMenu')}</button>
             <button id="btn-res-class" class="btn btn-accent-violet">${this.tl('changeHero')}</button>
             <button id="btn-res-again" class="btn btn-primary btn-hero">
@@ -1037,6 +1066,7 @@ export class UIManager {
           <div class="modal-bottom-row"><button id="btn-about-close" class="btn btn-primary" data-i18n="adCloseBtn">${this.tl('adCloseBtn')}</button></div>
         </div>
       </div>
+      <div id="fullscreen-feedback" class="fullscreen-feedback hidden" role="status" aria-live="polite"></div>
     `;
 
     this.hubTopDockEl = this.q('#hub-top-dock');
@@ -1126,6 +1156,8 @@ export class UIManager {
     this.resAgainBtnEl = this.q('#btn-res-again') as HTMLButtonElement;
     this.resClassBtnEl = this.q('#btn-res-class') as HTMLButtonElement;
     this.resMenuBtnEl = this.q('#btn-res-menu') as HTMLButtonElement;
+    this.fullscreenButtons = Array.from(this.root.querySelectorAll<HTMLButtonElement>('.js-fullscreen-toggle'));
+    this.fullscreenFeedbackEl = this.q('#fullscreen-feedback');
 
     this.bindEvents();
     this.renderSelectionClass(this.profile.activeKnight, false);
@@ -1169,6 +1201,7 @@ export class UIManager {
 
   private refreshLanguage(): void {
     this.applyTranslations();
+    this.syncFullscreenButtons();
     this.syncSettingsControls();
     this.renderSelectionClass(this.currentSelectedClass, false);
     this.renderMpClassButtons();
@@ -1513,7 +1546,73 @@ export class UIManager {
     }
   }
 
+  private isFullscreen(): boolean {
+    const webkitDocument = document as WebkitFullscreenDocument;
+    return Boolean(document.fullscreenElement || webkitDocument.webkitFullscreenElement);
+  }
+
+  private syncFullscreenButtons(): void {
+    const active = this.isFullscreen();
+    const label = this.tl(active ? 'fullscreenExit' : 'fullscreenEnter');
+    for (const button of this.fullscreenButtons) {
+      button.title = label;
+      button.setAttribute('aria-label', label);
+      button.setAttribute('aria-pressed', String(active));
+      button.disabled = this.fullscreenPending;
+      const icon = button.querySelector('svg');
+      if (icon) icon.outerHTML = active ? ICONS.fullscreenExit : ICONS.fullscreenEnter;
+      const text = button.querySelector('.fullscreen-label');
+      if (text) text.textContent = label;
+    }
+    if (!this.fullscreenFeedbackEl.classList.contains('hidden')) {
+      this.fullscreenFeedbackEl.textContent = this.tl('fullscreenUnavailable');
+    }
+  }
+
+  private showFullscreenError(): void {
+    this.fullscreenFeedbackEl.textContent = this.tl('fullscreenUnavailable');
+    this.fullscreenFeedbackEl.classList.remove('hidden');
+    if (this.fullscreenFeedbackTimer !== null) clearTimeout(this.fullscreenFeedbackTimer);
+    this.fullscreenFeedbackTimer = setTimeout(() => {
+      this.fullscreenFeedbackEl.classList.add('hidden');
+      this.fullscreenFeedbackTimer = null;
+    }, 4500);
+  }
+
+  private async toggleFullscreen(): Promise<void> {
+    if (this.fullscreenPending) return;
+    const webkitDocument = document as WebkitFullscreenDocument;
+    const root = document.documentElement as WebkitFullscreenElement;
+    const request = root.requestFullscreen?.bind(root) ?? root.webkitRequestFullscreen?.bind(root);
+    const exit = document.exitFullscreen?.bind(document) ?? webkitDocument.webkitExitFullscreen?.bind(document);
+    const action = this.isFullscreen() ? exit : request;
+    if (!action) {
+      this.showFullscreenError();
+      return;
+    }
+    this.fullscreenPending = true;
+    this.fullscreenFeedbackEl.classList.add('hidden');
+    this.syncFullscreenButtons();
+    try {
+      // Invoke directly from the click handler: fullscreen requires user activation.
+      await action();
+    } catch {
+      // Embedding platforms may deny fullscreen even when the API is available.
+      this.showFullscreenError();
+    } finally {
+      this.fullscreenPending = false;
+      this.syncFullscreenButtons();
+    }
+  }
+
   private bindEvents(): void {
+    for (const button of this.fullscreenButtons) {
+      button.addEventListener('click', () => { void this.toggleFullscreen(); });
+    }
+    document.addEventListener('fullscreenchange', () => this.syncFullscreenButtons());
+    document.addEventListener('webkitfullscreenchange', () => this.syncFullscreenButtons());
+    this.syncFullscreenButtons();
+
     const openSettings = () => {
       this.settingsModalEl.classList.remove('hidden');
     };
@@ -2769,6 +2868,10 @@ export class UIManager {
     this.root.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach((el) => {
       const key = el.dataset.i18nTitle;
       if (key) el.title = this.tl(key);
+    });
+    this.root.querySelectorAll<HTMLElement>('[data-i18n-aria-label]').forEach((el) => {
+      const key = el.dataset.i18nAriaLabel;
+      if (key) el.setAttribute('aria-label', this.tl(key));
     });
   }
 

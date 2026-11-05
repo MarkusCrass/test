@@ -417,6 +417,55 @@ body {
   color: #ffffff;
 }
 
+/* Icon-only fullscreen control fits the navigation dock at embedded sizes. */
+.hub-fullscreen-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.js-fullscreen-toggle[aria-pressed="true"] {
+  color: #e0f2fe;
+  border-color: rgba(56, 189, 248, 0.58);
+  background: rgba(37, 99, 235, 0.3);
+}
+
+.js-fullscreen-toggle[aria-pressed="true"] .ui-svg {
+  color: #e0f2fe;
+}
+
+.js-fullscreen-toggle:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
+}
+
+.js-fullscreen-toggle:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.fullscreen-feedback {
+  position: absolute;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--glass-shadow);
+  color: #e0f2fe;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* ============================================================================
    SCREEN 1: MAIN HERO HUB ("АРЕНА")
    ============================================================================ */
@@ -2148,6 +2197,38 @@ body {
   gap: 7px;
 }
 
+.roster-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fullscreen-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-card);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.fullscreen-mini-btn:hover {
+  background: var(--glass-card-hover);
+  border-color: var(--glass-border-strong);
+}
+
+.fullscreen-mini-btn .ui-svg {
+  width: 15px;
+  height: 15px;
+}
+
 .roster-title {
   font-size: 11px;
   font-weight: 700;
@@ -3285,6 +3366,11 @@ body {
   flex-wrap: wrap;
 }
 
+.results-fullscreen-btn {
+  min-width: 42px;
+  padding: 10px;
+}
+
 /* ============================================================================
    RESPONSIVE ADAPTATION
    ============================================================================ */
@@ -4231,3 +4317,66 @@ body {
 .about-credit { border: 1px solid rgba(149, 200, 255, .22); border-radius: 14px; background: rgba(12, 33, 61, .54); }
 .about-credit summary { cursor: pointer; padding: 13px 15px; font-weight: 700; color: #e6f4ff; }
 .about-credit pre { margin: 0; padding: 14px 16px; max-height: 40vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.55 system-ui, sans-serif; color: #d9e8fb; }
+
+/* Keep the fullscreen action reachable in narrow game embeds and on phones. */
+@media (max-width: 1050px) {
+  .hub-seg-btn {
+    padding-inline: 14px;
+  }
+  .hub-util-btn:not(.hub-fullscreen-btn) {
+    padding-inline: 11px;
+  }
+}
+
+@media (max-width: 680px) {
+  .hub-top-dock {
+    left: 12px;
+    right: 12px;
+    gap: 6px;
+  }
+  .hub-seg-btn {
+    gap: 4px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .hub-util-pills {
+    gap: 5px;
+  }
+  .hub-util-btn:not(.hub-fullscreen-btn),
+  .hub-fullscreen-btn {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    justify-content: center;
+  }
+  .hub-coin-display {
+    gap: 4px;
+    padding: 4px 6px;
+  }
+}
+
+@media (max-width: 560px) {
+  .hub-top-dock {
+    left: 8px;
+    right: 8px;
+    gap: 4px;
+  }
+  .hub-seg-btn {
+    padding: 8px;
+  }
+  .hub-seg-btn span {
+    display: none;
+  }
+  .hub-brand-pill {
+    padding: 5px;
+  }
+  .hub-util-pills {
+    gap: 4px;
+  }
+}
+
+@media (max-width: 380px) {
+  .hub-brand-pill {
+    display: none;
+  }
+}

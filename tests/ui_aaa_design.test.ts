@@ -266,6 +266,7 @@ describe('Modern Spatial Glass & Bento Hero Hub UI', () => {
   it('supports 1-click hero & mode switching right on Main Hub, Controls modal, 5-player party lobby, and HUD lifecycle', () => {
     (globalThis as Record<string, unknown>).document = {
       documentElement: { dir: 'ltr', lang: 'ru' },
+      addEventListener: vi.fn(),
       createElement: (tag: string) => new MiniElement(tag),
       body: new MiniElement('body'),
       execCommand: () => true,
