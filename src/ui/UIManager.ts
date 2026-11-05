@@ -20,6 +20,7 @@ import {
   unlockKnight,
   PlayerProfile,
 } from '../config/playerProfile';
+import { recordSoloBotOutcome } from '../config/soloBotProgress';
 import { botDisplayName } from '../config/botNames';
 import { abilityText, heroText } from '../config/heroLocales';
 import { AD_COIN_REWARD, KNIGHT_UNLOCK_CONFIG } from '../config/rewards';
@@ -282,6 +283,7 @@ export class UIManager {
   private lastPaused = false;
   private selectedMode: MatchMode = 'ffa5';
   private resultsRenderedKey = '';
+  private lastRecordedSoloMatchGeneration = 0;
   private lastResults: { match: MatchManager; isHost: boolean; rewards: ReturnType<MatchManager['getMatchRewards']> } | null = null;
 
 
@@ -1420,6 +1422,19 @@ export class UIManager {
     reticleState?: HudReticleViewState
   ): void {
     const st = match.state;
+    const localPlayer = match.getPlayer();
+    // Record a knockout immediately: the player may leave spectator mode before
+    // the remaining bots finish. The match generation prevents double counting.
+    if (
+      !match.isOnlineMatch &&
+      match.matchGeneration > this.lastRecordedSoloMatchGeneration &&
+      localPlayer &&
+      (st === 'MatchFinished' || (st === 'PlayerEliminated' && !localPlayer.isAlive))
+    ) {
+      const place = match.getMatchRewards().place;
+      recordSoloBotOutcome(place);
+      this.lastRecordedSoloMatchGeneration = match.matchGeneration;
+    }
 
     if (st !== this.lastRenderedState || match.paused !== this.lastPaused) {
       this.lastRenderedState = st;

@@ -1,4 +1,5 @@
 import { ArenaConfig, StairRamp } from '../config/arenaConfig';
+import { SOLO_BOT_ASSIST, type SoloAssistTier } from '../config/soloBotProgress';
 import { ThrownProjectile } from './CombatSystem';
 import {
   createEmptyIntent,
@@ -53,6 +54,7 @@ interface CrowdAssessment {
  */
 export class BotController {
   public readonly fighter: Fighter;
+  public readonly soloAssistTier: SoloAssistTier;
   public aiState: BotAIState = 'SearchingTarget';
   public targetId: string | null = null;
 
@@ -78,9 +80,14 @@ export class BotController {
 
   private readonly rng: () => number;
 
-  constructor(fighter: Fighter, rng: () => number = Math.random) {
+  constructor(
+    fighter: Fighter,
+    rng: () => number = Math.random,
+    soloAssistTier: SoloAssistTier = 0
+  ) {
     this.fighter = fighter;
     this.rng = rng;
+    this.soloAssistTier = soloAssistTier;
     this.strafeSign = this.rng() < 0.5 ? 1 : -1;
     this.decisionTimer = 0.08 + this.rng() * 0.16;
     this.reactionThreshold = 0.11 + this.rng() * 0.09;
@@ -158,8 +165,15 @@ export class BotController {
       this.observedThreatTime = 0;
     }
 
-    // 1. Acquire / refresh best tactical target
+    // 1. Acquire / refresh best tactical target. During a difficult solo FFA,
+    // leave the player room to breathe while the other bots settle their duels.
     let target = this.findFighterById(allFighters, this.targetId);
+    if (
+      this.soloAssistTier >= 2 && target?.isHuman &&
+      allFighters.some(f => f.id !== self.id && f.isAlive && !f.isHuman)
+    ) {
+      this.retargetTimer = Math.min(this.retargetTimer, 0.18);
+    }
     const urgentFinishable = this.findNearbyFinishableEnemy(allFighters, arena);
     if (urgentFinishable && urgentFinishable.id !== this.targetId) {
       target = urgentFinishable;
@@ -215,24 +229,36 @@ export class BotController {
     }
 
     // 3. Immediate Omni-Threat Defense (Blocks, Parries, Deflects & Dodges against ANY attacker or dagger!)
+    // Assistance only slows reactions to the LOCAL human; bot-versus-bot duels
+    // retain their original timing and defenses.
+    const playerThreat = Boolean(threat?.attacker?.isHuman && this.soloAssistTier > 0);
+    const assist = SOLO_BOT_ASSIST[this.soloAssistTier];
+    const reactionDelay = this.reactionThreshold + (playerThreat ? assist.reactionSeconds : 0);
     if (
       threat &&
-      (this.observedThreatTime >= this.reactionThreshold || threat.isNearImpact) &&
+      (this.observedThreatTime >= reactionDelay ||
+        (threat.isNearImpact && (!playerThreat || this.soloAssistTier === 1))) &&
       this.defenseCooldown <= 0
     ) {
       this.observedThreatTime = 0;
       intent.aimYaw = threat.yawToThreat;
       intent.hasAimOverride = true;
 
-      const handled = this.executeSmartDefense(
-        intent,
-        threat,
-        crowd,
-        arena,
-        allFighters
-      );
-      if (handled) {
-        return intent;
+      if (playerThreat && this.rng() < assist.missedDefenseChance) {
+        // A short committed hesitation, not invulnerability or a damage multiplier.
+        this.defenseCooldown = 0.3 + this.soloAssistTier * 0.08;
+        this.activeBlockHoldTimer = 0;
+      } else {
+        const handled = this.executeSmartDefense(
+          intent,
+          threat,
+          crowd,
+          arena,
+          allFighters
+        );
+        if (handled) {
+          return intent;
+        }
       }
     }
 
@@ -370,6 +396,19 @@ export class BotController {
         !target.activeAttack.interruptible) ||
       target.activeAbility?.id === 'dual_cyclone';
 
+    // Against a struggling solo player bots sometimes let an opening pass.
+    // This adds a real attack delay; the same bot still fights other bots normally.
+    const playerTarget = target.isHuman && this.soloAssistTier > 0;
+    if (
+      playerTarget && this.attackCooldown <= 0 &&
+      dist <= Math.max(self.config.lightCombo[0].range, self.config.heavyAttack.range) +
+        target.body.radius + 0.8 &&
+      this.rng() < assist.hesitationChance
+    ) {
+      this.attackCooldown = assist.hesitationSeconds;
+      this.comboBurstRemaining = 0;
+    }
+
     // 7. Continue multi-hit light combo burst ONLY if safe & within reach!
     if (
       this.comboBurstRemaining > 0 &&
@@ -391,8 +430,11 @@ export class BotController {
     }
 
     // 8. Instant Opportunistic Whiff-Punish & Guard-Break Offense!
-    if (targetPunishable && !lineBlocked && Math.abs(angleDiff(self.yaw, yawToTarget)) < 0.92) {
-      this.attackCooldown = 0; // Zero hesitation on exposed targets!
+    if (
+      targetPunishable && !playerTarget && !lineBlocked &&
+      Math.abs(angleDiff(self.yaw, yawToTarget)) < 0.92
+    ) {
+      this.attackCooldown = 0; // Zero hesitation on exposed targets in unassisted fights!
     }
 
     const { minPreferred, maxPreferred, engageRange } = this.getClassRanges();
@@ -417,7 +459,7 @@ export class BotController {
       const facingDiff = Math.abs(angleDiff(self.yaw, yawToTarget));
 
       // 8a. Tactical Signature Abilities [1] & [2] (high priority for punishes, guard-breaks & ranged pokes)
-      if (facingDiff < 0.78) {
+      if (facingDiff < 0.78 && (!playerTarget || this.attackCooldown <= 0)) {
         const slot = this.chooseSmartAbilitySlot(
           dist,
           target,
@@ -1172,9 +1214,14 @@ export class BotController {
     const self = this.fighter;
     let best: Fighter | null = null;
     let bestDist = 7.5;
+    const otherBotAlive = this.soloAssistTier >= 2 &&
+      allFighters.some(f => f.id !== self.id && f.isAlive && !f.isHuman);
 
     for (const f of allFighters) {
       if (f.id === self.id || !f.isAlive) continue;
+      // In assisted FFA prefer finishing another bot before hunting a low-HP
+      // player; when only the player remains, normal finisher logic applies.
+      if (f.isHuman && this.soloAssistTier >= 2 && otherBotAlive) continue;
       if (Math.abs(f.body.y - self.body.y) > 1.55) continue;
       if (f.hp > 32 && f.state !== 'Stunned') continue;
 
@@ -1453,6 +1500,9 @@ export class BotController {
     const self = this.fighter;
     let best: Fighter | null = null;
     let bestScore = -Infinity;
+    const otherBotsAlive = this.soloAssistTier > 0
+      ? allFighters.filter(f => f.id !== self.id && f.isAlive && !f.isHuman).length
+      : 0;
 
     for (const candidate of allFighters) {
       if (candidate.id === self.id || !candidate.isAlive) continue;
@@ -1511,6 +1561,13 @@ export class BotController {
       // Strong anti-dogpile & anti-cluster penalty: prefer clean 1v1 duels or flanking from outside!
       score -= Math.max(0, othersTargeting) * 8.5;
       score -= clusterAroundCandidate * 4.6;
+
+      // A solo comeback starts with bot-versus-bot duels so the player can
+      // genuinely survive into the last three. The last bot still fights them.
+      if (candidate.isHuman && otherBotsAlive > 0) {
+        const nearFinal = otherBotsAlive === 1 ? 0.55 : 1;
+        score -= SOLO_BOT_ASSIST[this.soloAssistTier].targetPenalty * nearFinal;
+      }
 
       // Line-of-sight bonus
       if (

@@ -1073,6 +1073,7 @@ export class ClientNetWorldSync {
     });
     match.bots.clear();
     match.combatSystem.reset();
+    match.soloAssistTier = 0;
     match.isOnlineMatch = true;
     match.localPlayerId = yourFighterId;
     match.spectatorTargetId = yourFighterId;

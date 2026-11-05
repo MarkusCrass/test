@@ -1,4 +1,5 @@
 import { BOT_NICKNAMES } from '../config/botNames';
+import type { SoloAssistTier } from '../config/soloBotProgress';
 import { ARENA_CONFIG, ArenaConfig } from '../config/arenaConfig';
 import { CLASS_ORDER, KnightClassId } from '../config/classes';
 import { MatchRewards, coinsForPlace } from '../config/rewards';
@@ -64,6 +65,7 @@ export class MatchManager {
   public selectedPlayerClass: KnightClassId = 'sword';
   public localPlayerId = 'player';
   public isOnlineMatch = false;
+  public soloAssistTier: SoloAssistTier = 0;
   public paused = false;
 
   public readonly arena: ArenaConfig;
@@ -125,11 +127,13 @@ export class MatchManager {
    */
   public startMatch(
     playerClass: KnightClassId = this.selectedPlayerClass,
-    mode: MatchMode = this.mode
+    mode: MatchMode = this.mode,
+    soloAssistTier: SoloAssistTier = 0
   ): void {
     this.clearMatchEntities();
     this.matchGeneration += 1;
     this.isOnlineMatch = false;
+    this.soloAssistTier = soloAssistTier;
     this.localPlayerId = 'player';
     this.selectedPlayerClass = playerClass;
     this.mode = mode;
@@ -198,7 +202,7 @@ export class MatchManager {
       });
       botFighter.body.constrainToArena(this.arena);
       this.fighters.push(botFighter);
-      this.bots.set(botId, new BotController(botFighter, this.rng));
+      this.bots.set(botId, new BotController(botFighter, this.rng, this.soloAssistTier));
     }
 
     // Ensure zero initial overlap
@@ -220,7 +224,7 @@ export class MatchManager {
   }
 
   public restartMatch(): void {
-    this.startMatch(this.selectedPlayerClass, this.mode);
+    this.startMatch(this.selectedPlayerClass, this.mode, this.soloAssistTier);
   }
 
   public getPlayer(): Fighter | null {

@@ -14,6 +14,7 @@ import { KnightClassId } from './config/classes';
 import { hasSavedLanguage, loadSettings, saveSettings } from './config/settings';
 import { detectYandexLanguage } from './config/locales';
 import { loadProfile } from './config/playerProfile';
+import { loadSoloBotProgress } from './config/soloBotProgress';
 import { createEmptyIntent, FighterInputIntent } from './core/Fighter';
 import { MatchManager, MatchMode, MatchState } from './core/MatchManager';
 import { forwardFromYaw } from './core/math';
@@ -446,7 +447,7 @@ class KnightsGameApp {
 
   private beginMatch(classId: KnightClassId, mode: MatchMode): void {
     this.clearActionInputs();
-    this.match.startMatch(classId, mode);
+    this.match.startMatch(classId, mode, loadSoloBotProgress().assistTier);
     this.lastCountdownWhole = Math.ceil(this.match.countdownTimer);
     this.sound.playCountdownTick(false);
     this.world?.resetCameraBehindPlayer(this.match);
