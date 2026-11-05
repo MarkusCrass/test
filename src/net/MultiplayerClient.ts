@@ -37,6 +37,7 @@ export interface MultiplayerClientCallbacks {
 }
 
 const WS_CONNECT_TIMEOUT_MS = 950;
+const HTTP_REQUEST_TIMEOUT_MS = 6500;
 const HTTP_BROWSER_POLL_MS = 900;
 const HTTP_ROOM_LOBBY_POLL_MS = 260;
 const HTTP_MATCH_POLL_MS = 46;
@@ -442,30 +443,37 @@ export class MultiplayerClient {
     url: string,
     bodyObj: unknown
   ): Promise<{ status: number; ok: boolean; text: string }> {
-    const serialized = JSON.stringify(bodyObj);
-    const execFetch = () =>
-      fetch(url, {
-        method: 'POST',
-        // text/plain avoids CORS preflight OPTIONS and ModSecurity JSON rules while keeping raw JSON intact
-        headers: {
-          'Content-Type': 'text/plain;charset=UTF-8',
-          Accept: 'application/json',
-        },
-        body: serialized,
-        cache: 'no-store',
-        credentials: 'same-origin',
-      });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), HTTP_REQUEST_TIMEOUT_MS);
+    try {
+      const serialized = JSON.stringify(bodyObj);
+      const execFetch = () =>
+        fetch(url, {
+          method: 'POST',
+          // text/plain avoids CORS preflight OPTIONS and ModSecurity JSON rules while keeping raw JSON intact
+          headers: {
+            'Content-Type': 'text/plain;charset=UTF-8',
+            Accept: 'application/json',
+          },
+          body: serialized,
+          cache: 'no-store',
+          credentials: 'same-origin',
+          signal: controller.signal,
+        });
 
-    let res = await execFetch();
-    let text = await res.text();
+      let res = await execFetch();
+      let text = await res.text();
 
-    // Handle Beget Nginx __beget=begetok anti-bot JS interstitial transparently
-    if (text && text.includes('__beget=') && ensureBegetAntiBotCookie(text)) {
-      res = await execFetch();
-      text = await res.text();
+      // Handle Beget Nginx __beget=begetok JS interstitial transparently
+      if (text && text.includes('__beget=') && ensureBegetAntiBotCookie(text)) {
+        res = await execFetch();
+        text = await res.text();
+      }
+
+      return { status: res.status, ok: res.ok, text };
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return { status: res.status, ok: res.ok, text };
   }
 
   private async tryHttpEndpointStyle(
@@ -684,11 +692,13 @@ export class MultiplayerClient {
           }
         }
       }
-    } catch {
+    } catch (err) {
       this.requeueAfterTransientFailure(outgoing);
       this.httpFailures += 1;
       transientBackoffMs = Math.min(450, 140 + this.httpFailures * 35);
-      if (this.httpFailures >= 20) {
+      // Two stalled requests are already long enough to stop a match instead of leaving it frozen.
+      const failureLimit = err instanceof Error && err.name === 'AbortError' ? 2 : 20;
+      if (this.httpFailures >= failureLimit) {
         this.handleHttpDisconnect('Потеряна связь с сервером арены.');
         return;
       }

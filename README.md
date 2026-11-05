@@ -58,6 +58,18 @@ npm run build    # Проверка типов TypeScript и сборка про
 npm start        # Запуск standalone production-сервера (dist/ + /ws на 0.0.0.0:4173)
 ```
 
+## Внешний хост для Яндекс Игр
+
+Яндекс-сборка использует `VITE_MULTIPLAYER_BASE_URL=https://ezegames.ru` из `.env.yandex`. При запуске, **не дожидаясь SDK** и не создавая игровую сессию, она один раз проверяет доступность настоящего PHP-сервера матчей запросом `GET https://ezegames.ru/api/mp.php?action=health`. Проверка ограничена пятью секундами и не задерживает запуск одиночной игры. При неудаче во вкладке «Онлайн» показывается сообщение, а подключение всё равно повторяется; при успехе сообщение снимается. Сами HTTP-запросы подключения и синхронизации прерываются через 6,5 секунды: зависшее подключение покажет ошибку, а длительная потеря связи не оставит матч навсегда замороженным. Остальные сборки не делают этот стартовый запрос; их онлайн-режим по-прежнему подключается по нажатию «Онлайн».
+
+После загрузки **нового** `knights-yandex-games.zip` в консоль Яндекс Игр откройте предварительный просмотр **внутри Яндекс iframe** и сетевой инспектор: при запуске должен быть виден `GET …/api/mp.php?action=health` на `ezegames.ru` (ответ HTTP 200, JSON с `ok: true`, заголовок CORS `Access-Control-Allow-Origin: *`). Нажмите «Онлайн» и проверьте `POST …?action=connect` и `…?action=sync`, а также сообщение в лобби при недоступном сервере. В разрешённых хостах игры должен быть `ezegames.ru`. Локальная успешная сборка/проверка GitHub Actions не заменяет тест в реальном iframe. Архивы для площадок и сайта содержат только клиент: `api/mp.php` должен быть установлен на HTTPS-сайте отдельно.
+
+```bash
+npm run package:yandex       # knights-yandex-games.zip
+npm run package:crazygames   # knights-crazygames.zip
+npm run package:site         # knights-website.zip
+```
+
 ## Ассеты и лицензии
 
 - Риггированные 3D-модели персонажей и скелетные анимации (`public/models/kaykit/Knight.glb`, `Rogue_Hooded.glb`): **KayKit Character Pack: Adventures 1.0** от **Kay Lousberg** ([GitHub](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0)) — лицензия **CC0 1.0 Universal (Public Domain)**, см. `public/models/kaykit/LICENSE.txt`.

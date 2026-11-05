@@ -198,10 +198,28 @@ describe('complete localized game content', () => {
       expect(root.querySelector<HTMLInputElement>('#mp-name-input')?.placeholder).toBe(t('enterName', code));
       ui.showMultiplayerNotice('Комната «ABCD» не найдена.');
       expect(root.querySelector('#mp-alert-banner')?.textContent).toBe(t('netRoomMissing', code, { code: 'ABCD' }));
+      ui.showMultiplayerNotice('Проверка сервера матчей не удалась. Пробуем подключиться повторно.');
+      expect(root.querySelector('#mp-alert-banner')?.textContent).toBe(t('netRelayHealthFailed', code));
       click('.hub-hero-chip[data-cid="hammer"]');
       expect(root.querySelector('#hub-play-title')?.textContent).toBe(t('playBuy', code, { price: 300 }));
       click('.hub-hero-chip[data-cid="sword"]');
     }
+  });
+
+  it('keeps a failed relay preflight advisory and clears the notice after a successful connection', () => {
+    const root = document.querySelector<HTMLElement>('#root')!;
+    const callbacks = new Proxy({}, { get: () => vi.fn() }) as UICallbacks;
+    const ui = new UIManager(root, { ...DEFAULT_SETTINGS }, callbacks);
+    const pill = root.querySelector<HTMLElement>('#mp-conn-pill')!;
+    const notice = root.querySelector<HTMLElement>('#mp-alert-banner')!;
+
+    ui.showMultiplayerNotice('Проверка сервера матчей не удалась. Пробуем подключиться повторно.');
+    expect(pill.classList.contains('offline')).toBe(true); // A health GET is not an online session.
+    expect(notice.classList.contains('hidden')).toBe(false);
+    ui.clearMultiplayerNotice();
+    ui.updateMultiplayerStatus('connected', 24);
+    expect(notice.classList.contains('hidden')).toBe(true);
+    expect(pill.textContent).toContain('24 ms');
   });
 
   it('translates identified bot hosts without changing player-chosen nicknames', () => {

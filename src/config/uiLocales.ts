@@ -828,6 +828,13 @@ export const UI_LOCALES: Record<string, Record<Lang, string>> = {
     "es": "Se interrumpió la conexión con el servidor.",
     "ar": "انقطع الاتصال بالخادم."
   },
+  "netRelayHealthFailed": {
+    "ru": "Проверка сервера матчей не удалась. Пробуем подключиться повторно.",
+    "en": "Could not reach the match server. Retrying the connection.",
+    "tr": "Maç sunucusuna ulaşılamadı. Bağlantı yeniden deneniyor.",
+    "es": "No se pudo acceder al servidor de partidas. Reintentando la conexión.",
+    "ar": "تعذر الوصول إلى خادم المباريات. نعيد محاولة الاتصال."
+  },
   "netCannotConnect": {
     "ru": "Не удалось подключиться к серверу арены",
     "en": "Could not connect to the arena server",

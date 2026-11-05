@@ -1267,7 +1267,14 @@ export class UIManager {
     );
     this.mpAlertTimer = setTimeout(() => {
       this.mpAlertEl.classList.add('hidden');
+      this.mpAlertTimer = null;
     }, 4500);
+  }
+
+  public clearMultiplayerNotice(): void {
+    if (this.mpAlertTimer) clearTimeout(this.mpAlertTimer);
+    this.mpAlertTimer = null;
+    this.mpAlertEl.classList.add('hidden');
   }
 
   public updatePublicRooms(rooms: RoomSummary[]): void {
@@ -2845,6 +2852,7 @@ export class UIManager {
       'Сервер хостинга временно перегружен. Попробуйте через пару секунд.': 'netBusy',
       'Потеряна связь с сервером арены.': 'netLost',
       'Соединение с сервером прервано.': 'netDisconnected',
+      'Проверка сервера матчей не удалась. Пробуем подключиться повторно.': 'netRelayHealthFailed',
     };
     if (exact[message]) return this.tl(exact[message]);
     const missing = message.match(/^Комната «(.+)» не найдена\.$/);

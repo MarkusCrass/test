@@ -23,6 +23,7 @@ import {
   MultiplayerClient,
   ServerSnapshotMsg,
 } from './net/MultiplayerClient';
+import { checkYandexRelayHealth } from './net/relayHealth';
 import { ClientNetWorldSync } from './net/MultiplayerRoomSim';
 import {
   CameraRig,
@@ -38,6 +39,8 @@ import { YandexGames, type YandexLoader } from './platform/YandexGames';
 import { CrazyGames, findCrazySdk } from './platform/CrazyGames';
 import type { GamePlatform } from './platform/GamePlatform';
 import { CloudProfile, type CloudPlayer } from './platform/CloudProfile';
+
+const RELAY_HEALTH_NOTICE = 'Проверка сервера матчей не удалась. Пробуем подключиться повторно.';
 
 class KnightsGameApp {
   private settings = loadSettings();
@@ -87,8 +90,16 @@ class KnightsGameApp {
   private readonly platform: GamePlatform;
   private readonly isCrazyGames = import.meta.env.VITE_PLATFORM === 'crazygames';
   private loading = true;
+  private relayHealthUnavailable = false;
 
-  constructor(platform: GamePlatform, platformLanguage: string | undefined, platformPaused: boolean, cloud: CloudProfile | null, private readonly loadingScreen: LoadingScreen) {
+  constructor(
+    platform: GamePlatform,
+    platformLanguage: string | undefined,
+    platformPaused: boolean,
+    cloud: CloudProfile | null,
+    private readonly loadingScreen: LoadingScreen,
+    relayHealth: Promise<boolean> | null = null
+  ) {
     this.platform = platform;
     this.platformPaused = platformPaused;
     if (platformLanguage && !hasSavedLanguage()) {
@@ -166,8 +177,13 @@ class KnightsGameApp {
         this.sound.playUiClick();
         this.releasePointerLock();
         this.match.goToMultiplayerLobby();
+        if (this.relayHealthUnavailable) {
+          this.ui.showMultiplayerNotice(RELAY_HEALTH_NOTICE);
+        }
         this.net.connect().then((ok) => {
           if (ok) {
+            this.relayHealthUnavailable = false;
+            this.ui.clearMultiplayerNotice();
             this.net.requestRooms();
           }
         });
@@ -324,6 +340,17 @@ class KnightsGameApp {
         this.sound.playUiClick();
         this.net.returnToLobby();
       },
+    });
+
+    void relayHealth?.then((available) => {
+      this.relayHealthUnavailable = !available && !this.net.isConnected();
+      if (
+        this.relayHealthUnavailable &&
+        this.match.state === 'MultiplayerLobby' &&
+        this.net.getStatus() === 'disconnected'
+      ) {
+        this.ui.showMultiplayerNotice(RELAY_HEALTH_NOTICE);
+      }
     });
 
     void this.platform.getPlayerName().then((name) => {
@@ -1193,6 +1220,12 @@ const loadingScreen = new LoadingScreen(loadSettings().language);
 (window as unknown as { __knightsLoadingStarted?: boolean }).__knightsLoadingStarted = true;
 
 async function startGame(): Promise<void> {
+  // Start the Yandex relay availability check before waiting for platform SDK/account.
+  // Do not await it: offline play and the game UI must load even if CSP/CORS blocks the host.
+  const relayHealth = checkYandexRelayHealth(
+    import.meta.env.MODE,
+    import.meta.env.VITE_MULTIPLAYER_BASE_URL
+  );
   let app: KnightsGameApp | undefined;
   let platformPaused = false;
   let platformLanguage: string | undefined;
@@ -1226,7 +1259,7 @@ async function startGame(): Promise<void> {
   if (player?.getUniqueID && player.getData && player.setData) {
     cloud = await CloudProfile.start(player as CloudPlayer);
   }
-  app = new KnightsGameApp(yandex, platformLanguage, platformPaused, cloud, loadingScreen);
+  app = new KnightsGameApp(yandex, platformLanguage, platformPaused, cloud, loadingScreen, relayHealth);
 }
 
 void startGame().catch((err: unknown) => {
