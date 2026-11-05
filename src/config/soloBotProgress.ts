@@ -3,6 +3,8 @@
  * tactical bot behavior; the other levels give a struggling player breathing
  * room without changing health, damage, standings or coin rewards.
  */
+import { GAME_DATA_KEYS, getStorageGeneration, isCrazyDataActive, readGameItem, writeGameItem } from './gameStorage';
+
 export type SoloAssistTier = 0 | 1 | 2 | 3;
 
 export interface SoloBotProgress {
@@ -22,14 +24,17 @@ export const SOLO_BOT_ASSIST = [
   { targetPenalty: 24, hesitationChance: 0.45, hesitationSeconds: 0.6, reactionSeconds: 0.12, missedDefenseChance: 0.25 },
 ] as const;
 
-const STORAGE_KEY = 'kls_solo_bot_progress_v1';
+const STORAGE_KEY = GAME_DATA_KEYS.soloBots;
 const CLOUD_OWNER_KEY = 'kls_cloud_profile_owner_v1';
 let volatileProgress: SoloBotProgress | null = null;
 let volatileKey: string | null = null;
+let volatileGeneration = -1;
 let storageFailed = false;
 
 function progressStorageKey(): string {
-  // Keep difficulty separate for different Yandex accounts on one browser.
+  // CrazyGames Data already scopes progress to the active account. Only Yandex
+  // uses the local cloud-owner suffix to separate accounts in one browser.
+  if (isCrazyDataActive() || import.meta.env.VITE_PLATFORM === 'crazygames') return STORAGE_KEY;
   const owner = localStorage.getItem(CLOUD_OWNER_KEY);
   return owner ? `${STORAGE_KEY}_${encodeURIComponent(owner)}` : STORAGE_KEY;
 }
@@ -59,17 +64,18 @@ function validProgress(value: unknown): value is SoloBotProgress {
 }
 
 export function loadSoloBotProgress(): SoloBotProgress {
+  const recent = volatileGeneration === getStorageGeneration() ? volatileProgress : null;
   let raw: string | null;
   let key: string;
   try {
     key = progressStorageKey();
-    raw = localStorage.getItem(key);
+    raw = readGameItem(key);
   } catch {
-    return volatileProgress ? { ...volatileProgress } : { ...DEFAULT_SOLO_BOT_PROGRESS };
+    return recent ? { ...recent } : { ...DEFAULT_SOLO_BOT_PROGRESS };
   }
   if (!raw) {
-    return storageFailed && volatileKey === key && volatileProgress
-      ? { ...volatileProgress }
+    return storageFailed && volatileKey === key && recent
+      ? { ...recent }
       : { ...DEFAULT_SOLO_BOT_PROGRESS };
   }
   try {
@@ -86,10 +92,11 @@ export function loadSoloBotProgress(): SoloBotProgress {
 export function recordSoloBotOutcome(place: number): SoloBotProgress {
   const next = advanceSoloBotProgress(loadSoloBotProgress(), place);
   volatileProgress = next;
+  volatileGeneration = getStorageGeneration();
   try {
     const key = progressStorageKey();
     volatileKey = key;
-    localStorage.setItem(key, JSON.stringify(next));
+    writeGameItem(key, JSON.stringify(next));
     storageFailed = false;
   } catch {
     storageFailed = true;

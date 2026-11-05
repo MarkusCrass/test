@@ -1,5 +1,6 @@
 import type { Lang } from './locales';
 import { detectLanguage, isLanguage } from './locales';
+import { GAME_DATA_KEYS, readGameItem, writeGameItem } from './gameStorage';
 
 export type GraphicsQuality = 'ultra' | 'high' | 'low';
 
@@ -87,7 +88,7 @@ export interface GameSettings {
   language: Lang; // default 'ru'
 }
 
-const STORAGE_KEY = 'knights_last_standing_settings_v2';
+const STORAGE_KEY = GAME_DATA_KEYS.settings;
 
 export const DEFAULT_SETTINGS: GameSettings = {
   mouseSensitivity: 1.0,
@@ -112,10 +113,7 @@ export function loadSettings(): GameSettings {
   const crazyDefault = import.meta.env.VITE_PLATFORM === 'crazygames';
   const defaultLanguage = crazyDefault ? 'en' : detectLanguage(typeof navigator === 'undefined' ? undefined : navigator.language);
   try {
-    if (typeof localStorage === 'undefined') {
-      return { ...DEFAULT_SETTINGS, language: defaultLanguage };
-    }
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = readGameItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS, language: defaultLanguage };
     const parsed = JSON.parse(raw) as Partial<GameSettings>;
     const q = parsed.graphicsQuality;
@@ -152,10 +150,9 @@ export function loadSettings(): GameSettings {
 /** Whether the player has explicitly stored a language preference. */
 export function hasSavedLanguage(): boolean {
   try {
-    if (typeof localStorage === 'undefined') return false;
-    const mode = localStorage.getItem('kls_language_preference_manual');
+    const mode = readGameItem(GAME_DATA_KEYS.languagePreference);
     if (mode === 'auto') return false;
-    const value = localStorage.getItem(STORAGE_KEY);
+    const value = readGameItem(STORAGE_KEY);
     return value !== null && isLanguage((JSON.parse(value) as Partial<GameSettings>).language);
   } catch {
     return false;
@@ -164,17 +161,15 @@ export function hasSavedLanguage(): boolean {
 
 /** Only the language selector, not other settings, opts out of platform detection. */
 export function markLanguageSelected(): void {
-  try { localStorage.setItem('kls_language_preference_manual', 'manual'); } catch { /* storage unavailable */ }
+  try { writeGameItem(GAME_DATA_KEYS.languagePreference, 'manual'); } catch { /* storage unavailable */ }
 }
 
 export function saveSettings(settings: GameSettings): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      if (localStorage.getItem('kls_language_preference_manual') === null && localStorage.getItem(STORAGE_KEY) === null) {
-        localStorage.setItem('kls_language_preference_manual', 'auto');
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    if (readGameItem(GAME_DATA_KEYS.languagePreference) === null && readGameItem(STORAGE_KEY) === null) {
+      writeGameItem(GAME_DATA_KEYS.languagePreference, 'auto');
     }
+    writeGameItem(STORAGE_KEY, JSON.stringify(settings));
   } catch {
     // Ignore storage errors in restricted environments
   }

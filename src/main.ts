@@ -15,6 +15,7 @@ import { hasSavedLanguage, loadSettings, saveSettings } from './config/settings'
 import { detectYandexLanguage } from './config/locales';
 import { loadProfile } from './config/playerProfile';
 import { loadSoloBotProgress } from './config/soloBotProgress';
+import { isCrazyDataActive, onCrazyDataSaveError } from './config/gameStorage';
 import { createEmptyIntent, FighterInputIntent } from './core/Fighter';
 import { MatchManager, MatchMode, MatchState } from './core/MatchManager';
 import { forwardFromYaw } from './core/math';
@@ -341,6 +342,11 @@ class KnightsGameApp {
         this.net.returnToLobby();
       },
     });
+
+    if (this.isCrazyGames) {
+      if (!isCrazyDataActive()) this.ui.showSaveWarning('saveLocalOnly');
+      onCrazyDataSaveError(() => this.ui.showSaveWarning('saveFailed'));
+    }
 
     void relayHealth?.then((available) => {
       this.relayHealthUnavailable = !available && !this.net.isConnected();

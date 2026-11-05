@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CrazyGames, type CrazySdk } from '../src/platform/CrazyGames';
+import { configureCrazyData } from '../src/config/gameStorage';
 
 function mockSdk(environment = 'local') {
+  const values = new Map<string, string>();
   return {
     environment,
     init: vi.fn(async () => {}),
+    data: {
+      getItem: vi.fn((key: string) => values.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => { values.set(key, value); }),
+    },
     game: {
       loadingStart: vi.fn(), loadingStop: vi.fn(),
       gameplayStart: vi.fn(), gameplayStop: vi.fn(),
@@ -12,7 +18,7 @@ function mockSdk(environment = 'local') {
   } satisfies CrazySdk;
 }
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => { vi.useRealTimers(); configureCrazyData(null); });
 
 describe('CrazyGames Basic Launch SDK', () => {
   it('initializes before loading events and sends gameplay only when ready', async () => {

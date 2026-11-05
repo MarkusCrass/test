@@ -828,6 +828,20 @@ export const UI_LOCALES: Record<string, Record<Lang, string>> = {
     "es": "Se interrumpió la conexión con el servidor.",
     "ar": "انقطع الاتصال بالخادم."
   },
+  "saveLocalOnly": {
+    "ru": "Облачное сохранение недоступно. Прогресс останется только в этом браузере.",
+    "en": "Cloud saves are unavailable. Progress stays in this browser only.",
+    "tr": "Bulut kaydı kullanılamıyor. İlerleme yalnızca bu tarayıcıda kalacak.",
+    "es": "El guardado en la nube no está disponible. El progreso solo quedará en este navegador.",
+    "ar": "الحفظ السحابي غير متاح. سيبقى التقدم في هذا المتصفح فقط."
+  },
+  "saveFailed": {
+    "ru": "Не удалось сохранить прогресс. Не закрывайте игру и попробуйте ещё раз позже.",
+    "en": "Could not save progress. Keep the game open and try again later.",
+    "tr": "İlerleme kaydedilemedi. Oyunu açık tutun ve sonra tekrar deneyin.",
+    "es": "No se pudo guardar el progreso. Mantén el juego abierto e inténtalo más tarde.",
+    "ar": "تعذر حفظ التقدم. أبقِ اللعبة مفتوحة وحاول مرة أخرى لاحقًا."
+  },
   "netRelayHealthFailed": {
     "ru": "Проверка сервера матчей не удалась. Пробуем подключиться повторно.",
     "en": "Could not reach the match server. Retrying the connection.",

@@ -1,4 +1,5 @@
 import { CLASS_ORDER, KnightClassId } from './classes';
+import { GAME_DATA_KEYS, getStorageGeneration, readGameItem, writeGameItem } from './gameStorage';
 
 export interface PlayerProfileTotals {
   gamesPlayed: number;
@@ -13,9 +14,10 @@ export interface PlayerProfile {
   totals: PlayerProfileTotals;
 }
 
-const STORAGE_KEY = 'kls_player_profile_v1';
+const STORAGE_KEY = GAME_DATA_KEYS.profile;
 const profileListeners = new Set<(profile: PlayerProfile) => void>();
 let volatileProfile: PlayerProfile | null = null;
+let volatileGeneration = -1;
 let storageFailed = false;
 
 export function onProfileSaved(listener: (profile: PlayerProfile) => void): () => void {
@@ -35,9 +37,10 @@ function copyProfile(profile: PlayerProfile): PlayerProfile {
 }
 
 export function loadProfile(): PlayerProfile {
+  const recent = volatileGeneration === getStorageGeneration() ? volatileProfile : null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return storageFailed && volatileProfile ? copyProfile(volatileProfile) : copyProfile(DEFAULT_PROFILE);
+    const raw = readGameItem(STORAGE_KEY);
+    if (!raw) return storageFailed && recent ? copyProfile(recent) : copyProfile(DEFAULT_PROFILE);
     const parsed = JSON.parse(raw) as Partial<PlayerProfile>;
     const profile: PlayerProfile = {
       coins: typeof parsed.coins === 'number' ? parsed.coins : DEFAULT_PROFILE.coins,
@@ -71,14 +74,15 @@ export function loadProfile(): PlayerProfile {
     }
     return profile;
   } catch {
-    return volatileProfile ? copyProfile(volatileProfile) : copyProfile(DEFAULT_PROFILE);
+    return recent ? copyProfile(recent) : copyProfile(DEFAULT_PROFILE);
   }
 }
 
 export function saveProfile(profile: PlayerProfile): void {
   volatileProfile = copyProfile(profile);
+  volatileGeneration = getStorageGeneration();
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    writeGameItem(STORAGE_KEY, JSON.stringify(profile));
     storageFailed = false;
   } catch {
     storageFailed = true;

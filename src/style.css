@@ -446,9 +446,9 @@ body {
   opacity: 0.65;
 }
 
-.fullscreen-feedback {
+.fullscreen-feedback,
+.save-warning {
   position: absolute;
-  bottom: calc(18px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 80;
@@ -464,6 +464,14 @@ body {
   font-weight: 600;
   text-align: center;
   pointer-events: none;
+}
+
+.fullscreen-feedback {
+  bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
+.save-warning {
+  top: calc(86px + env(safe-area-inset-top));
 }
 
 /* ============================================================================

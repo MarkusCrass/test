@@ -186,6 +186,7 @@ describe('complete localized game content', () => {
     const root = document.querySelector<HTMLElement>('#root')!;
     const ui = new UIManager(root, { ...DEFAULT_SETTINGS }, callbacks);
     ui.updatePublicRooms([{ roomCode: 'ABCD', hostName: 'Alice', playerCount: 1, maxPlayers: 5, fillBots: true, phase: 'lobby' }]);
+    ui.showSaveWarning('saveLocalOnly');
     const click = (sel: string) => root.querySelector<HTMLButtonElement>(sel)!.click();
     for (const { code } of LANGS.filter(l => l.code !== 'ru')) {
       click(`.lang-btn[data-lang="${code}"]`);
@@ -200,9 +201,13 @@ describe('complete localized game content', () => {
       expect(root.querySelector('#mp-alert-banner')?.textContent).toBe(t('netRoomMissing', code, { code: 'ABCD' }));
       ui.showMultiplayerNotice('Проверка сервера матчей не удалась. Пробуем подключиться повторно.');
       expect(root.querySelector('#mp-alert-banner')?.textContent).toBe(t('netRelayHealthFailed', code));
+      expect(root.querySelector('#save-warning')?.textContent).toBe(t('saveLocalOnly', code));
+      ui.showSaveWarning('saveFailed');
+      expect(root.querySelector('#save-warning')?.textContent).toBe(t('saveFailed', code));
       click('.hub-hero-chip[data-cid="hammer"]');
       expect(root.querySelector('#hub-play-title')?.textContent).toBe(t('playBuy', code, { price: 300 }));
       click('.hub-hero-chip[data-cid="sword"]');
+      ui.showSaveWarning('saveLocalOnly');
     }
   });
 

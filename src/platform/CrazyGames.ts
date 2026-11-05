@@ -1,8 +1,10 @@
 import type { GamePlatform } from './GamePlatform';
+import { configureCrazyData, type CrazyDataStore } from '../config/gameStorage';
 
 export interface CrazySdk {
   init(): Promise<void>;
   environment?: string;
+  data?: CrazyDataStore;
   game: {
     loadingStart(): void;
     loadingStop(): void;
@@ -11,7 +13,7 @@ export interface CrazySdk {
   };
 }
 
-/** Basic Launch intentionally has no ads; progress uses localStorage / CrazyGames APS. */
+/** Basic Launch intentionally has no ads; progress uses the CrazyGames SDK Data module. */
 export class CrazyGames implements GamePlatform {
   private sdk: CrazySdk | null = null;
   private readySent = false;
@@ -28,6 +30,13 @@ export class CrazyGames implements GamePlatform {
       ]);
       if (!initialized || loader.environment === 'disabled') return;
       this.sdk = loader;
+      // sdk.init() has already loaded this account's Data: switch storage before
+      // KnightsGameApp reads coins, unlocked heroes, settings or bot progress.
+      if (loader.data && typeof loader.data.getItem === 'function' && typeof loader.data.setItem === 'function') {
+        configureCrazyData(loader.data);
+      } else {
+        console.warn('CrazyGames Data module is missing; select "Yes, using the Data Module" in the submission form. Local progress only.');
+      }
       loader.game.loadingStart();
     } catch (error) {
       this.sdk = null;

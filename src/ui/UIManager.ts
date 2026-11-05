@@ -21,6 +21,7 @@ import {
   PlayerProfile,
 } from '../config/playerProfile';
 import { recordSoloBotOutcome } from '../config/soloBotProgress';
+import { GAME_DATA_KEYS, readGameItem, writeGameItem } from '../config/gameStorage';
 import { botDisplayName } from '../config/botNames';
 import { abilityText, heroText } from '../config/heroLocales';
 import { AD_COIN_REWARD, KNIGHT_UNLOCK_CONFIG } from '../config/rewards';
@@ -104,7 +105,7 @@ type WebkitFullscreenElement = HTMLElement & {
   webkitRequestFullscreen?: () => Promise<void> | void;
 };
 
-const MP_NAME_STORAGE_KEY = 'kls_mp_player_name_v1';
+const MP_NAME_STORAGE_KEY = GAME_DATA_KEYS.multiplayerName;
 
 const CLASS_EMBLEM_ICON: Record<KnightClassId, string> = {
   sword: 'sword_light.svg',
@@ -158,7 +159,7 @@ function escapeHtml(text: string): string {
 
 function loadSavedPlayerName(lang: Lang): string {
   try {
-    const saved = localStorage.getItem(MP_NAME_STORAGE_KEY);
+    const saved = readGameItem(MP_NAME_STORAGE_KEY);
     if (saved && saved.trim().length >= 2) {
       return saved.trim().slice(0, 18);
     }
@@ -170,7 +171,7 @@ function loadSavedPlayerName(lang: Lang): string {
 
 function savePlayerName(name: string): void {
   try {
-    localStorage.setItem(MP_NAME_STORAGE_KEY, name.trim().slice(0, 18));
+    writeGameItem(MP_NAME_STORAGE_KEY, name.trim().slice(0, 18));
   } catch {
     // Ignore
   }
@@ -286,6 +287,7 @@ export class UIManager {
   private readonly resMenuBtnEl: HTMLButtonElement;
   private readonly fullscreenButtons: HTMLButtonElement[];
   private readonly fullscreenFeedbackEl: HTMLElement;
+  private readonly saveWarningEl: HTMLElement;
   private fullscreenPending = false;
   private fullscreenFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1067,6 +1069,7 @@ export class UIManager {
         </div>
       </div>
       <div id="fullscreen-feedback" class="fullscreen-feedback hidden" role="status" aria-live="polite"></div>
+      <div id="save-warning" class="save-warning hidden" role="alert"></div>
     `;
 
     this.hubTopDockEl = this.q('#hub-top-dock');
@@ -1158,6 +1161,7 @@ export class UIManager {
     this.resMenuBtnEl = this.q('#btn-res-menu') as HTMLButtonElement;
     this.fullscreenButtons = Array.from(this.root.querySelectorAll<HTMLButtonElement>('.js-fullscreen-toggle'));
     this.fullscreenFeedbackEl = this.q('#fullscreen-feedback');
+    this.saveWarningEl = this.q('#save-warning');
 
     this.bindEvents();
     this.renderSelectionClass(this.profile.activeKnight, false);
@@ -1188,10 +1192,16 @@ export class UIManager {
 
   /** Only use the platform name when the player has not selected their own. */
   public useYandexPlayerName(name: string): void {
-    try { if (localStorage.getItem(MP_NAME_STORAGE_KEY)) return; } catch { return; }
+    try { if (readGameItem(MP_NAME_STORAGE_KEY)) return; } catch { return; }
     if (this.playerNameEdited || document.activeElement === this.mpNameInputEl) return;
     const clean = name.trim().slice(0, 18);
     if (clean.length >= 2) this.mpNameInputEl.value = clean;
+  }
+
+  public showSaveWarning(reason: 'saveLocalOnly' | 'saveFailed'): void {
+    this.saveWarningEl.dataset.i18n = reason;
+    this.saveWarningEl.textContent = this.tl(reason);
+    this.saveWarningEl.classList.remove('hidden');
   }
 
   public updateSettingsExternal(next: GameSettings): void {
