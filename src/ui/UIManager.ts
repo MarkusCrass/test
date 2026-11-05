@@ -87,6 +87,7 @@ export interface UICallbacks {
     playerName: string,
     classId: KnightClassId
   ) => void;
+  onMpInviteLink?: (roomCode: string) => string | null;
   onMpRefreshRooms: () => void;
   onMpLeaveRoom: () => void;
   onMpSelectClass: (classId: KnightClassId) => void;
@@ -161,7 +162,7 @@ function loadSavedPlayerName(lang: Lang): string {
   try {
     const saved = readGameItem(MP_NAME_STORAGE_KEY);
     if (saved && saved.trim().length >= 2) {
-      return saved.trim().slice(0, 18);
+      return saved.trim().slice(0, 20);
     }
   } catch {
     // Ignore storage block
@@ -171,7 +172,7 @@ function loadSavedPlayerName(lang: Lang): string {
 
 function savePlayerName(name: string): void {
   try {
-    writeGameItem(MP_NAME_STORAGE_KEY, name.trim().slice(0, 18));
+    writeGameItem(MP_NAME_STORAGE_KEY, name.trim().slice(0, 20));
   } catch {
     // Ignore
   }
@@ -246,6 +247,7 @@ export class UIManager {
   private readonly mpReadyBtnEl: HTMLButtonElement;
   private readonly mpStartBtnEl: HTMLButtonElement;
   private readonly mpCopyCodeBtnEl: HTMLButtonElement;
+  private readonly mpInviteBtnEl: HTMLButtonElement;
 
   // Dynamic HUD sub-elements
   private readonly timerEl: HTMLElement;
@@ -540,7 +542,7 @@ export class UIManager {
                   <input
                     id="mp-name-input"
                     type="text"
-                    maxlength="18"
+                    maxlength="20"
                     value="${initialName}"
                     placeholder="Введите имя..." data-i18n-placeholder="enterName"
                     class="mp-text-input"
@@ -627,6 +629,10 @@ export class UIManager {
                 <button id="btn-mp-copy-code" class="btn btn-sm">
                   ${ICONS.copy}
                   <span data-i18n="mpCopyCode">Скопировать</span>
+                </button>
+                <button id="btn-mp-invite" class="btn btn-primary btn-sm hidden">
+                  ${ICONS.users}
+                  <span data-i18n="mpInviteFriends">Пригласить друзей</span>
                 </button>
               </div>
 
@@ -1120,6 +1126,7 @@ export class UIManager {
     this.mpReadyBtnEl = this.q('#btn-mp-ready') as HTMLButtonElement;
     this.mpStartBtnEl = this.q('#btn-mp-start') as HTMLButtonElement;
     this.mpCopyCodeBtnEl = this.q('#btn-mp-copy-code') as HTMLButtonElement;
+    this.mpInviteBtnEl = this.q('#btn-mp-invite') as HTMLButtonElement;
 
     this.timerEl = this.q('#hud-timer');
     this.alivePillEl = this.q('#hud-alive-pill');
@@ -1194,8 +1201,18 @@ export class UIManager {
   public useYandexPlayerName(name: string): void {
     try { if (readGameItem(MP_NAME_STORAGE_KEY)) return; } catch { return; }
     if (this.playerNameEdited || document.activeElement === this.mpNameInputEl) return;
-    const clean = name.trim().slice(0, 18);
+    const clean = name.trim().slice(0, 20);
     if (clean.length >= 2) this.mpNameInputEl.value = clean;
+  }
+
+  /** Logged-in CrazyGames friends must see the actual portal username, not a local alias. */
+  public useCrazyGamesPlayerName(name: string): void {
+    const clean = name.trim().slice(0, 20);
+    if (clean.length < 2) return;
+    this.mpNameInputEl.value = clean;
+    this.mpNameInputEl.readOnly = true;
+    this.mpNameInputEl.dataset.i18nTitle = 'mpCrazyGamesName';
+    this.mpNameInputEl.title = this.tl('mpCrazyGamesName');
   }
 
   public showSaveWarning(reason: 'saveLocalOnly' | 'saveFailed'): void {
@@ -1228,7 +1245,7 @@ export class UIManager {
 
   public getEnteredPlayerName(): string {
     const val = this.mpNameInputEl.value.trim();
-    const clean = val.length >= 2 ? val.slice(0, 18) : loadSavedPlayerName(this.settings.language);
+    const clean = val.length >= 2 ? val.slice(0, 20) : loadSavedPlayerName(this.settings.language);
     savePlayerName(clean);
     return clean;
   }
@@ -1285,6 +1302,23 @@ export class UIManager {
     if (this.mpAlertTimer) clearTimeout(this.mpAlertTimer);
     this.mpAlertTimer = null;
     this.mpAlertEl.classList.add('hidden');
+  }
+
+  private async copyText(text: string): Promise<boolean> {
+    if (navigator.clipboard?.writeText) {
+      try { await navigator.clipboard.writeText(text); return true; }
+      catch { /* Try the older clipboard API, then show the code to copy manually. */ }
+    }
+    const input = document.createElement('textarea');
+    input.value = text;
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    try {
+      document.body.appendChild(input);
+      input.select();
+      return document.execCommand('copy');
+    } catch { return false; }
+    finally { input.remove(); }
   }
 
   public updatePublicRooms(rooms: RoomSummary[]): void {
@@ -1361,6 +1395,7 @@ export class UIManager {
     const inLobbyRoom = Boolean(room && room.phase === 'lobby');
     this.mpBrowserViewEl.classList.toggle('hidden', inLobbyRoom);
     this.mpRoomViewEl.classList.toggle('hidden', !inLobbyRoom);
+    this.mpInviteBtnEl.classList.toggle('hidden', !inLobbyRoom || !room || room.players.length >= MAX_PLAYERS_PER_ROOM);
 
     if (!room) {
       return;
@@ -1761,29 +1796,20 @@ export class UIManager {
       this.callbacks.onReturnMainMenu();
     });
 
-    this.mpCopyCodeBtnEl.addEventListener('click', () => {
+    this.mpCopyCodeBtnEl.addEventListener('click', async () => {
       if (!this.mpRoom) return;
       const code = this.mpRoom.roomCode;
-      if (navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(code).catch(() => {});
-      } else {
-        try {
-          const tmp = document.createElement('textarea');
-          tmp.value = code;
-          tmp.style.position = 'fixed';
-          tmp.style.opacity = '0';
-          document.body.appendChild(tmp);
-          tmp.select();
-          document.execCommand('copy');
-          tmp.remove();
-        } catch {
-          // Ignore
-        }
-      }
-      this.showMultiplayerNotice(
-        this.tl('mpNoticeCopied', { code }),
-        'info'
-      );
+      const copied = await this.copyText(code);
+      this.showMultiplayerNotice(this.tl(copied ? 'mpNoticeCopied' : 'mpCopyFailed', { code }), copied ? 'info' : 'error');
+    });
+    this.mpInviteBtnEl.addEventListener('click', async () => {
+      const room = this.mpRoom;
+      if (!room || room.phase !== 'lobby' || room.players.length >= MAX_PLAYERS_PER_ROOM) return;
+      let link: string | null = null;
+      try { link = this.callbacks.onMpInviteLink?.(room.roomCode) ?? null; } catch { /* Share by code if the SDK fails. */ }
+      const copied = await this.copyText(link ?? room.roomCode);
+      const key = !copied ? 'mpCopyFailed' : link ? 'mpInviteCopied' : 'mpInviteCodeCopied';
+      this.showMultiplayerNotice(this.tl(key, { code: room.roomCode }), copied ? 'info' : 'error');
     });
     this.mpRoomBotsToggleEl.addEventListener('change', () => {
       this.callbacks.onMpRoomOptions({

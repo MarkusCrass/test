@@ -102,11 +102,16 @@ function mp_sanitize_name($raw, $fallbackNum) {
     }
     $clean = trim($clean);
     if (function_exists('mb_substr') && function_exists('mb_strlen')) {
-        $clean = mb_substr($clean, 0, 18, 'UTF-8');
+        $clean = mb_substr($clean, 0, 20, 'UTF-8');
         return mb_strlen($clean, 'UTF-8') >= 2 ? $clean : ('Рыцарь #' . $num);
     }
-    $clean = substr($clean, 0, 36);
-    return strlen($clean) >= 2 ? $clean : ('Рыцарь #' . $num);
+    // mbstring is optional on shared hosts. Preserve the entire 20-character
+    // CrazyGames username without slicing a multibyte UTF-8 character.
+    if (preg_match_all('/./us', $clean, $characters)) {
+        $clean = implode('', array_slice($characters[0], 0, 20));
+        return count($characters[0]) >= 2 ? $clean : ('Рыцарь #' . $num);
+    }
+    return 'Рыцарь #' . $num;
 }
 
 function mp_sanitize_class($raw) {

@@ -63,7 +63,7 @@ function sanitizeName(raw: unknown, fallbackNum: number): string {
   const cleaned = raw
     .replace(/[\r\n\t<>]/g, '')
     .trim()
-    .slice(0, 18);
+    .slice(0, 20);
   return cleaned.length >= 2 ? cleaned : `Рыцарь #${fallbackNum}`;
 }
 

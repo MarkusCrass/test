@@ -26,6 +26,8 @@ import {
 } from './net/MultiplayerClient';
 import { checkYandexRelayHealth } from './net/relayHealth';
 import { ClientNetWorldSync } from './net/MultiplayerRoomSim';
+import { RoomInviteFlow } from './net/roomInviteFlow';
+import type { RoomLobbyState } from './net/protocol';
 import {
   CameraRig,
   CrosshairAimResult,
@@ -52,6 +54,7 @@ class KnightsGameApp {
   private world: WorldRenderer | null = null;
   private readonly ui: UIManager;
   private readonly net: MultiplayerClient;
+  private readonly roomInvites: RoomInviteFlow;
   private readonly netSync = new ClientNetWorldSync();
 
   private readonly canvasRoot: HTMLElement;
@@ -92,6 +95,8 @@ class KnightsGameApp {
   private readonly isCrazyGames = import.meta.env.VITE_PLATFORM === 'crazygames';
   private loading = true;
   private relayHealthUnavailable = false;
+  private crazyPortalName: string | null = null;
+  private portalNameSyncedRoom: string | null = null;
 
   constructor(
     platform: GamePlatform,
@@ -114,9 +119,15 @@ class KnightsGameApp {
 
     this.sound.setVolume(this.settings.masterVolume);
 
+    this.roomInvites = new RoomInviteFlow(platform, {
+      currentRoomCode: () => this.net.currentRoom?.roomCode ?? null,
+      join: code => this.joinInvitedRoom(code),
+      createPrivateRoom: () => this.createInstantRoom(),
+    });
     this.net = new MultiplayerClient({
       onStatusChange: (status, errText) => {
         this.ui.updateMultiplayerStatus(status, this.net.pingMs, errText);
+        if (status === 'disconnected' || status === 'error') this.roomInvites.failed();
         if (
           (status === 'disconnected' || status === 'error') &&
           this.match.isOnlineMatch
@@ -136,12 +147,18 @@ class KnightsGameApp {
         this.ui.updatePublicRooms(rooms);
       },
       onRoomUpdated: (room) => {
+        this.roomInvites.roomUpdated(room);
         this.ui.updateMultiplayerRoom(room, this.net.clientId);
+        if (!room) this.portalNameSyncedRoom = null;
+        else this.syncCrazyRoomName(room);
       },
       onErrorMsg: (message) => {
+        this.roomInvites.failed();
         this.ui.showMultiplayerNotice(message, 'error');
       },
       onMatchStarted: ({ yourFighterId, matchGeneration, snapshot }) => {
+        // The room still exists for rematches, but new friends cannot join mid-round.
+        this.roomInvites.roomUpdated(this.net.currentRoom);
         this.sound.unlock();
         this.clearActionInputs();
         this.netSync.initMatchFromSnapshot(
@@ -163,7 +180,9 @@ class KnightsGameApp {
         this.releasePointerLock();
         this.clearActionInputs();
         this.match.goToMultiplayerLobby();
+        this.roomInvites.roomUpdated(room);
         this.ui.updateMultiplayerRoom(room, this.net.clientId);
+        this.syncCrazyRoomName(room);
       },
     }, import.meta.env.VITE_MULTIPLAYER_BASE_URL || undefined);
 
@@ -175,6 +194,7 @@ class KnightsGameApp {
         this.match.goToCharacterSelection();
       },
       onOpenMultiplayer: () => {
+        this.roomInvites.markManualNavigation();
         this.sound.playUiClick();
         this.releasePointerLock();
         this.match.goToMultiplayerLobby();
@@ -290,17 +310,21 @@ class KnightsGameApp {
 
       // Online Multiplayer UI actions
       onMpQuickJoin: (playerName, classId) => {
+        this.roomInvites.markManualNavigation();
         this.sound.playUiClick();
         this.net.quickJoin(playerName, classId);
       },
       onMpCreateRoom: (opts) => {
+        this.roomInvites.markManualNavigation();
         this.sound.playUiClick();
         this.net.createRoom(opts);
       },
       onMpJoinRoom: (roomCode, playerName, classId) => {
+        this.roomInvites.markManualNavigation();
         this.sound.playUiClick();
         this.net.joinRoom(roomCode, playerName, classId);
       },
+      onMpInviteLink: (roomCode) => this.platform.getRoomInviteLink?.(roomCode) ?? null,
       onMpRefreshRooms: () => {
         this.sound.playUiClick();
         this.net.connect().then((ok) => {
@@ -359,9 +383,14 @@ class KnightsGameApp {
       }
     });
 
-    void this.platform.getPlayerName().then((name) => {
-      if (name) this.ui.useYandexPlayerName(name);
-    });
+    const platformNameReady = this.platform.getPlayerName().then((name) => {
+      if (!name) return;
+      if (this.isCrazyGames) {
+        this.crazyPortalName = name;
+        this.ui.useCrazyGamesPlayerName(name);
+        if (this.net.currentRoom) this.syncCrazyRoomName(this.net.currentRoom);
+      } else this.ui.useYandexPlayerName(name);
+    }).catch(() => { /* Guest play does not depend on an account API. */ });
     const showCloudConflict = () => {
       if (!cloud) return;
       if (this.match.state === 'Countdown' || this.match.state === 'InProgress') {
@@ -383,6 +412,8 @@ class KnightsGameApp {
 
     this.setupGlobalInputListeners();
     this.ui.update(this.match, [], false);
+
+    this.roomInvites.start(platformNameReady);
 
     // Create the renderer while the loading overlay blocks interaction.
     window.setTimeout(() => {
@@ -476,6 +507,46 @@ class KnightsGameApp {
         location.hostname.endsWith('.e2b.app') || location.hostname.endsWith('.arena.site')) {
       fetch('/api/client-ready', { method: 'POST' }).catch(() => {});
     }
+  }
+
+  private syncCrazyRoomName(room: RoomLobbyState): void {
+    const name = this.crazyPortalName;
+    if (!this.isCrazyGames || !name) return;
+    const me = room.players.find(player => player.clientId === this.net.clientId);
+    const key = `${room.roomCode}:${name}`;
+    if (!me || this.portalNameSyncedRoom === key) return;
+    // getUser() might resolve after a room was created or joined. Send at most
+    // once per room; an old relay may still truncate 20-character usernames.
+    this.portalNameSyncedRoom = key;
+    if (me.name !== name) this.net.setName(name);
+  }
+
+  private joinInvitedRoom(code: string): void {
+    // Join requests can arrive after loading, while browsing, or during a match.
+    // Leaving the previous room first also removes its CrazyGames Invite button.
+    this.releasePointerLock();
+    this.clearActionInputs();
+    this.net.leaveRoom();
+    this.match.goToMultiplayerLobby();
+    this.ui.update(this.match, [], false);
+    void this.net.joinRoom(code, this.ui.getEnteredPlayerName(), this.ui.getSelectedClass())
+      .catch(() => {
+        this.roomInvites.failed();
+        this.ui.showMultiplayerNotice('Не удалось подключиться к серверу арены.', 'error');
+      });
+  }
+
+  private createInstantRoom(): void {
+    this.match.goToMultiplayerLobby();
+    this.ui.update(this.match, [], false);
+    // A party leader should immediately be in a private, joinable 2–5 human
+    // room; gameplay only starts after at least one friend joins.
+    void this.net.createRoom({
+      playerName: this.ui.getEnteredPlayerName(),
+      classId: this.ui.getSelectedClass(),
+      isPublic: false,
+      fillBots: false,
+    });
   }
 
   private beginMatch(classId: KnightClassId, mode: MatchMode): void {

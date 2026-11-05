@@ -40,8 +40,10 @@ try {
   assert.equal(rooms[0].playerCount, 1);
   const botName = rooms[0].hostName;
   const code = rooms[0].roomCode;
-  const joined = find((await sync(host.clientId, { type: 'join_room', roomCode: code, playerName: 'Host', classId: 'dual' })).messages, 'room_joined');
+  const portalName = 'CrazyKnight_2026.Pro';
+  const joined = find((await sync(host.clientId, { type: 'join_room', roomCode: code, playerName: portalName, classId: 'dual' })).messages, 'room_joined');
   assert.equal(joined.room.hostClientId, host.clientId);
+  assert.equal(joined.room.players[0].name, portalName, 'PHP relay must preserve a full 20-character portal username');
   assert.equal(joined.room.players.length, 2);
   assert.equal(joined.room.players[1].name, botName);
   assert.ok(joined.room.players[1].clientId.startsWith('c_bot_'));

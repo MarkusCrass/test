@@ -12,6 +12,7 @@ import {
   ClientNetWorldSync,
 } from '../src/net/MultiplayerRoomSim';
 import { MultiplayerClient } from '../src/net/MultiplayerClient';
+import { roomCodeFromWebUrl, roomCodeFromYandexPayload, webRoomInviteUrl, yandexRoomInviteUrl } from '../src/net/roomInvites';
 import { ClientMsg, ServerMsg } from '../src/net/protocol';
 
 function waitForMsg<T extends ServerMsg['type']>(
@@ -231,7 +232,7 @@ describe('Online Multiplayer Simulation, Sync & WebSocket Hub', () => {
       const roomsBroadcastP = waitForMsg(ws2, 'rooms_list');
       sendClientMsg(ws1, {
         type: 'create_room',
-        playerName: 'Сэр Роланд',
+        playerName: 'CrazyKnight_2026.Pro', // Full 20-character CrazyGames username.
         classId: 'sword',
         isPublic: true,
         fillBots: false,
@@ -240,6 +241,7 @@ describe('Online Multiplayer Simulation, Sync & WebSocket Hub', () => {
       const joined1 = await joined1P;
       const roomsBroadcast = await roomsBroadcastP;
       const code = joined1.room.roomCode;
+      expect(joined1.room.players[0].name).toBe('CrazyKnight_2026.Pro');
       expect(code).toHaveLength(4);
       expect(roomsBroadcast.rooms.some((r) => r.roomCode === code)).toBe(true);
 
@@ -255,12 +257,17 @@ describe('Online Multiplayer Simulation, Sync & WebSocket Hub', () => {
       expect(apiJson.onlinePlayers).toBe(2);
       expect(apiJson.rooms.some((r) => r.roomCode === code)).toBe(true);
 
-      // Client 2 joins room by 4-char code
+      // Client 2 enters the same real server room via an invitation on either platform.
+      const siteLink = webRoomInviteUrl('https://game.example/?lang=en', code)!;
+      const yandexLink = yandexRoomInviteUrl('12345', code)!;
+      expect(roomCodeFromWebUrl(siteLink)).toBe(code);
+      const invitedCode = roomCodeFromYandexPayload(new URL(yandexLink).searchParams.get('payload'));
+      expect(invitedCode).toBe(code);
       const joined2P = waitForMsg(ws2, 'room_joined');
       const updated1P = waitForMsg(ws1, 'room_updated');
       sendClientMsg(ws2, {
         type: 'join_room',
-        roomCode: code,
+        roomCode: invitedCode!,
         playerName: 'Торвальд',
         classId: 'hammer',
       });

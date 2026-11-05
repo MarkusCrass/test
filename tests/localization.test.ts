@@ -197,6 +197,7 @@ describe('complete localized game content', () => {
       expect(root.querySelector('#lbl-arena-theme')?.textContent).toBe(t('theme_oak_tournament', code));
       expect(root.querySelector('.arena-theme-chip-name')?.textContent).toBe(t('themeShort_oak_tournament', code));
       expect(root.querySelector<HTMLInputElement>('#mp-name-input')?.placeholder).toBe(t('enterName', code));
+      expect(root.querySelector('#btn-mp-invite [data-i18n]')?.textContent).toBe(t('mpInviteFriends', code));
       ui.showMultiplayerNotice('Комната «ABCD» не найдена.');
       expect(root.querySelector('#mp-alert-banner')?.textContent).toBe(t('netRoomMissing', code, { code: 'ABCD' }));
       ui.showMultiplayerNotice('Проверка сервера матчей не удалась. Пробуем подключиться повторно.');

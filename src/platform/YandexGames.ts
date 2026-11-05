@@ -1,8 +1,9 @@
 import type { CloudPlayer } from './CloudProfile';
+import { roomCodeFromWebUrl, roomCodeFromYandexPayload, webRoomInviteUrl, yandexRoomInviteUrl } from '../net/roomInvites';
 
 /** Minimal surface of the official Yandex Games SDK used by the game. */
 export interface YandexSdk {
-  environment?: { i18n?: { lang?: string } };
+  environment?: { i18n?: { lang?: string }; app?: { id?: string }; payload?: string };
   features?: {
     LoadingAPI?: { ready(): void };
     GameplayAPI?: { start(): void; stop(): void };
@@ -51,6 +52,22 @@ export class YandexGames {
   watchAccountSelection(onOpen: () => void, onClose: () => void): void {
     this.sdk?.on?.('ACCOUNT_SELECTION_DIALOG_OPENED', onOpen);
     this.sdk?.on?.('ACCOUNT_SELECTION_DIALOG_CLOSED', onClose);
+  }
+
+  getInitialRoomCode(): string | null {
+    if (import.meta.env.VITE_PLATFORM === 'site' || (!this.sdk && !import.meta.env.VITE_PLATFORM)) {
+      return typeof window === 'undefined' ? null : roomCodeFromWebUrl(window.location.href);
+    }
+    // In Yandex the game runs in an iframe: the URL of that iframe is not the
+    // address the friend opens. The SDK passes the game page's payload instead.
+    return roomCodeFromYandexPayload(this.sdk?.environment?.payload);
+  }
+
+  getRoomInviteLink(roomCode: string): string | null {
+    if (import.meta.env.VITE_PLATFORM === 'site' || (!this.sdk && !import.meta.env.VITE_PLATFORM)) {
+      return typeof window === 'undefined' ? null : webRoomInviteUrl(window.location.href, roomCode);
+    }
+    return yandexRoomInviteUrl(this.sdk?.environment?.app?.id, roomCode);
   }
 
   ready(): void {

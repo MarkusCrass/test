@@ -1,15 +1,28 @@
 import type { GamePlatform } from './GamePlatform';
 import { configureCrazyData, type CrazyDataStore } from '../config/gameStorage';
+import { normalizeRoomCode, roomCodeFromParams } from '../net/roomInvites';
+import { MAX_PLAYERS_PER_ROOM, type RoomLobbyState } from '../net/protocol';
 
 export interface CrazySdk {
   init(): Promise<void>;
   environment?: string;
   data?: CrazyDataStore;
+  user?: {
+    isUserAccountAvailable?: boolean;
+    getUser?(): Promise<{ username?: string } | null>;
+  };
   game: {
     loadingStart(): void;
     loadingStop(): void;
     gameplayStart(): void;
     gameplayStop(): void;
+    isInstantMultiplayer?: boolean;
+    inviteParams?: unknown;
+    getInviteParam?(key: string): string | null;
+    addJoinRoomListener?(listener: (inviteParams: unknown) => void): void;
+    updateRoom?(state: { roomId: string; isJoinable: boolean; inviteParams: { roomCode: string } }): void;
+    leftRoom?(): void;
+    inviteLink?(inviteParams: { roomCode: string }): string;
   };
 }
 
@@ -19,6 +32,8 @@ export class CrazyGames implements GamePlatform {
   private readySent = false;
   private desiredGameplay = false;
   private gameplay = false;
+  private reportedRoom: string | null = null;
+  private reportedJoinable = false;
 
   async initialize(loader: CrazySdk | undefined, timeoutMs = 10000): Promise<void> {
     if (!loader) return;
@@ -67,7 +82,73 @@ export class CrazyGames implements GamePlatform {
     } catch (error) { console.warn('CrazyGames gameplay event failed:', error); }
   }
 
-  async getPlayerName(): Promise<undefined> { return undefined; }
+  async getPlayerName(): Promise<string | undefined> {
+    const user = this.sdk?.user;
+    if (!user?.getUser || user.isUserAccountAvailable === false) return undefined;
+    try {
+      const name = (await user.getUser())?.username?.trim();
+      return name && name.length >= 2 ? name.slice(0, 20) : undefined;
+    } catch { return undefined; } // Guests and embedded versions need no login prompt.
+  }
+
+  getInitialRoomCode(): string | null {
+    const game = this.sdk?.game;
+    if (!game) return null;
+    try { return roomCodeFromParams(game.inviteParams) ?? normalizeRoomCode(game.getInviteParam?.('roomCode')); }
+    catch { return null; }
+  }
+
+  onJoinRoomInvite(join: (roomCode: string) => void): void {
+    try {
+      this.sdk?.game.addJoinRoomListener?.((params) => {
+        const code = roomCodeFromParams(params);
+        if (code) join(code);
+      });
+    } catch (error) { console.warn('CrazyGames room join listener failed:', error); }
+  }
+
+  isInstantMultiplayer(): boolean {
+    try { return this.sdk?.game.isInstantMultiplayer === true; }
+    catch { return false; }
+  }
+
+  /** updateRoom drives CrazyGames' own Friends/Invite button; never show it for a full/active room. */
+  updateRoom(room: RoomLobbyState | null): void {
+    const game = this.sdk?.game;
+    if (!game) return;
+    if (!room) {
+      if (this.reportedRoom === null) return;
+      try {
+        game.leftRoom?.();
+        this.reportedRoom = null;
+        this.reportedJoinable = false;
+      } catch (error) { console.warn('CrazyGames room leave failed:', error); }
+      return;
+    }
+    const code = normalizeRoomCode(room.roomCode);
+    if (!code || !game.updateRoom) return;
+    const joinable = room.phase === 'lobby' && room.players.length < MAX_PLAYERS_PER_ROOM;
+    if (this.reportedRoom === code && this.reportedJoinable === joinable) return;
+    try {
+      game.updateRoom({ roomId: code, isJoinable: joinable, inviteParams: { roomCode: code } });
+      this.reportedRoom = code;
+      this.reportedJoinable = joinable;
+    } catch (error) { console.warn('CrazyGames room status update failed:', error); }
+  }
+
+  getRoomInviteLink(roomCode: string): string | null {
+    const code = normalizeRoomCode(roomCode);
+    if (!code || !this.sdk?.game.inviteLink) return null;
+    try {
+      const link = this.sdk.game.inviteLink({ roomCode: code });
+      const url = new URL(link);
+      return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
+    } catch (error) {
+      console.warn('CrazyGames invite link failed:', error);
+      return null; // The code remains usable if the SDK/share service is offline.
+    }
+  }
+
   showRewarded(): boolean { return false; }
 }
 

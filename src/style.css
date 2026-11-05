@@ -1938,11 +1938,20 @@ body {
 .mp-room-code-plaque {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 12px;
   padding: 8px 14px;
   border-radius: 16px;
   background: rgba(37, 99, 235, 0.16);
   border: 1px solid rgba(96, 165, 250, 0.42);
+}
+
+#btn-mp-invite {
+  white-space: nowrap;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.88), rgba(14, 165, 233, 0.82));
+  border-color: rgba(125, 211, 252, 0.62);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.23), var(--glass-specular);
 }
 
 .mp-code-kicker {
@@ -2052,10 +2061,9 @@ body {
   display: block;
   font-size: 13.5px;
   font-weight: 800;
+  line-height: 1.25;
   color: #ffffff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .mp-slot-name.muted {
